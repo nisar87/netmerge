@@ -265,6 +265,12 @@ pre.log{background:var(--inset);border:1px solid var(--line);border-radius:var(-
 .updb{display:flex;align-items:center;gap:14px;background:var(--accent-soft);border-color:var(--accent)}
 .role label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:var(--mute);min-height:32px}
 .role .sel{min-width:0;width:200px;max-width:62%;font-size:12.5px;padding:5px 8px}
+.pr{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.pr .pc{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--card);display:flex;flex-direction:column;gap:8px}
+.pr .pc.on{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
+.pr .pc h4{margin:0;font-size:15px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.pr .pc p{margin:0;color:var(--mute);font-size:13px;flex:1}
+.pr .pc .row{gap:8px}
 .wiz{position:fixed;inset:0;background:#0009;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
 .wiz .card{max-width:520px;width:100%;box-shadow:0 20px 60px #0006}
 .wiz ol{list-style:none;margin:14px 0;padding:0;display:grid;gap:10px}
@@ -319,6 +325,7 @@ details.adv[open] summary::before{content:"▾ "}
     </div>
     <nav id="nav" style="display:contents">
       <button class="nav sel" data-p="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Overview</button>
+      <button class="nav" data-p="presets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Presets</button>
       <button class="nav" data-p="apps"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/></svg>Apps</button>
       <button class="nav" data-p="test"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-5"/><circle cx="12" cy="16" r="1.2" fill="currentColor"/></svg>Speed test</button>
       <button class="nav" data-p="usage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Usage</button>
@@ -385,6 +392,9 @@ details.adv[open] summary::before{content:"▾ "}
     </section>
 
     <!-- APPS -->
+    <section class="page" id="pg-presets" hidden>
+      <div id="prBody"></div>
+    </section>
     <section class="page" id="pg-apps" hidden>
       <div class="card">
         <h3>Choose which connection an app uses</h3>
@@ -556,6 +566,7 @@ const ICONS = {
 };
 const PAGES = {
   overview:['Overview','Live speed of every connection'],
+  presets:['Presets','One click for gaming, work, travel and more'],
   apps:['Apps','Decide which connection each app uses'],
   test:['Speed test','Measure what your connections can really do'],
   usage:['Usage','Data used by each connection, day by day'],
@@ -613,6 +624,7 @@ function go(p){
   if (p === 'block') loadBlock();
   if (p === 'usage') loadUsage();
   if (p === 'share') loadShare();
+  if (p === 'presets') loadPresets();
   if (S) render();
 }
 $$('.nav').forEach(n => n.onclick = () => go(n.dataset.p));
@@ -1295,6 +1307,44 @@ async function poll(resync){
     if (S && local) render();
   }
 }
+
+/* ---------- presets ---------- */
+let PR = null;
+async function loadPresets(act){
+  try { PR = await api('presets', act); } catch(e){ toast(e.message || 'Could not load presets', true); return; }
+  if (act) await poll(true); // the window's copy of the settings must follow the preset
+  paintPresets();
+}
+function paintPresets(){
+  const box = $('#prBody'); if (!box || !PR) return;
+  const sc = PR.schedule || {enabled:false, from:'22:00', to:'06:00', preset:'maxspeed'};
+  const active = PR.active || '';
+  const cards = PR.presets.map(p => `<div class="pc${p.id===active?' on':''}"><h4>${esc(p.name)}${p.id===active?'<span class="badge">On</span>':''}</h4><p>${esc(p.desc)}</p><div class="row"><button class="btn" data-pa="${esc(p.id)}"${p.id===active?' disabled':''}>${p.id===active?'Active':'Use this'}</button>${p.builtin?'':`<button class="btn" data-pd="${esc(p.id)}" aria-label="Delete preset ${esc(p.name)}">Delete</button>`}</div></div>`).join('');
+  const opts = PR.presets.map(p => `<option value="${esc(p.id)}"${p.id===sc.preset?' selected':''}>${esc(p.name)}</option>`).join('');
+  const html = `<div class="card" style="margin-bottom:16px"><div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap"><div><b>${active ? 'Preset on: ' + esc((PR.presets.find(p=>p.id===active)||{}).name || active) : 'Your own settings are on'}</b><div class="hint2">A preset adds to your settings and can be undone at any time. Your own app rules always win over a preset.</div></div>${active?'<button class="btn" id="prRestore">Back to my settings</button>':''}</div></div>
+  <div class="pr">${cards}</div>
+  <div class="card" style="margin-top:16px"><h3 style="margin:0 0 6px">Save your current settings as a preset</h3><div class="row" style="gap:8px;flex-wrap:wrap"><input class="inp" id="prName" maxlength="40" placeholder="Name, for example Evening" aria-label="Preset name" style="max-width:260px"><button class="btn" id="prSave">Save</button></div></div>
+  <div class="card" style="margin-top:16px"><h3 style="margin:0 0 6px">Schedule</h3><div class="hint2" style="margin-bottom:10px">Switch to a preset at set hours, then back to what you had. ${PR.scheduled ? '<b>The schedule is on right now.</b>' : ''}</div><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="tog${sc.enabled?' on':''}" id="prScOn" role="switch" aria-checked="${sc.enabled}" aria-label="Use a schedule"></button><span>From</span><input class="inp" type="time" id="prFrom" value="${esc(sc.from)}" style="width:120px"><span>to</span><input class="inp" type="time" id="prTo" value="${esc(sc.to)}" style="width:120px"><span>use</span><select class="sel" id="prSc">${opts}</select></div></div>`;
+  if (box.contains(document.activeElement) && ['INPUT','SELECT'].includes(document.activeElement.tagName)) return;
+  setHTML(box, html);
+}
+async function prSched(on){
+  const f = $('#prFrom').value, t = $('#prTo').value, p = $('#prSc').value;
+  const schedule = {enabled: on, from: f, to: t, preset: p};
+  try { await api('presets', {action:'schedule', schedule}); toast(on ? 'Schedule saved' : 'Schedule off'); loadPresets(); } catch(e){ toast(e.message, true); }
+}
+document.addEventListener('click', async e => {
+  const t = e.target.closest('button'); if (!t) return;
+  try {
+    if (t.dataset.pa) { await loadPresets({action:'apply', id:t.dataset.pa}); toast('Preset is on'); }
+    else if (t.dataset.pd) { await loadPresets({action:'delete', id:t.dataset.pd}); }
+    else if (t.id === 'prRestore') { await loadPresets({action:'restore'}); toast('Back to your settings'); }
+    else if (t.id === 'prSave') { const n = $('#prName').value; await loadPresets({action:'save', name:n}); toast('Preset saved'); }
+    else if (t.id === 'prScOn') { await prSched(!t.classList.contains('on')); }
+  } catch(err){ toast(err.message || 'Failed', true); }
+});
+document.addEventListener('change', e => { if (['prFrom','prTo','prSc'].includes(e.target.id) && $('#prScOn')?.classList.contains('on')) prSched(true); });
+setInterval(() => { if (page === 'presets') loadPresets(); }, 8000);
 
 /* ---------- 24-hour history ---------- */
 let histAt = 0, histPts = null;

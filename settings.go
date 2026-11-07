@@ -46,7 +46,13 @@ type Settings struct {
 	SetupDone      bool              `json:"setupDone"`             // the first-run guide was finished or skipped
 	NoCallProtect  bool              `json:"noCallProtect"`         // true = do not keep call apps (Teams, Zoom...) on one steady line
 	NoUpdateCheck  bool              `json:"noUpdateCheck"`         // true = do not look for new versions by itself
-	ClassicBalance bool              `json:"classicBalance"`        // true = old fixed round-robin instead of the smart dispatcher
+	Preset         string            `json:"preset"`                // active preset id ("" = your own settings)
+	PresetBackup   *PresetBackup     `json:"presetBackup,omitempty"`
+	CustomPresets  []Preset          `json:"customPresets,omitempty"`
+	PresetSchedule *PresetSchedule   `json:"presetSchedule,omitempty"`
+	SchedActive    bool              `json:"schedActive"`
+	SchedPrev      string            `json:"schedPrev"`
+	ClassicBalance bool              `json:"classicBalance"` // true = old fixed round-robin instead of the smart dispatcher
 }
 
 var (

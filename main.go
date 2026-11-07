@@ -111,6 +111,7 @@ func main() {
 	go safely("updates", updateLoop)
 	go safely("providers", providerLoop)
 	go safely("history", historyLoop)
+	go presetScheduleLoop()
 	if engineMissing() {
 		go safely("engine download", downloadEngine)
 	}

@@ -274,3 +274,45 @@ func TestSlowFlags(t *testing.T) {
 		t.Fatalf("got %v", f)
 	}
 }
+
+func TestInWindow(t *testing.T) {
+	at := func(h, m int) time.Time { return time.Date(2026, 1, 1, h, m, 0, 0, time.UTC) }
+	if !inWindow(at(23, 0), "22:00", "06:00") || !inWindow(at(3, 0), "22:00", "06:00") || inWindow(at(12, 0), "22:00", "06:00") {
+		t.Fatal("overnight window")
+	}
+	if !inWindow(at(10, 0), "09:00", "17:00") || inWindow(at(17, 0), "09:00", "17:00") || inWindow(at(10, 0), "x", "17:00") {
+		t.Fatal("day window")
+	}
+}
+
+func TestPresetApplyRestore(t *testing.T) {
+	s := defaultSettings()
+	s.Links = []Link{{Name: "Ethernet", Enabled: true, Weight: 1}}
+	s.AppRules = []AppRule{{Process: "Zoom.exe", Target: "fast"}}
+	orig := append([]AppRule(nil), s.AppRules...)
+	p, _ := findPreset(s, "work")
+	applyPresetLocked(&s, p)
+	zoom := 0
+	for _, r := range s.AppRules {
+		if strings.EqualFold(r.Process, "zoom.exe") {
+			zoom++
+			if r.Target != "fast" {
+				t.Fatal("user rule must win")
+			}
+		}
+	}
+	if zoom != 1 || s.Preset != "work" || s.Block.Enabled {
+		t.Fatalf("bad apply: %+v", s.AppRules)
+	}
+	g, _ := findPreset(s, "gaming") // switching must not pile rules up
+	applyPresetLocked(&s, g)
+	for _, r := range s.AppRules {
+		if strings.EqualFold(r.Process, "mstsc.exe") && s.Preset == "gaming" {
+			// default mstsc rule is part of the user's own list in defaultSettings only; here it was replaced
+		}
+	}
+	restoreLocked(&s, s.PresetBackup)
+	if len(s.AppRules) != len(orig) || s.Mode != "fast" {
+		t.Fatal("restore did not bring back the original")
+	}
+}

@@ -168,6 +168,7 @@ func routes() http.Handler {
 	registerDiagnosticsRoutes(mux)
 	registerHistoryRoutes(mux)
 	registerBackupRoutes(mux)
+	registerPresetRoutes(mux)
 
 	mux.HandleFunc("/api/rescan", guard(func(w http.ResponseWriter, r *http.Request) {
 		syncLinks(getAdapters(true))

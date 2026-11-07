@@ -16,6 +16,7 @@ NetMerge wraps the open-source [mihomo](https://github.com/MetaCubeX/mihomo) eng
 - **Diagnostics export.** One click saves the logs, settings (without passwords) and a summary.
 - **Quality score, activity log and 24-hour graph.** See how steady each line is and what NetMerge changed.
 - **Calls protection.** Meeting apps use one steady line and downloads are steered away from it during a call.
+- **Presets and schedule.** Gaming, work, travel and more in one click, with your own presets and a time schedule.
 - **Backup and restore** of settings, plus a first-run guide.
 - **Health checks.** A line without internet is left out until it works again.
 - **Tray icon, start with Windows, speed test, update notifications.**

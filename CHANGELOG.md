@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.0
+- Presets page: Normal, Work from home, Gaming, Max speed, Travel / limited data and Safe browsing, each one click. A preset adds to your settings (your own app rules always win) and "Back to my settings" undoes it.
+- Save your current settings as your own preset (up to 12).
+- Schedule: switch to a preset between two times (also over midnight) and back afterwards.
+
 ## 2.4.1
 - Every 10 seconds NetMerge checks that the engine's slots match the split it set, and sets them again (with a line in the log) if they differ.
 - Learned line speeds start fresh: values inflated by earlier false spikes are discarded once.
