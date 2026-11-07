@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.1.1
+- First release delivered through the in-app updater (no changes to merging).
+
 ## 2.1.0
 - Smart connection dispatcher that spreads each burst of new connections over all your lines.
 - Usage tab: daily download and upload for every connection, monthly allowance, usage forecast.
