@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.2.1
+- Connection cards: the details are laid out in a fixed grid and the "Share of new connections" and "Use this line" rows line up across cards, whatever the data length.
+
 ## 2.2.0
 - Link roles: set a line to "Always", "Only when the others are busy" or "Backup: only if the others fail" on its card on the Overview page.
 - Warning when two lines show the same public address (same provider or router), because merging them cannot add speed.
