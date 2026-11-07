@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -16,17 +19,68 @@ type ActivityEvent struct {
 }
 
 var (
-	actMu  sync.Mutex
-	actLog []ActivityEvent
+	actMu    sync.Mutex
+	actLog   []ActivityEvent
+	actDirty bool
 )
+
+const actKeep = 500 // events kept (and saved) for the History page
+
+func eventsPath() string { return filepath.Join(rootDir, "data", "events.json") }
+
+// eventsLoop loads the saved history once and saves it again when something new was added.
+func eventsLoop() {
+	if b, err := os.ReadFile(eventsPath()); err == nil {
+		var old []ActivityEvent
+		if json.Unmarshal(b, &old) == nil {
+			actMu.Lock()
+			actLog = append(old, actLog...)
+			if len(actLog) > actKeep {
+				actLog = actLog[len(actLog)-actKeep:]
+			}
+			actMu.Unlock()
+		}
+	}
+	t := time.NewTicker(20 * time.Second)
+	for range t.C {
+		eventsSave()
+	}
+}
+
+func eventsSave() {
+	actMu.Lock()
+	if !actDirty {
+		actMu.Unlock()
+		return
+	}
+	b, _ := json.Marshal(actLog)
+	actDirty = false
+	actMu.Unlock()
+	_ = os.MkdirAll(filepath.Dir(eventsPath()), 0o755)
+	tmp := eventsPath() + ".tmp"
+	if os.WriteFile(tmp, b, 0o644) == nil {
+		_ = os.Rename(tmp, eventsPath())
+	}
+}
+
+func allEvents() []ActivityEvent {
+	actMu.Lock()
+	defer actMu.Unlock()
+	out := make([]ActivityEvent, 0, len(actLog))
+	for i := len(actLog) - 1; i >= 0; i-- {
+		out = append(out, actLog[i])
+	}
+	return out
+}
 
 func note(kind, format string, a ...any) {
 	e := ActivityEvent{Time: time.Now().Unix(), Kind: kind, Text: fmt.Sprintf(format, a...)}
 	actMu.Lock()
 	actLog = append(actLog, e)
-	if len(actLog) > 60 {
-		actLog = actLog[len(actLog)-60:]
+	if len(actLog) > actKeep {
+		actLog = actLog[len(actLog)-actKeep:]
 	}
+	actDirty = true
 	actMu.Unlock()
 }
 

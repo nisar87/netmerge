@@ -111,6 +111,7 @@ func main() {
 	go safely("updates", updateLoop)
 	go safely("providers", providerLoop)
 	go safely("history", historyLoop)
+	go safely("events", eventsLoop)
 	go presetScheduleLoop()
 	if engineMissing() {
 		go safely("engine download", downloadEngine)
@@ -131,6 +132,8 @@ func main() {
 	logf("NetMerge quitting")
 	trayRemove()
 	usageSave()
+	eventsSave()
+	historySave()
 	engine.Stop()
 	_ = srv.Close()
 }

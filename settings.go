@@ -235,6 +235,7 @@ func syncLinks(adapters []Adapter) {
 			settings.Links = append(settings.Links, Link{Name: a.Name, Label: label, Enabled: true, Weight: 1})
 			changed = true
 			logf("new connection found: %s (%s)", a.Name, a.Desc)
+			note("info", "New connection found: %s", label)
 		}
 	}
 	if changed {

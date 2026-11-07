@@ -264,7 +264,8 @@ pre.log{background:var(--inset);border:1px solid var(--line);border-radius:var(-
 .statusline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
 .updb{display:flex;align-items:center;gap:14px;background:var(--accent-soft);border-color:var(--accent)}
 .role label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:var(--mute);min-height:32px}
-.role .sel{min-width:0;width:200px;max-width:62%;font-size:12.5px;padding:5px 8px}
+.role .sel{min-width:0;width:210px;max-width:62%;font-size:12.5px;padding:5px 8px}
+.role .hint2{margin-top:2px}
 .pr{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
 .pr .pc{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--card);display:flex;flex-direction:column;gap:8px}
 .pr .pc.on{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
@@ -278,6 +279,12 @@ details.adv>summary{cursor:pointer;list-style:none;padding:2px 0}
 details.adv>summary::-webkit-details-marker{display:none}
 details.adv>summary::after{content:'Show';float:right;color:var(--mute);font-size:13px}
 details.adv[open]>summary::after{content:'Hide'}
+.hi-day{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);padding:14px 0 6px}
+.hi-day:first-child{padding-top:0}
+.hi-row{display:flex;gap:12px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px}
+.hi-row time{flex:none;width:64px;color:var(--mute);font-variant-numeric:tabular-nums}
+.hi-row i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--info);align-self:center}
+.hi-row i.good{background:var(--good)}.hi-row i.warn{background:var(--warn)}.hi-row i.bad{background:var(--bad)}
 .wiz{position:fixed;inset:0;background:#0009;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
 .wiz .card{max-width:520px;width:100%;box-shadow:0 20px 60px #0006}
 .wiz ol{list-style:none;margin:14px 0;padding:0;display:grid;gap:10px}
@@ -340,6 +347,7 @@ details.adv[open] summary::before{content:"▾ "}
       <button class="nav" data-p="rules"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>Protection</button>
       <button class="nav" data-p="block"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>Blocking<span class="navbadge" id="blkBadge" hidden></span></button>
       <button class="nav" data-p="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
+      <button class="nav" data-p="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>History</button>
       <button class="nav" data-p="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>Logs</button>
     </nav>
     <div class="side-foot"><b id="sfTitle">NetMerge</b><span id="sfText">Starting…</span></div>
@@ -393,7 +401,7 @@ details.adv[open] summary::before{content:"▾ "}
         <div id="histBox"></div>
       </div>
       <div class="card" style="margin-top:16px">
-        <h3 style="margin:0 0 8px">Recent activity</h3>
+        <h3 style="margin:0 0 8px">Recent activity <button class="btn" id="seeAll" style="float:right;padding:3px 10px;font-size:12px">See all</button></h3>
         <div id="actList"></div>
       </div>
     </section>
@@ -564,6 +572,10 @@ details.adv[open] summary::before{content:"▾ "}
     </section>
 
     <!-- LOGS -->
+    <section class="page" id="pg-history" hidden>
+      <div class="row" style="gap:10px;flex-wrap:wrap"><div class="seg" id="hiSel"><button data-v="all" class="sel">Everything</button><button data-v="problems">Problems</button><button data-v="changes">Changes</button></div><div class="spacer"></div><button class="btn" id="hiRefresh">Refresh</button></div>
+      <div class="card" style="margin-top:12px" id="hiBox"></div>
+    </section>
     <section class="page" id="pg-log" hidden>
       <div class="row"><div class="seg" id="logSel"><button data-v="app" class="sel">NetMerge</button><button data-v="engine">Engine</button><button data-v="rates">Speed</button></div><div class="spacer"></div><button class="btn" id="logRefresh">Refresh</button></div>
       <pre class="log" id="logBox"></pre>
@@ -582,6 +594,7 @@ const ICONS = {
 };
 const PAGES = {
   overview:['Overview','Live speed of every connection'],
+  history:['History','What happened and when'],
   presets:['Presets','One click for gaming, work, travel and more'],
   apps:['Apps','Decide which connection each app uses'],
   test:['Speed test','Measure what your connections can really do'],
@@ -641,6 +654,7 @@ function go(p){
   if (p === 'usage') loadUsage();
   if (p === 'share') loadShare();
   if (p === 'presets') loadPresets();
+  if (p === 'history') loadHistoryEvents();
   if (S) render();
 }
 $$('.nav').forEach(n => n.onclick = () => go(n.dataset.p));
@@ -716,7 +730,7 @@ function renderOverview(sn, run, act, P){
   $('#session').textContent = bytes(sn.links.reduce((a,l)=>a+(l.totalRx||0),0));
   $('#uptime').textContent = run ? dur(sn.uptime) : '—';
   setHTML($('#legend'), sn.links.filter(l=>l.present && l.enabled).map(l => `<div><i style="background:${colorOf(l.name)}"></i>${esc(l.label)}<b>${fmtM(l.down)}</b></div>`).join(''));
-  $('#connHint').textContent = sn.links.length ? 'Turn a connection off to leave it out of the merge.' : '';
+  $('#connHint').textContent = sn.links.length ? 'NetMerge shares the work between your connections by itself. Turn one off to leave it out.' : '';
   const ms = $('#mode');
   if (document.activeElement !== ms) {
     const opts = [['fast','Combine all · fastest'], ['stable','Combine all · steady sites']].concat(local.links.map(l => ['link:'+l.name, 'Only '+l.label + (S.snap.links.find(x=>x.name===l.name)?.present === false ? ' (not connected)' : '')]));
@@ -725,8 +739,8 @@ function renderOverview(sn, run, act, P){
   $('#modeDesc').textContent = local.mode.startsWith('link:')
     ? `Everything uses ${labelOf(local.mode.slice(5))} only. The other connection stays ready as a backup if it drops. Apps with their own rule keep that rule.`
     : local.mode === 'stable'
-    ? 'Each website sticks to one connection. Safest for logins, slightly lower peak speed.'
-    : 'Every new connection alternates between your links. Best speed for downloads and speed tests.';
+    ? 'Each website stays on one line. Fewer sign-in problems, slightly lower top speed.'
+    : 'Uses all your lines at once, sharing the work by speed. Best for downloads and speed tests.';
   renderLinks(sn, act, P); drawChart();
 }
 
@@ -778,11 +792,11 @@ function renderLinks(sn, act, P){
         <div class="meta"><span class="chip" data-f="status"></span><span data-f="tags" style="display:contents"></span></div>
         <div data-f="missing"></div>
         <div class="share">
-          <div class="share-h"><span>Share of new connections<b data-f="pct"></b></span>
+          <div class="share-h"><span title="NetMerge decides by itself how many newly opened websites and downloads use this line, based on its speed right now.">Share of the work<b data-f="pct"></b></span>
             <div class="step" data-f="step"><button data-f="minus" aria-label="Give this connection a smaller share">−</button><b class="num" data-f="w"></b><button data-f="plus" aria-label="Give this connection a bigger share">+</button></div></div>
           <div class="share-bar"><div data-f="bar"></div></div>
         </div>
-        <div class="role"><label title="Always: used all the time. Only when busy: joins when the other lines are nearly full. Backup only: used only if the other lines fail.">Use this line<select class="sel" data-f="role" aria-label="When to use this connection"><option value="">Always</option><option value="busy">Only when busy</option><option value="backup">Backup only</option></select></label><div class="hint2 slowHint" data-f="slowHint" hidden>This line is much slower or less steady than the others. <button class="btn" data-f="slowBtn" style="padding:2px 8px;font-size:12px">Use it only when busy</button></div></div>
+        <div class="role"><label>When to use this line<select class="sel" data-f="role" aria-label="When to use this connection"><option value="">Always</option><option value="busy">Only when the others are busy</option><option value="backup">Only if the others fail</option></select></label><div class="hint2" data-f="roleHint"></div><div class="hint2 slowHint" data-f="slowHint" hidden>This line is much slower or less steady than the others. <button class="btn" data-f="slowBtn" style="padding:2px 8px;font-size:12px">Use it only when the others are busy</button></div></div>
       </div>`).join('');
     box.querySelectorAll('.lk').forEach(card => {
       const name = card.dataset.n, L = () => local.links.find(x => x.name === name);
@@ -816,15 +830,15 @@ function renderLinks(sn, act, P){
     const h = holdFor(l.name), on = l.present && ll.enabled;
     const tag = (txt, title, dim) => `<span class="tag${dim ? ' dim' : ''}" title="${title}">${txt}</span>`;
     setHTML(f('tags'), [
-      tag(l.present ? esc(l.ip) : '—', 'Local address', !l.present),
-      tag(h.publicIP ? esc(h.publicIP) : 'public IP…', 'Public address (what websites see)', !h.publicIP),
+      tag(l.present ? esc(l.ip) : '—', 'Address on your network', !l.present),
+      tag(h.publicIP ? esc(h.publicIP) : 'internet address…', 'Internet address (what websites see)', !h.publicIP),
       tag((h.delay ? h.delay : '—') + ' ms' + (l.quality && l.quality.label ? ' · ' + l.quality.label : ''), l.quality && l.quality.label ? `Response time and line quality: ${l.quality.label} (${l.quality.loss.toFixed(0)}% lost, jitter ${l.quality.jitter} ms, last few minutes)` : 'Response time', !(run && on && h.delay)),
       tag(bytes(l.useDay||0) + ' today', 'Data used on this connection today (this month: ' + bytes(l.useMonth||0) + ')', !l.useDay),
       tag((h.share == null ? '—' : h.share) + '% of traffic', 'Share of the traffic over the last few seconds', !(run && on && h.share != null))
     ].join(''));
     f('missing').innerHTML = l.present ? '' : '<div class="warn-line">Unplugged or no internet. It rejoins by itself when it comes back.</div>';
     f('w').textContent = '×'+ll.weight;
-    { const r = f('role'); if (document.activeElement !== r) r.value = ll.role || ''; }
+    { const r = f('role'); if (document.activeElement !== r) r.value = ll.role || ''; f('roleHint').textContent = ll.role === 'busy' ? 'Saves this line: it joins only when the other lines are nearly full.' : ll.role === 'backup' ? 'Kept in reserve: it is used only if the other lines stop working.' : 'Used all the time, together with the other lines.'; }
     { const poor = run && on && !ll.role && (l.slow || (l.quality && l.quality.label === 'Poor')); f('slowHint').hidden = !poor; }
     f('minus').disabled = ll.weight <= 1; f('plus').disabled = ll.weight >= 5;
     const smart = !!sn.smart && !local.mode.startsWith('link:') && local.mode !== 'stable';
@@ -1362,6 +1376,27 @@ document.addEventListener('click', async e => {
 });
 document.addEventListener('change', e => { if (['prFrom','prTo','prSc'].includes(e.target.id) && $('#prScOn')?.classList.contains('on')) prSched(true); });
 setInterval(() => { if (page === 'presets') loadPresets(); }, 8000);
+
+/* ---------- history ---------- */
+let HI = null, hiFilter = 'all';
+async function loadHistoryEvents(){ try { HI = (await api('events')).events || []; } catch(e){ return; } paintHistoryEvents(); }
+function paintHistoryEvents(){
+  const box = $('#hiBox'); if (!box || !HI) return;
+  const ev = HI.filter(e => hiFilter === 'all' || (hiFilter === 'problems' ? (e.kind === 'warn' || e.kind === 'bad') : (e.kind === 'info' || e.kind === 'good')));
+  if (!ev.length) { setHTML(box, '<div class="hint2">Nothing here yet. Connection changes, outages, presets and starts and stops show up as they happen.</div>'); return; }
+  let day = '', html = '';
+  const today = new Date().toDateString(), yest = new Date(Date.now()-864e5).toDateString();
+  ev.forEach(e => {
+    const d = new Date(e.time*1000), ds = d.toDateString();
+    if (ds !== day) { day = ds; html += `<div class="hi-day">${ds === today ? 'Today' : ds === yest ? 'Yesterday' : d.toLocaleDateString(undefined, {weekday:'long', day:'numeric', month:'long'})}</div>`; }
+    html += `<div class="hi-row"><time>${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</time><i class="${esc(e.kind)}"></i><span>${esc(e.text)}</span></div>`;
+  });
+  setHTML(box, html);
+}
+$$('#hiSel button').forEach(b => b.onclick = () => { hiFilter = b.dataset.v; $$('#hiSel button').forEach(x=>x.classList.toggle('sel', x===b)); paintHistoryEvents(); });
+$('#hiRefresh').onclick = loadHistoryEvents;
+$('#seeAll').onclick = () => go('history');
+setInterval(() => { if (page === 'history' && !document.hidden) loadHistoryEvents(); }, 5000);
 
 /* ---------- 24-hour history ---------- */
 let histAt = 0, histPts = null;

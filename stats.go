@@ -85,6 +85,7 @@ type linkTrack struct {
 	rx, tx         float64
 	hist           []float64
 	totRx, totTx   uint64
+	known, was     bool // presence seen before / last presence (for the history)
 }
 
 type connTrack struct{ down, up int64 }
@@ -364,6 +365,14 @@ func sample(slow bool) {
 			tracks[l.Name] = tr
 		}
 		a, present := byName[l.Name]
+		if tr.known && tr.was != present {
+			if present {
+				note("good", "%s is connected again", labelFor(s, l.Name))
+			} else {
+				note("warn", "%s was unplugged or lost its connection", labelFor(s, l.Name))
+			}
+		}
+		tr.known, tr.was = true, present
 		if present {
 			if c, ok := counters[a.Index]; ok {
 				if tr.have {

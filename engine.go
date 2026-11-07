@@ -185,6 +185,7 @@ func (e *Engine) Start() error {
 			e.running, e.version, e.startedAt, e.lastError, e.apiFails = true, v, time.Now(), "", 0
 			e.appliedKey = keyOf(links)
 			logf("engine %s started with %d connection(s)", v, len(links))
+			note("good", "Merging started with %d connection(s)", len(links))
 			go e.watch(cmd, exited)
 			return nil
 		}
@@ -216,6 +217,7 @@ func (e *Engine) watch(cmd *exec.Cmd, exited chan error) {
 	}
 	e.mu.Unlock()
 	if current {
+		note("bad", "The network engine stopped unexpectedly. NetMerge is restarting it.")
 		e.restartAfter(fmt.Sprintf("engine exited unexpectedly (%v)", err))
 	}
 }
@@ -282,6 +284,7 @@ func (e *Engine) Check() {
 func (e *Engine) Stop() {
 	e.mu.Lock()
 	cmd := e.cmd
+	was := e.running
 	e.running, e.cmd = false, nil
 	e.mu.Unlock()
 	if cmd != nil && cmd.Process != nil {
@@ -289,6 +292,9 @@ func (e *Engine) Stop() {
 	}
 	killProcessByName("mihomo.exe")
 	logf("merging stopped")
+	if was {
+		note("info", "Merging stopped")
+	}
 }
 
 // Apply writes the config and hot-reloads the engine.
