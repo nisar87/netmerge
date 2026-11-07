@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.7.0
+- New DNS page: choose Windows default (still the default), Cloudflare, Google, Quad9, OpenDNS, AdGuard or your own servers, optionally encrypted (DNS-over-HTTPS). Company/VPN domains can be kept on the Windows DNS.
+- "Find the best DNS" test: sends real lookups through every connection to each provider, times them, flags servers that redirect unknown names, and recommends one. Nothing changes until you press Use this.
+- Safety: if the chosen servers stop answering, or the engine will not start with them, NetMerge returns to the Windows DNS by itself and says so. Old "built-in DNS" setting keeps working as "NetMerge built-in".
+- Backup/restore include the DNS choice.
+
 ## 2.6.0
 - Overview cards in plain language: "Share of the work", "When to use this line" (Always / Only when the others are busy / Only if the others fail) with a one-line explanation of the current choice, "internet address" instead of "public IP".
 - New History page: connection changes (plugged, unplugged, back), outages, presets, merging started and stopped, grouped by day with Problems and Changes filters. Saved on disk (last 500 events) and kept across restarts. "See all" on the Overview opens it.

@@ -280,11 +280,7 @@ func buildConfig(s Settings) ([]byte, error) {
 	}
 	if s.BuiltinDNS {
 		tun["dns-hijack"] = []string{"any:53"}
-		cfg["dns"] = map[string]any{
-			"enable": true, "enhanced-mode": "fake-ip", "fake-ip-range": "198.18.0.1/16",
-			"fake-ip-filter": []string{"+.lan", "+.local", "+.msftconnecttest.com", "+.msftncsi.com", "+.corp", "+.internal"},
-			"nameserver":     []string{"1.1.1.1", "8.8.8.8"},
-		}
+		cfg["dns"] = buildDNSConfig(s)
 	} else {
 		// Keep Windows DNS untouched (works with VPN / company DNS); domains are learned by sniffing.
 		cfg["dns"] = map[string]any{"enable": false}

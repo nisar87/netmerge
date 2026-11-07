@@ -177,6 +177,7 @@ func (e *Engine) Start() error {
 		case err := <-exited:
 			e.lastError = "The engine stopped right after starting (" + fmt.Sprint(err) + "). " + tailFile(logPath, 6)
 			e.cmd = nil
+			dnsStartFailed(e.lastError)
 			logf("engine failed: %s", e.lastError)
 			return fmt.Errorf("%s", e.lastError)
 		default:
@@ -194,6 +195,7 @@ func (e *Engine) Start() error {
 	_ = cmd.Process.Kill()
 	e.cmd = nil
 	e.lastError = "The engine did not respond. " + tailFile(logPath, 6)
+	dnsStartFailed(e.lastError)
 	return fmt.Errorf("%s", e.lastError)
 }
 

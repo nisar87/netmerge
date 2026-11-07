@@ -52,7 +52,12 @@ type Settings struct {
 	PresetSchedule *PresetSchedule   `json:"presetSchedule,omitempty"`
 	SchedActive    bool              `json:"schedActive"`
 	SchedPrev      string            `json:"schedPrev"`
-	ClassicBalance bool              `json:"classicBalance"` // true = old fixed round-robin instead of the smart dispatcher
+	DNSProvider    string            `json:"dnsProvider"` // "" | provider id | "custom" (used when BuiltinDNS is on)
+	DNSSecure      bool              `json:"dnsSecure"`   // encrypted lookups (DNS-over-HTTPS)
+	DNSCustom      []string          `json:"dnsCustom,omitempty"`
+	DNSDomains     []string          `json:"dnsDomains,omitempty"` // names that keep using the Windows DNS
+	DNSFallback    bool              `json:"dnsFallback"`          // NetMerge went back to Windows DNS by itself
+	ClassicBalance bool              `json:"classicBalance"`       // true = old fixed round-robin instead of the smart dispatcher
 }
 
 var (
@@ -136,6 +141,12 @@ func updateSettings(fn func(s *Settings)) Settings {
 }
 
 func normalizeLocked() {
+	if _, ok := findProv(settings.DNSProvider); !ok && settings.DNSProvider != "custom" {
+		settings.DNSProvider = ""
+	}
+	if settings.DNSProvider == "custom" && len(settings.DNSCustom) == 0 {
+		settings.DNSProvider = ""
+	}
 	for i := range settings.Links {
 		if r := settings.Links[i].Role; r != "busy" && r != "backup" {
 			settings.Links[i].Role = ""

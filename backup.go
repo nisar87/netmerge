@@ -63,6 +63,7 @@ func restoreInto(s *Settings, in Settings) {
 		s.StableDomains = in.StableDomains
 	}
 	s.MergeOnLaunch, s.BuiltinDNS = in.MergeOnLaunch, in.BuiltinDNS
+	s.DNSProvider, s.DNSSecure, s.DNSCustom, s.DNSDomains = in.DNSProvider, in.DNSSecure, cleanIPs(in.DNSCustom), cleanDomains(in.DNSDomains)
 	s.NoCallProtect, s.NoUpdateCheck, s.ClassicBalance = in.NoCallProtect, in.NoUpdateCheck, in.ClassicBalance
 	if in.QuotaReset >= 1 && in.QuotaReset <= 28 {
 		s.QuotaReset = in.QuotaReset

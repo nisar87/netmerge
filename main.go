@@ -112,6 +112,7 @@ func main() {
 	go safely("providers", providerLoop)
 	go safely("history", historyLoop)
 	go safely("events", eventsLoop)
+	go dnsGuardLoop()
 	go presetScheduleLoop()
 	if engineMissing() {
 		go safely("engine download", downloadEngine)

@@ -316,3 +316,91 @@ func TestPresetApplyRestore(t *testing.T) {
 		t.Fatal("restore did not bring back the original")
 	}
 }
+
+func TestDNSCleaning(t *testing.T) {
+	if got := cleanIPs([]string{" 9.9.9.9 ", "bad", "127.0.0.1", "0.0.0.0", "1.1.1.1", "8.8.8.8"}); len(got) != 2 || got[0] != "9.9.9.9" || got[1] != "1.1.1.1" {
+		t.Fatalf("ips %v", got)
+	}
+	if got := cleanDomains([]string{"*.Corp.Example.com", "bad_name", "corp.example.com", "x"}); len(got) != 1 || got[0] != "corp.example.com" {
+		t.Fatalf("domains %v", got)
+	}
+}
+
+func TestDNSConfig(t *testing.T) {
+	s := defaultSettings()
+	s.BuiltinDNS = true
+	d := buildDNSConfig(s) // old built-in behaviour must be unchanged
+	if ns := d["nameserver"].([]string); len(ns) != 2 || ns[0] != "1.1.1.1" || ns[1] != "8.8.8.8" {
+		t.Fatalf("legacy nameserver %v", ns)
+	}
+	if _, ok := d["default-nameserver"]; ok {
+		t.Fatal("legacy config must not gain keys")
+	}
+	s.DNSProvider, s.DNSSecure, s.DNSDomains = "quad9", true, []string{"corp.example.com"}
+	d = buildDNSConfig(s)
+	if ns := d["nameserver"].([]string); ns[0] != "https://9.9.9.9/dns-query" {
+		t.Fatalf("doh %v", ns)
+	}
+	pol := d["nameserver-policy"].(map[string]any)
+	if _, ok := pol["+.corp.example.com"]; !ok {
+		t.Fatal("policy missing")
+	}
+	s.DNSProvider, s.DNSSecure, s.DNSCustom = "custom", true, []string{"192.168.1.5"}
+	d = buildDNSConfig(s)
+	if ns := d["nameserver"].([]string); len(ns) != 1 || ns[0] != "192.168.1.5" {
+		t.Fatalf("custom %v", ns)
+	}
+	s.BuiltinDNS = false
+	if dnsActive(s) {
+		t.Fatal("must be off when built-in DNS is off")
+	}
+}
+
+func TestDNSWire(t *testing.T) {
+	id, q := dnsQuery("www.example.com")
+	resp := append([]byte{}, q[:12]...)
+	resp[2], resp[3], resp[7] = 0x81, 0x80, 1 // response, no error, one answer
+	if rc, an, ok := parseDNS(id, resp); !ok || rc != 0 || an != 1 {
+		t.Fatalf("parse %v %v %v", rc, an, ok)
+	}
+	if _, _, ok := parseDNS(id+1, resp); ok {
+		t.Fatal("must reject another id")
+	}
+}
+
+func TestDNSRecommend(t *testing.T) {
+	mk := func(id, prov, kind string, ms, fail float64, hij bool) DNSRow {
+		return DNSRow{ID: id, Provider: prov, Kind: kind, Label: id, Median: ms, Fail: fail, Hijack: hij}
+	}
+	rows := []DNSRow{mk("router", "windows", "router", 80, 0, false), mk("c:plain", "cloudflare", "plain", 30, 0, false),
+		mk("c:doh", "cloudflare", "doh", 45, 0, false), mk("g:plain", "google", "plain", 35, 20, false)}
+	r := recommendDNS(rows)
+	if r.Provider != "cloudflare" || !r.Secure {
+		t.Fatalf("rec %+v", r)
+	}
+	rows[0].Median = 35 // current is nearly as fast: no change
+	if r := recommendDNS(rows); r.Provider != "" {
+		t.Fatalf("should not recommend: %+v", r)
+	}
+	rows[0].Hijack = true // a redirecting provider is a reason to change even if fast
+	if r := recommendDNS(rows); r.Provider == "" {
+		t.Fatal("should recommend when the current DNS redirects")
+	}
+	rows[1].Hijack = true
+	rows[2].Fail = 50
+	if r := recommendDNS(rows); r.Provider != "" && r.Provider != "google" {
+		t.Fatalf("unreliable choice %+v", r)
+	}
+}
+
+func TestDNSAggregate(t *testing.T) {
+	targets := []dnsTarget{{ID: "router", Kind: "router"}, {ID: "x", Kind: "plain", Provider: "x"}}
+	res := []map[string]DNSLineStat{
+		{"A": {Median: 50, N: 12}, "B": {Median: -1, Fail: 100, N: 12}},
+		{"A": {Median: 20, N: 12}, "B": {Median: -1, Fail: 100, N: 12}},
+	}
+	rows := aggregateDNS(targets, res)
+	if rows[0].ID != "x" || rows[0].Median != 20 || rows[0].Fail != 0 {
+		t.Fatalf("a dead line must not count against the servers: %+v", rows)
+	}
+}
