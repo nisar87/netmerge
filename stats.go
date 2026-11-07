@@ -145,7 +145,43 @@ func statsLoop() {
 	}
 }
 
-var lastSampleAt time.Time
+type connList struct {
+	Connections []mConn `json:"connections"`
+}
+
+var (
+	lastApps      map[string]*AppStat
+	lastDevs      map[string]*DeviceStat
+	lastLinkConns map[string]int
+	lastConnN     int
+)
+
+type connResult struct {
+	ok   bool
+	at   time.Time
+	list connList
+}
+
+var connPending chan connResult
+
+type mConn struct {
+	ID       string   `json:"id"`
+	Download int64    `json:"download"`
+	Upload   int64    `json:"upload"`
+	Chains   []string `json:"chains"`
+	Rule     string   `json:"rule"`
+	Payload  string   `json:"rulePayload"`
+	Metadata struct {
+		Process  string `json:"process"`
+		Type     string `json:"type"`
+		SrcIP    string `json:"sourceIP"`
+		DestIP   string `json:"destinationIP"`
+		DestPort string `json:"destinationPort"`
+		Host     string `json:"host"`
+	} `json:"metadata"`
+}
+
+var lastSampleAt, lastCounterAt, lastConnAt time.Time
 
 func sample(slow bool) {
 	now := time.Now()
@@ -168,32 +204,68 @@ func sample(slow bool) {
 		s = getSettings()
 	}
 	counters := ifCounters()
+	// the byte counters were read just now: their interval is measured between reads, not from the start of the
+	// sample (a slow engine reply in between used to stretch one interval and shrink the next: false 200+ Mbps spikes)
+	cNow := time.Now()
+	dtC := 1.0
+	if !lastCounterAt.IsZero() {
+		dtC = cNow.Sub(lastCounterAt).Seconds()
+	}
+	lastCounterAt = cNow
 	running, errMsg, started, version := engine.Status()
 
 	// --- engine connections (per app / per link) ---
-	type mConn struct {
-		ID       string   `json:"id"`
-		Download int64    `json:"download"`
-		Upload   int64    `json:"upload"`
-		Chains   []string `json:"chains"`
-		Rule     string   `json:"rule"`
-		Payload  string   `json:"rulePayload"`
-		Metadata struct {
-			Process  string `json:"process"`
-			Type     string `json:"type"`
-			SrcIP    string `json:"sourceIP"`
-			DestIP   string `json:"destinationIP"`
-			DestPort string `json:"destinationPort"`
-			Host     string `json:"host"`
-		} `json:"metadata"`
-	}
-	var mc struct {
-		Connections []mConn `json:"connections"`
-	}
+	var mc connList
+	// The engine's connection list can take seconds when the engine is under load. It is fetched in the background:
+	// if it is not back within a moment, this tick keeps the previous per-app numbers and only the link speeds
+	// (read from the adapters, always instant) move, so the window never freezes.
+	gotConns := false
+	var connAt time.Time
 	if running {
-		if b, code, err := apiReq("GET", "/connections", nil); err == nil && code == 200 {
-			_ = json.Unmarshal(b, &mc)
+		if connPending == nil {
+			ch := make(chan connResult, 1)
+			connPending = ch
+			go func() {
+				var r connResult
+				if b, code, err := apiReq("GET", "/connections", nil); err == nil && code == 200 {
+					_ = json.Unmarshal(b, &r.list)
+					r.ok = true
+				}
+				r.at = time.Now()
+				ch <- r
+			}()
 		}
+		var r connResult
+		select {
+		case r = <-connPending:
+			connPending = nil
+		case <-time.After(300 * time.Millisecond):
+			r.ok = false
+		}
+		if r.ok {
+			gotConns, connAt = true, r.at
+			mc.Connections = r.list.Connections
+		}
+	} else {
+		connPending = nil
+	}
+
+	connNow := connAt
+	if !gotConns {
+		connNow = time.Now()
+	}
+	dtConn := dtSec
+	if !lastConnAt.IsZero() {
+		dtConn = connNow.Sub(lastConnAt).Seconds()
+	}
+	if gotConns {
+		lastConnAt = connNow
+	}
+	if dtConn < 0.2 {
+		dtConn = 0.2
+	}
+	if dtC < 0.2 {
+		dtC = 0.2
 	}
 
 	statsMu.Lock()
@@ -217,7 +289,7 @@ func sample(slow bool) {
 		prev, had := conns[c.ID]
 		d, u := float64(0), float64(0)
 		if had {
-			d, u = float64(c.Download-prev.down)/dtSec, float64(c.Upload-prev.up)/dtSec
+			d, u = float64(c.Download-prev.down)/dtConn, float64(c.Upload-prev.up)/dtConn
 			if d < 0 {
 				d = 0
 			}
@@ -264,7 +336,19 @@ func sample(slow bool) {
 			dbgRows = append(dbgRows, dbgConn{labelFor(s, ln), d, dst + ":" + c.Metadata.DestPort})
 		}
 	}
-	conns = newConns
+	if gotConns {
+		conns = newConns
+		lastApps, lastDevs, lastLinkConns, lastConnN = apps, devs, linkConns, len(mc.Connections)
+	} else if running {
+		apps, devs, linkConns = lastApps, lastDevs, lastLinkConns
+		if apps == nil {
+			apps, devs, linkConns = map[string]*AppStat{}, map[string]*DeviceStat{}, map[string]int{}
+		}
+		mc.Connections = make([]mConn, lastConnN)
+	} else {
+		conns = newConns
+		lastApps, lastDevs, lastLinkConns, lastConnN = nil, nil, nil, 0
+	}
 
 	// remember apps we have seen, for the app picker
 	if len(apps) > 0 {
@@ -284,7 +368,7 @@ func sample(slow bool) {
 			if c, ok := counters[a.Index]; ok {
 				if tr.have {
 					dr, dtx := c[0]-tr.lastRx, c[1]-tr.lastTx // uint32 wrap-safe
-					tr.rx, tr.tx = float64(dr)/dtSec, float64(dtx)/dtSec
+					tr.rx, tr.tx = float64(dr)/dtC, float64(dtx)/dtC
 					tr.totRx += uint64(dr)
 					tr.totTx += uint64(dtx)
 					usageAdd(l.Name, uint64(dr), uint64(dtx))

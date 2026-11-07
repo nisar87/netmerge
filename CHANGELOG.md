@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.2
+- Speeds on the connection cards are measured between the real counter readings, so they no longer jump to 200+ Mbps and back to zero when the engine answers slowly.
+- The window keeps updating every second even when the engine's connection list is slow; the status check no longer waits for the service check.
+
 ## 2.3.1
 - A new or slow connection (a weak mobile signal) no longer takes a big share of new connections: unknown lines start at a quarter of the best line, laggy or poor lines get less, and a line far slower than the best one stands by instead of slowing pages down.
 
