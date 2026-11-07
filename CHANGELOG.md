@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.2
+- Settings reorganised: "Everyday" and "Updates and backup" first, rarely needed options folded into "Advanced". Every option says what it does, what happens if you change it, and what is recommended.
+- Protection page explains that it is only for special cases and marks each box "Only if needed".
+- The separate "Normal" preset is gone: the "Default · my settings" card covers it.
+
 ## 2.5.1
 - Presets page starts with a "Default · my settings" card: your own settings from before any preset, one click to return to them.
 

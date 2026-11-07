@@ -50,7 +50,6 @@ func stableRules(names ...string) []AppRule {
 
 func builtinPresets() []Preset {
 	return []Preset{
-		{ID: "normal", Name: "Normal", Builtin: true, Mode: "fast", Desc: "Everything merged, all lines used all the time. Calls stay on one steady line."},
 		{ID: "work", Name: "Work from home", Builtin: true, Mode: "fast", Block: boolp(false), Mobile: "busy",
 			Desc:  "Meetings and remote desktop stay on one steady line. The mobile line joins only when the others are full. Ad blocking off so work sites do not break.",
 			Rules: stableRules("mstsc.exe", "AnyDesk.exe", "TeamViewer.exe", "Citrix.exe", "wfica32.exe", "Slack.exe", "Teams.exe", "ms-teams.exe", "Zoom.exe", "webex.exe")},
