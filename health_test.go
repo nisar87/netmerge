@@ -51,7 +51,7 @@ func TestAutoGroup(t *testing.T) {
 
 func TestAllocSlots(t *testing.T) {
 	for _, w := range [][]float64{{1, 1}, {9, 1}, {100, 1}, {1, 100}, {5, 3, 2}, {0.1, 0.1, 0.1}, {1}, {0, 5}} {
-		c := allocSlots(w, dispatchSlots)
+		c := allocSlots(w, dispatchSlots, nil)
 		sum := 0
 		for i, n := range c {
 			if n < 1 {
@@ -63,7 +63,7 @@ func TestAllocSlots(t *testing.T) {
 			t.Fatalf("%v -> %v: slots add up to %d", w, c, sum)
 		}
 	}
-	if c := allocSlots([]float64{3, 1}, 8); c[0] != 6 || c[1] != 2 {
+	if c := allocSlots([]float64{3, 1}, 8, nil); c[0] != 6 || c[1] != 2 {
 		t.Fatalf("3:1 should give 6/2, got %v", c)
 	}
 }
@@ -253,5 +253,24 @@ func TestCallRules(t *testing.T) {
 	s.NoCallProtect = true
 	if len(callRules(s, "STABLE")) != 0 {
 		t.Fatal("should be off")
+	}
+}
+
+func TestSlowLinkGetsNoSlot(t *testing.T) {
+	c := allocSlots([]float64{50, 40, 3}, dispatchSlots, []bool{false, false, true})
+	if c[2] != 0 || c[0]+c[1] != dispatchSlots {
+		t.Fatalf("got %v", c)
+	}
+	c = allocSlots([]float64{50, 40, 3}, dispatchSlots, nil)
+	if c[2] != 1 {
+		t.Fatalf("got %v", c)
+	}
+}
+
+func TestSlowFlags(t *testing.T) {
+	set := []*dispLink{{capRx: 6e6, capTx: 6e6, seenRx: true}, {capRx: 5e6, capTx: 5e6, seenRx: true}, {capRx: 0.4e6, capTx: 0.4e6, seenRx: true}}
+	f := slowFlags(set)
+	if f[0] || f[1] || !f[2] {
+		t.Fatalf("got %v", f)
 	}
 }

@@ -38,6 +38,7 @@ type LinkStat struct {
 	QuotaOut bool      `json:"quotaOut"` // allowance used up and the connection is left out
 	Role     string    `json:"role"`
 	Standby  bool      `json:"standby"` // role says it is not needed right now
+	Slow     bool      `json:"slow"`    // far slower than the best line: kept as standby, no new connections
 	Quality  Quality   `json:"quality"`
 	Portal   bool      `json:"portal"` // the network wants a sign-in page first (hotel / café Wi-Fi)
 }
@@ -303,6 +304,9 @@ func sample(slow bool) {
 		ls.Quality = qualityFor(l.Name)
 		ls.Portal = isPortal(l.Name)
 		ls.Role, ls.Standby = l.Role, running && l.Enabled && present && isStandby(l)
+		if n, on := dispatchSlotsOf(l.Name); on && n == 0 && running && l.Enabled && present && !ls.Standby {
+			ls.Slow = true
+		}
 		if n, ok := dispatchSlotsOf(l.Name); ok {
 			ls.Slots = n
 		}

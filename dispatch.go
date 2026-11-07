@@ -68,7 +68,7 @@ const neutralCap = 12.5e6 // 100 Mbit/s
 // learn keeps the best 3-second average a link has carried (forgotten with a half-life of ~15 minutes). A short
 // window follows the real speed up quickly and does not count idle seconds against the link; guessing too high
 // only means the link is used a bit more, guessing too low would starve it.
-func learn(ring *[3]float64, n int, cap *float64, seen *bool) {
+func learn(ring *[3]float64, n int, cap *float64, seen *bool, busyAll bool) {
 	k := n
 	if k > len(ring) {
 		k = len(ring)
@@ -80,6 +80,11 @@ func learn(ring *[3]float64, n int, cap *float64, seen *bool) {
 	avg := sum / float64(k)
 	if *cap == 0 {
 		*cap = neutralCap
+	}
+	// a link that has not been seen carrying much, while the others are busy, is simply slow: remember that
+	// instead of leaving it at the optimistic starting value
+	if !*seen && busyAll && n >= 3 && avg >= 50e3 && avg < 1e6 {
+		*seen, *cap = true, avg*1.5
 	}
 	if avg >= 1e6 {
 		if !*seen {
@@ -121,6 +126,13 @@ func dispatchTick() {
 
 	var set []*dispLink
 	statsMu.Lock()
+	allLoad := 0.0
+	for _, l := range ls {
+		if tr := tracks[l.Name]; tr != nil {
+			allLoad += tr.rx + tr.tx
+		}
+	}
+	busyAll := allLoad > 1.5e6
 	for _, l := range ls {
 		d := dispLinks[l.Name]
 		if d == nil {
@@ -135,8 +147,8 @@ func dispatchTick() {
 			d.ringRx[d.n%3] = tr.rx
 			d.ringTx[d.n%3] = tr.tx
 			d.n++
-			learn(&d.ringRx, d.n, &d.capRx, &d.seenRx)
-			learn(&d.ringTx, d.n, &d.capTx, &d.seenTx)
+			learn(&d.ringRx, d.n, &d.capRx, &d.seenRx, busyAll)
+			learn(&d.ringTx, d.n, &d.capTx, &d.seenTx, busyAll)
 		}
 		if d.capRx == 0 {
 			d.capRx, d.capTx = neutralCap, neutralCap
@@ -145,6 +157,27 @@ func dispatchTick() {
 	}
 	statsMu.Unlock()
 	sort.Slice(set, func(i, j int) bool { return set[i].name < set[j].name })
+
+	// A link that has never been seen carrying anything is not assumed to be as fast as the best one: it starts at a
+	// quarter of it and moves up as soon as it proves otherwise (a new mobile link must not take half the traffic).
+	var bestRx, bestTx float64
+	for _, d := range set {
+		if d.seenRx && d.capRx > bestRx {
+			bestRx = d.capRx
+		}
+		if d.seenTx && d.capTx > bestTx {
+			bestTx = d.capTx
+		}
+	}
+	for _, d := range set {
+		if !d.seenRx && bestRx > 0 && d.capRx > bestRx/4 {
+			d.capRx = bestRx / 4
+		}
+		if !d.seenTx && bestTx > 0 && d.capTx > bestTx/4 {
+			d.capTx = bestTx / 4
+		}
+	}
+	pen := delayPenalty(set)
 
 	// which direction is busy decides which spare capacity counts
 	saveCaps(set)
@@ -171,6 +204,7 @@ func dispatchTick() {
 				w = 0.1 * d.capRx
 			}
 		}
+		w *= pen[i]
 		weights[i] = w
 		sum += w
 	}
@@ -187,7 +221,7 @@ func dispatchTick() {
 	for _, w := range weights {
 		sum += w
 	}
-	counts := allocSlots(weights, dispatchSlots)
+	counts := allocSlots(weights, dispatchSlots, slowFlags(set))
 	for i, d := range set {
 		dispShare[d.name] = weights[i] / sum
 	}
@@ -278,7 +312,7 @@ func dispatchTick() {
 
 // allocSlots splits n slots between links in proportion to their weights (largest remainder); every link keeps at
 // least one slot so it is still used, and the result always adds up to n.
-func allocSlots(weights []float64, n int) []int {
+func allocSlots(weights []float64, n int, slow []bool) []int {
 	counts := make([]int, len(weights))
 	if len(weights) == 0 {
 		return counts
@@ -301,7 +335,7 @@ func allocSlots(weights []float64, n int) []int {
 			x = w / sum * float64(n)
 		}
 		c := int(x)
-		if c < 1 {
+		if c < 1 && !(i < len(slow) && slow[i]) {
 			c = 1
 		}
 		counts[i] = c
@@ -315,6 +349,9 @@ func allocSlots(weights []float64, n int) []int {
 			counts[r.i]++
 			left--
 		} else if counts[r.i] > 1 {
+			counts[r.i]--
+			left++
+		} else if counts[r.i] == 1 && r.i < len(slow) && slow[r.i] {
 			counts[r.i]--
 			left++
 		}
@@ -545,4 +582,56 @@ func explainSplit(set []*dispLink, before, after map[string]int, force bool) {
 	lastSplitNote = time.Now()
 	note("info", "More new connections go to %s (%d/%d): %s is busier (%.0f%% used) than %s (%.0f%%)",
 		labelFor(s, up.name), after[up.proxy], dispatchSlots, labelFor(s, down.name), load(down), labelFor(s, up.name), load(up))
+}
+
+// delayPenalty scales a link's weight down when its response time is much worse than the best line's, and when its
+// quality is poor: a slow, laggy link (a weak mobile signal) makes pages hang when it gets its "fair" share.
+func delayPenalty(set []*dispLink) []float64 {
+	pen := make([]float64, len(set))
+	delays := make([]int, len(set))
+	best := 0
+	statsMu.Lock()
+	for i, d := range set {
+		delays[i] = health[d.name].delay
+		if delays[i] > 0 && (best == 0 || delays[i] < best) {
+			best = delays[i]
+		}
+	}
+	statsMu.Unlock()
+	for i, d := range set {
+		p := 1.0
+		if delays[i] > 0 && best > 0 && delays[i] > 2*best {
+			p = float64(2*best) / float64(delays[i])
+			if p < 0.2 {
+				p = 0.2
+			}
+		}
+		qualMu.Lock()
+		q := qualityOf(qual[d.name])
+		qualMu.Unlock()
+		if q.Label == "Poor" {
+			p *= 0.5
+		}
+		pen[i] = p
+	}
+	return pen
+}
+
+// slowFlags marks lines that carry less than a tenth of the best line (once both are known): they get no slot of
+// their own, so pages are not slowed down by sending a few of their connections down a weak line. They stay in the
+// merge as standby and are still used when they are the only line left.
+func slowFlags(set []*dispLink) []bool {
+	out := make([]bool, len(set))
+	var best float64
+	for _, d := range set {
+		if v := d.capRx + d.capTx; d.seenRx && v > best {
+			best = v
+		}
+	}
+	for i, d := range set {
+		if d.seenRx && best > 0 && d.capRx+d.capTx < best/10 {
+			out[i] = true
+		}
+	}
+	return out
 }

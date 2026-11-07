@@ -723,6 +723,7 @@ function statusOf(l, run){
   if (!run) return ['Ready', 'var(--mute)'];
   if (l.quotaOut) return ['Allowance used up', 'var(--warn)'];
   if (l.standby) return ['Standing by', 'var(--info)'];
+  if (l.slow) return ['Too slow to help: standing by', 'var(--info)'];
   if (l.portal) return ['Needs sign-in', 'var(--warn)'];
   if (l.healthy === false) return ['No internet', 'var(--bad)'];
   if (Date.now() - holdFor(l.name).activeAt < 5000) return ['Active', 'var(--good)'];

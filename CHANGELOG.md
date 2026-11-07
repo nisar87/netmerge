@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.3.1
+- A new or slow connection (a weak mobile signal) no longer takes a big share of new connections: unknown lines start at a quarter of the best line, laggy or poor lines get less, and a line far slower than the best one stands by instead of slowing pages down.
+
 ## 2.3.0
 - Sleep and resume: after the PC wakes up, NetMerge re-checks every connection and refreshes addresses and the engine.
 - Quality score for each connection (loss, jitter, delay from the last 30 checks).
