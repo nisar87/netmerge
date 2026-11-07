@@ -1,0 +1,8 @@
+# build output and local data
+*.exe
+/data/
+/core/
+/config/
+*.log
+*.old
+.DS_Store

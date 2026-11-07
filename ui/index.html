@@ -1,0 +1,1241 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NetMerge</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2311161d'/%3E%3Cpath d='M6 9c7 0 7 7 13 7M6 23c7 0 7-7 13-7h7' stroke='%2333d6c4' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0a0d12; --side:#0d1117; --panel:#131921; --panel2:#18202a; --inset:#0e131a; --line:#232d39; --line2:#2f3c4b;
+  --text:#e8eef5; --mute:#93a1b1; --dim:#64717f;
+  --accent:#2fd4c2; --accent-ink:#03201c; --accent-soft:#2fd4c21c;
+  --good:#3ddc84; --warn:#f5b84a; --bad:#ff6b6b; --info:#5ab0ff;
+  --l1:#2fd4c2; --l2:#f5b84a; --l3:#a78bfa; --l4:#5ab0ff; --l5:#ff8fb1;
+  --shadow:0 12px 32px #0007;
+  --mono:"Cascadia Mono","Cascadia Code",Consolas,ui-monospace,monospace;
+  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;
+  --r:14px;
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f3f5f8; --side:#ffffff; --panel:#ffffff; --panel2:#f6f8fb; --inset:#eef2f6; --line:#e1e6ed; --line2:#cfd7e1;
+  --text:#18212b; --mute:#566474; --dim:#8794a3;
+  --accent:#0e9f90; --accent-ink:#ffffff; --accent-soft:#0e9f9016;
+  --good:#16a35a; --warn:#c77d0a; --bad:#d63b3b; --info:#2570d4;
+  --l1:#0e9f90; --l2:#d98a0b; --l3:#7c5cd6; --l4:#2570d4; --l5:#d6407a;
+  --shadow:0 12px 32px #1a2b4018;
+}
+@media (prefers-color-scheme:light){
+  :root[data-theme="auto"]{
+    color-scheme:light;
+    --bg:#f3f5f8; --side:#ffffff; --panel:#ffffff; --panel2:#f6f8fb; --inset:#eef2f6; --line:#e1e6ed; --line2:#cfd7e1;
+    --text:#18212b; --mute:#566474; --dim:#8794a3;
+    --accent:#0e9f90; --accent-ink:#ffffff; --accent-soft:#0e9f9016;
+    --good:#16a35a; --warn:#c77d0a; --bad:#d63b3b; --info:#2570d4;
+    --l1:#0e9f90; --l2:#d98a0b; --l3:#7c5cd6; --l4:#2570d4; --l5:#d6407a;
+    --shadow:0 12px 32px #1a2b4018;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.spacer{flex:1}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+[hidden]{display:none!important}
+
+/* ---------- layout ---------- */
+.app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+.side{background:var(--side);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:11px;padding:2px 8px 18px;font-weight:680;font-size:17px;letter-spacing:.1px}
+.brand svg{width:30px;height:30px;flex:none}
+.nav{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border:0;border-radius:10px;background:none;color:var(--mute);font-weight:560;text-align:left}
+.nav svg{width:19px;height:19px;flex:none}
+.nav:hover{background:var(--panel2);color:var(--text)}
+.nav.sel{background:var(--accent-soft);color:var(--accent)}
+.side-foot{margin-top:auto;padding:12px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);font-size:12.5px;color:var(--mute)}
+.side-foot b{display:block;color:var(--text);font-weight:600;margin-bottom:2px}
+main{padding:22px 30px 48px;max-width:1240px;width:100%}
+.bar{display:flex;align-items:center;gap:16px;margin-bottom:20px}
+.bar h1{font-size:22px;margin:0;font-weight:680;letter-spacing:-.01em}
+.bar .sub{color:var(--mute);font-size:13px}
+
+/* ---------- power ---------- */
+.power{display:flex;align-items:center;gap:12px;padding:7px 8px 7px 18px;border-radius:99px;border:1px solid var(--line2);background:var(--panel);user-select:none;transition:.2s}
+.power b{font-weight:620;min-width:92px;text-align:right}
+.power .sw{width:54px;height:30px;border-radius:99px;background:var(--line2);position:relative;transition:.25s}
+.power .sw::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.25s;box-shadow:0 1px 3px #0005}
+.power.is-on{border-color:color-mix(in srgb,var(--accent) 50%,transparent);background:var(--accent-soft)}
+.power.is-on .sw{background:var(--accent)}
+.power.is-on .sw::after{left:27px}
+.power.busy{opacity:.6;pointer-events:none}
+
+/* ---------- common ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.card h3{margin:0 0 4px;font-size:15px;font-weight:650}
+.card p.d{margin:0 0 14px;color:var(--mute);font-size:13px}
+.sec{display:flex;align-items:flex-end;gap:12px;margin:28px 0 12px}
+.sec h2{font-size:16px;margin:0;font-weight:650}
+.sec .hint{color:var(--mute);font-size:13px}
+.btn{border:1px solid var(--line2);background:var(--panel2);padding:8px 16px;border-radius:10px;font-weight:580;transition:.15s}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--bad)} .btn.danger:hover{border-color:var(--bad)}
+.btn:disabled{opacity:.5;cursor:default;filter:none}
+.inp,.sel{background:var(--inset);border:1px solid var(--line2);border-radius:10px;padding:8px 12px}
+.inp{min-width:230px} .sel{cursor:pointer;min-width:190px}
+.inp:focus,.sel:focus{outline:none;border-color:var(--accent)}
+.seg{display:inline-flex;background:var(--inset);border:1px solid var(--line);border-radius:12px;padding:3px}
+.seg button{border:0;background:transparent;padding:7px 15px;border-radius:9px;color:var(--mute);font-weight:580}
+.seg button.sel{background:var(--panel);color:var(--text);box-shadow:0 1px 3px #0003,inset 0 0 0 1px var(--line2)}
+.tog{width:42px;height:24px;border-radius:99px;background:var(--line2);position:relative;border:0;flex:none;transition:.2s}
+.tog::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 2px #0004}
+.tog.on{background:var(--c,var(--accent))} .tog.on::after{left:21px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 10px;border-radius:99px;background:color-mix(in srgb,var(--c,var(--mute)) 14%,transparent);color:var(--c,var(--mute))}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c,var(--mute))}
+.tag.dim{opacity:.55}
+.tag{font-variant-numeric:tabular-nums;min-width:62px;text-align:center;font-size:12px;color:var(--mute);background:var(--inset);border:1px solid var(--line);padding:2px 9px;border-radius:99px;font-family:var(--mono)}
+.x{border:0;background:none;color:var(--dim);padding:0 0 0 7px;font-size:15px;line-height:1}
+.x:hover{color:var(--bad)}
+.note{padding:12px 16px;border-radius:12px;font-size:13.5px;margin:0 0 16px;display:flex;gap:12px;align-items:center;border:1px solid}
+.note.warn{background:color-mix(in srgb,var(--warn) 11%,transparent);border-color:color-mix(in srgb,var(--warn) 38%,transparent)}
+.note.bad{background:color-mix(in srgb,var(--bad) 11%,transparent);border-color:color-mix(in srgb,var(--bad) 40%,transparent);white-space:pre-wrap}
+.note.info{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 35%,transparent)}
+.note b{font-weight:650}
+
+/* ---------- overview hero ---------- */
+.hero{display:grid;grid-template-columns:290px 1fr;background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.hero-l{padding:22px 24px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:18px}
+.eyebrow{font-size:11.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--mute);font-weight:650}
+.big{font-size:58px;line-height:1;font-weight:600;margin-top:6px}
+.big small{font-size:18px;color:var(--mute);margin-left:7px;font-family:var(--sans);font-weight:500;letter-spacing:0}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.kv span{display:block;font-size:12px;color:var(--mute)}
+.kv b{font-family:var(--mono);font-weight:500;font-size:15px}
+.legend{display:flex;flex-direction:column;gap:7px;font-size:13px}
+.legend div{display:flex;align-items:center;gap:9px;color:var(--mute)}
+.legend i{width:10px;height:10px;border-radius:3px;flex:none}
+.legend b{margin-left:auto;font-family:var(--mono);font-weight:500;color:var(--text)}
+.hero-r{position:relative;min-height:268px}
+.hero-r canvas{position:absolute;inset:0;width:100%;height:100%}
+.chart-note{position:absolute;left:18px;top:10px;font-size:12px;color:var(--dim);pointer-events:none}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:8px 11px;font-size:12.5px;box-shadow:var(--shadow);min-width:150px;z-index:3}
+.tip div{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.tip i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:6px}
+.tip .t{border-top:1px solid var(--line);margin-top:5px;padding-top:5px;font-weight:600}
+
+/* ---------- connection cards ---------- */
+.links{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.lk{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;position:relative;overflow:hidden;transition:opacity .2s}
+.lk::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
+.lk.off{opacity:.6} .lk.off::before{background:var(--dim)}
+.lk-h{display:flex;align-items:center;gap:12px}
+.ico{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 15%,transparent);color:var(--c);flex:none}
+.ico svg{width:21px;height:21px}
+.lbl{font-weight:650;font-size:15.5px;background:transparent;border:1px solid transparent;border-radius:7px;padding:1px 5px;margin-left:-6px;width:100%;min-width:0}
+.lbl:hover{border-color:var(--line2)} .lbl:focus{outline:none;border-color:var(--accent);background:var(--inset)}
+.desc{color:var(--dim);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.lk-s{display:flex;align-items:baseline;gap:7px;margin:16px 0 0}
+.lk-s .num{font-size:32px;font-weight:600}
+.lk-s small{color:var(--mute)}
+.lk-s .up{margin-left:auto;color:var(--mute);font-size:12.5px;font-family:var(--mono)}
+.spark{width:100%;height:50px;display:block;margin:8px 0 10px}
+.meta{display:flex;flex-wrap:wrap;gap:6px;min-height:58px;align-content:flex-start}
+.share{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line2)}
+.share-h{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--mute);margin-bottom:8px}
+.share-h b{color:var(--text);font-family:var(--mono);font-weight:600;margin-left:6px}
+.share-bar{height:8px;border-radius:99px;background:var(--inset);overflow:hidden}
+.share-bar div{height:100%;background:var(--c);border-radius:99px;transition:width .4s}
+.step{display:flex;align-items:center;gap:3px}
+.step button{width:28px;height:28px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);line-height:1;font-size:16px}
+.step button:hover{border-color:var(--c)}
+.step button:disabled{opacity:.35;cursor:default}
+.step b{min-width:42px;text-align:center}
+.warn-line{color:var(--warn);font-size:12.5px;margin-top:10px}
+.modebox{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px}
+.modebox .d{color:var(--mute);font-size:13px}
+
+.navbadge{margin-left:auto;font-size:11.5px;font-weight:650;padding:1px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent)}
+.big{font-size:34px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.stat{display:flex;gap:34px;flex-wrap:wrap;margin-top:6px}
+.stat small{display:block;color:var(--mute);font-size:12.5px;margin-top:2px}
+.pack{display:flex;gap:16px;align-items:center;padding:14px 0;border-bottom:1px solid var(--line)}
+.pack:last-child{border-bottom:0}
+.pack .t{flex:1;min-width:0}.pack .t b{display:block}.pack .t span{display:block;color:var(--mute);font-size:13px;margin-top:2px}
+.pack .m{color:var(--dim);font-size:12.5px;text-align:right;white-space:nowrap}
+textarea.inp{width:100%;min-height:140px;resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+.scrollbox{height:340px;overflow:auto;border:1px solid var(--line);border-radius:var(--r)}
+.scrollbox .tbl{border:0;border-radius:0}
+.scrollbox .tbl th{position:sticky;top:0;z-index:1}
+.btn.sm{padding:4px 11px;font-size:12.5px}
+/* ---------- tables ---------- */
+.tbl{width:100%;border-collapse:separate;border-spacing:0;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.tbl th{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);text-align:left;font-weight:650;padding:11px 16px;background:var(--panel2);border-bottom:1px solid var(--line)}
+.tbl td{padding:10px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.r,.tbl th.r{text-align:right}
+.tbl td.num{width:112px}
+.proc{font-weight:600}
+.split{display:flex;height:8px;border-radius:99px;overflow:hidden;background:var(--inset);min-width:120px;max-width:200px}
+.split i{display:block;height:100%}
+.empty{padding:30px;text-align:center;color:var(--mute)}
+.listchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.listchips .tag{font-size:12.5px;padding:4px 7px 4px 12px;color:var(--text)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.opt{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:15px 0;border-bottom:1px solid var(--line)}
+.opt:first-child{padding-top:2px} .opt:last-child{border-bottom:0;padding-bottom:2px}
+.opt b{font-weight:610;display:block} .opt span{color:var(--mute);font-size:13px}
+
+/* ---------- speed test ---------- */
+.bars{display:flex;flex-direction:column;gap:14px;margin-top:20px}
+.bar-r{display:grid;grid-template-columns:200px 1fr 120px;align-items:center;gap:16px}
+.bar-r .t{font-weight:580} .bar-r .t small{display:block;color:var(--dim);font-family:var(--mono);font-size:11.5px;font-weight:400}
+.track{height:12px;border-radius:99px;background:var(--inset);border:1px solid var(--line);overflow:hidden}
+.fill{height:100%;border-radius:99px;background:var(--c);transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.bar-r .v{text-align:right;font-family:var(--mono);font-size:16px}
+.progress{height:5px;background:var(--inset);border-radius:99px;overflow:hidden;margin-top:16px}
+.progress div{height:100%;background:var(--accent);transition:width .4s}
+pre.log{background:var(--inset);border:1px solid var(--line);border-radius:var(--r);padding:14px;font:12px/1.55 var(--mono);color:var(--mute);height:440px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:14px 0 0}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--panel);border:1px solid var(--line2);padding:11px 18px;border-radius:12px;opacity:0;transition:.25s;pointer-events:none;box-shadow:var(--shadow);z-index:20;max-width:80vw}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.bad{border-color:color-mix(in srgb,var(--bad) 50%,transparent);color:var(--bad)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ---------- small screens ---------- */
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  .side{position:static;height:auto;flex-direction:row;overflow-x:auto;padding:10px 12px;border-right:0;border-bottom:1px solid var(--line);align-items:center;gap:4px}
+  .brand{padding:0 10px 0 4px} .brand span,.side-foot{display:none}
+  .nav{width:auto;white-space:nowrap;padding:8px 12px}
+  main{padding:16px 16px 40px}
+  .hero{grid-template-columns:1fr} .hero-l{border-right:0;border-bottom:1px solid var(--line)}
+  .grid2{grid-template-columns:1fr}
+  .bar-r{grid-template-columns:110px 1fr 84px}
+  .bar{flex-wrap:wrap} .power b{min-width:0}
+}
+.usgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:14px}
+.us{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;border-left:4px solid var(--c,var(--accent))}
+.us .n{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:650}
+.us .v{font-size:26px;font-weight:700;margin:4px 0 8px;font-variant-numeric:tabular-nums}
+.us .s{color:var(--mute);font-size:12.5px;margin-top:6px}
+.us .share-bar>div{height:100%;background:var(--c,var(--accent))}
+.us.out .v{color:var(--bad)}
+.qrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0}
+.qrow b{min-width:120px}
+.qrow .inp{min-width:0;width:130px}
+.tbl td.num,.tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tbl tr.today td{background:var(--accent-soft)}
+.tbl th.grp{text-align:center;border-bottom:3px solid var(--c,var(--line2))}
+.tbl th.tot,.tbl td.tot{border-left:1px solid var(--line2)}
+.tbl tr.sub th{text-transform:none;letter-spacing:0;font-size:12px;padding:6px 12px}
+.tbl td.num{padding-left:10px;padding-right:10px}
+#usTbl{min-width:640px}
+#usTbl td:first-child{white-space:nowrap}
+.shk{display:grid;grid-template-columns:150px 1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.shk:last-child{border-bottom:0}
+.shk span{color:var(--mute)}
+.shk code{font-family:ui-monospace,Consolas,monospace;font-size:15px;font-weight:650;user-select:all}
+.qrs{display:flex;gap:28px;flex-wrap:wrap}
+.qrc{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.qrc canvas{width:220px;height:220px;border-radius:12px;border:1px solid var(--line2)}
+.qrc code{font-size:11px;color:var(--mute);max-width:240px;word-break:break-all}
+.shsteps{margin:6px 0 0;padding-left:20px;color:var(--mute);line-height:1.7}
+.shsteps b{color:var(--text)}
+.shhero{display:flex;align-items:center;gap:16px;padding:18px 22px;margin-bottom:16px}
+.shic{width:48px;height:48px;border-radius:14px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
+.shsub{color:var(--mute);font-size:13.5px;margin-top:2px;display:flex;align-items:center;gap:8px}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:var(--dim)}
+.statusline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.updb{display:flex;align-items:center;gap:14px;background:var(--accent-soft);border-color:var(--accent)}
+.fc{margin-top:4px}.fc.bad{color:var(--warn)}
+.dot.bad{background:var(--bad)}
+.dot.good{background:var(--good)} .dot.warn{background:var(--warn)}
+.shgrid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:1000px){.shgrid{grid-template-columns:1fr}}
+.shsteps2{display:flex;flex-direction:column;gap:14px}
+.stp{display:flex;gap:14px}
+.stp i{flex:none;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-style:normal;font-weight:700;font-size:13.5px;margin-top:1px}
+.stp>div>b{display:block}
+.hint2{color:var(--mute);font-size:13px;line-height:1.55}
+.qrbox{align-self:center;background:#fff;border-radius:20px;padding:14px;box-shadow:0 6px 24px #0002,0 0 0 1px var(--line)}
+.qrbox canvas{display:block;width:260px;height:260px}
+.qrmeta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center}
+.qrmeta .sel{min-width:0}
+.tips{margin:0;padding-left:18px;color:var(--mute);font-size:13px;line-height:1.75}
+.tips b{color:var(--text)}
+.dev{display:flex;align-items:center;gap:12px;padding:8px 0}
+.dev .dic{width:36px;height:36px;border-radius:10px;background:var(--accent-soft);display:grid;place-items:center;font-size:18px}
+.dname{display:flex;align-items:center;gap:8px}
+.lnk{background:none;border:0;color:var(--accent);font-size:12.5px;cursor:pointer;padding:0}
+.lnk:hover{text-decoration:underline}
+.dev .num{font-size:20px;font-weight:700}
+.dev small{font-size:11px;color:var(--mute);font-weight:500}
+details.adv{padding:14px 18px}
+details.adv summary{cursor:pointer;font-weight:650;padding:2px 0;list-style:none}
+details.adv summary::before{content:"▸ ";color:var(--mute)}
+details.adv[open] summary::before{content:"▾ "}
+.shoff{text-align:center;padding:42px 20px}
+.shoff .big{font-size:40px;margin-bottom:8px}
+.btn.sm{padding:5px 12px;font-size:13px}
+.btn.primary{background:var(--accent);color:#fff;border-color:transparent;padding:10px 22px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#141c25" stroke="#2f3c4b"/><path d="M6 9.5c7 0 7 6.5 13 6.5M6 22.5c7 0 7-6.5 13-6.5h7" stroke="#2fd4c2" stroke-width="2.6" fill="none" stroke-linecap="round"/><circle cx="26" cy="16" r="2.4" fill="#2fd4c2"/></svg>
+      <span>NetMerge</span>
+    </div>
+    <nav id="nav" style="display:contents">
+      <button class="nav sel" data-p="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Overview</button>
+      <button class="nav" data-p="apps"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/></svg>Apps</button>
+      <button class="nav" data-p="test"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-5"/><circle cx="12" cy="16" r="1.2" fill="currentColor"/></svg>Speed test</button>
+      <button class="nav" data-p="usage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Usage</button>
+      <button class="nav" data-p="share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>Share</button>
+      <button class="nav" data-p="rules"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>Protection</button>
+      <button class="nav" data-p="block"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>Blocking<span class="navbadge" id="blkBadge" hidden></span></button>
+      <button class="nav" data-p="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
+      <button class="nav" data-p="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>Logs</button>
+    </nav>
+    <div class="side-foot"><b id="sfTitle">NetMerge</b><span id="sfText">Starting…</span></div>
+  </aside>
+
+  <main>
+    <div class="bar">
+      <div><h1 id="pageTitle">Overview</h1><div class="sub" id="pageSub"></div></div>
+      <div class="spacer"></div>
+      <div class="power" id="power" role="switch" aria-checked="false" aria-label="Merge connections" tabindex="0"><b id="powerText">Merging off</b><div class="sw"></div></div>
+    </div>
+    <div id="updBanner"></div><div id="alerts"></div>
+
+    <!-- OVERVIEW -->
+    <section class="page" id="pg-overview">
+      <div class="statusline" id="statusLine"></div>
+      <div class="hero">
+        <div class="hero-l">
+          <div>
+            <div class="eyebrow">Combined download</div>
+            <div class="big num" id="totalDown">0<small>Mbps</small></div>
+          </div>
+          <div class="kv">
+            <div><span>Upload</span><b id="totalUp">0 Mbps</b></div>
+            <div><span>Peak</span><b id="peak">0 Mbps</b></div>
+            <div><span>Downloaded</span><b id="session">0 MB</b></div>
+            <div><span>Running for</span><b id="uptime">—</b></div>
+          </div>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div class="hero-r" id="chartBox"><canvas id="chart"></canvas><div class="chart-note">last 90 seconds</div><div class="tip" id="tip" hidden></div></div>
+      </div>
+
+      <div class="sec">
+        <h2>Connections</h2><span class="hint" id="connHint"></span>
+      </div>
+      <div class="links" id="links"></div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="row">
+          <div>
+            <h3 style="margin-bottom:2px">Which internet to use</h3>
+            <div class="d" style="color:var(--mute);font-size:13px" id="modeDesc"></div>
+          </div>
+          <div class="spacer"></div>
+          <select class="sel" id="mode" aria-label="How to share traffic" style="min-width:230px"></select>
+        </div>
+      </div>
+    </section>
+
+    <!-- APPS -->
+    <section class="page" id="pg-apps" hidden>
+      <div class="card">
+        <h3>Choose which connection an app uses</h3>
+        <p class="d">Apps without a rule simply follow the setting on the Overview page.</p>
+        <div class="row">
+          <input class="inp" id="appInput" list="seenApps" placeholder="App name, e.g. steam.exe" autocomplete="off" aria-label="App name">
+          <datalist id="seenApps"></datalist>
+          <select class="sel" id="appTarget" aria-label="Connection"></select>
+          <button class="btn pri" id="appAdd">Add rule</button>
+        </div>
+        <table class="tbl" id="rulesTbl" style="margin-top:16px"></table>
+      </div>
+      <div class="sec"><h2>Using the internet now</h2><span class="hint">Pick a rule from any row to change how that app connects.</span></div>
+      <table class="tbl" id="appsTbl"></table>
+    </section>
+
+    <!-- SPEED TEST -->
+    <section class="page" id="pg-test" hidden>
+      <div class="card">
+        <div class="row">
+          <div>
+            <h3>Speed test</h3>
+            <p class="d" style="margin-bottom:0">Tests each connection alone, then all together, then through NetMerge. About a minute — please pause other downloads.</p>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn pri" id="testBtn">Start test</button>
+        </div>
+        <div class="progress" id="testProg" hidden><div></div></div>
+        <div style="margin-top:10px;color:var(--mute);font-size:13px" id="testPhase"></div>
+        <div class="bars" id="testBars"></div>
+        <div id="testNotes" style="margin-top:16px"></div>
+      </div>
+    </section>
+
+    <!-- PROTECTION -->
+    <section class="page" id="pg-rules" hidden>
+      <div class="grid2">
+        <div class="card">
+          <h3>Never merge these addresses</h3>
+          <p class="d">Traffic to these IPs skips NetMerge and uses normal Windows routing — for example a Remote Desktop server reached through your VPN.</p>
+          <div class="row" style="flex-wrap:nowrap"><input class="inp" id="ipInput" placeholder="132.120.111.46 or 10.20.0.0/16" style="flex:1" aria-label="IP address"><button class="btn" id="ipAdd">Add</button></div>
+          <div class="listchips" id="ipList"></div>
+        </div>
+        <div class="card">
+          <h3>Keep these websites on one connection</h3>
+          <p class="d">Banks and login pages can sign you out if your IP changes between requests. These stay on a single link.</p>
+          <div class="row" style="flex-wrap:nowrap"><input class="inp" id="domInput" placeholder="mybank.com" style="flex:1" aria-label="Website"><button class="btn" id="domAdd">Add</button></div>
+          <div class="listchips" id="domList"></div>
+        </div>
+        <div class="card">
+          <h3>VPN connection</h3>
+          <p class="d">VPN tunnels (SonicWALL, Cisco, FortiClient, OpenVPN…) are kept on one link so they never break.</p>
+          <select class="sel" id="vpnLink" style="width:100%" aria-label="VPN connection"></select>
+        </div>
+        <div class="card">
+          <h3>Built-in DNS</h3>
+          <p class="d">Off (recommended): Windows and your VPN keep handling name lookups. On: NetMerge resolves names itself, which may break company-only addresses.</p>
+          <div class="row"><button class="tog" id="dnsTog" role="switch" aria-label="Built-in DNS"></button><span id="dnsTxt" style="color:var(--mute)"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BLOCKING -->
+    <section class="page" id="pg-block" hidden>
+      <div class="card" style="margin-bottom:16px">
+        <div class="row" style="flex-wrap:nowrap;align-items:flex-start">
+          <div style="flex:1">
+            <h3 style="margin-bottom:2px">Block ads &amp; trackers</h3>
+            <p class="d" style="margin:0 0 4px">NetMerge refuses connections to known ad, tracking and malware websites before they use your internet. It works for every app, while merging is on.</p>
+          </div>
+          <button class="tog" id="blkTog" role="switch" aria-label="Block ads and trackers"></button>
+        </div>
+        <div class="stat"><div><div class="big" id="blkToday">0</div><small>blocked today</small></div><div><div class="big" id="blkTotal">0</div><small>blocked in total</small></div></div>
+        <div id="blkHint" style="margin-top:12px"></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="row" style="flex-wrap:nowrap;margin-bottom:4px"><h3 style="margin:0;flex:1">Block lists</h3><button class="btn sm" id="blkUpdate">Update now</button></div>
+          <p class="d">Start small and add more. Lists update by themselves every day.</p>
+          <div id="blkPacks"></div>
+        </div>
+        <div class="card">
+          <h3>Most blocked today</h3>
+          <div id="blkTop" style="min-height:300px"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3>Blocked today</h3>
+        <p class="d">The 20 most blocked websites. If a website or app stops working, find it here and press Allow.</p>
+        <div class="scrollbox"><table class="tbl" id="blkRecent"></table></div>
+      </div>
+      <div class="grid2" style="margin-top:16px">
+        <div class="card">
+          <h3>My block list</h3>
+          <p class="d">One website per line. Its subdomains are blocked too.</p>
+          <textarea class="inp" id="blkMine" spellcheck="false" placeholder="ads.example.com"></textarea>
+          <div class="row" style="margin-top:10px"><button class="btn pri" id="blkSaveMine">Save</button></div>
+        </div>
+        <div class="card">
+          <h3>My allow list</h3>
+          <p class="d">Never blocked, even if a list says so.</p>
+          <textarea class="inp" id="blkAllow" spellcheck="false" placeholder="shop.example.com"></textarea>
+          <div class="row" style="margin-top:10px"><button class="btn pri" id="blkSaveAllow">Save</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="page" id="pg-settings" hidden>
+      <div class="card">
+        <div class="opt"><div><b>Start with Windows</b><span>NetMerge starts quietly in the background when you sign in.</span></div><button class="tog" id="autoTog" role="switch" aria-label="Start with Windows"></button></div>
+        <div class="opt"><div><b>Merge automatically</b><span>Turn merging on as soon as NetMerge starts.</span></div><button class="tog" id="launchTog" role="switch" aria-label="Merge automatically"></button></div>
+        <div class="opt"><div><b>Appearance</b><span>Match Windows, or choose a theme.</span></div><div class="seg" id="theme"><button data-v="auto">Auto</button><button data-v="dark">Dark</button><button data-v="light">Light</button></div></div>
+        <div class="opt"><div><b>Look for new connections</b><span>Plugged in another adapter or phone? NetMerge also checks by itself every few seconds.</span></div><button class="btn" id="rescan">Scan now</button></div>
+        <div class="opt"><div><b>Connection balancing</b><span>Smart gives each new connection to the link with the most spare speed right now. Classic splits them by the fixed shares (×1–×5) on the Overview page.</span></div><select class="sel" id="balSel" aria-label="Connection balancing"><option value="smart">Smart (recommended)</option><option value="classic">Classic (fixed shares)</option></select></div>
+        <div class="opt"><div><b>Network engine mode</b><span>How the engine handles your traffic. Normal is best for most PCs. If single downloads feel slow, try System.</span></div><select class="sel" id="stackSel" aria-label="Network engine mode"><option value="">Normal (recommended)</option><option value="system">System</option><option value="gvisor">Compatibility</option></select></div>
+        <div class="opt"><div><b>Detailed logging</b><span>Records every connection and a speed line per second. Only for troubleshooting.</span></div><button class="tog" id="debugTog" role="switch" aria-label="Detailed logging"></button></div>
+        <div class="opt"><div><b>Engine</b><span id="engineVer">—</span></div></div>
+        <div class="opt"><div><b>NetMerge <span id="appVer"></span></b><span id="updInfo">—</span></div><button class="btn" id="updCheck">Check for updates</button></div>
+        <div class="opt"><div><b>Check for updates automatically</b><span>Looks for a new version a few times a day and tells you. Nothing is installed until you click Update.</span></div><button class="tog" id="updTog" role="switch" aria-label="Check for updates automatically"></button></div>
+        <div class="opt"><div><b>Quit NetMerge</b><span>Closing the window keeps merging running in the background. Quit stops merging and exits.</span></div><button class="btn danger" id="quit">Quit</button></div>
+      </div>
+    </section>
+
+    <!-- SHARE -->
+    <section class="page" id="pg-share" hidden>
+      <div class="card shhero" id="shHero">
+        <div class="shic"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/><path d="M3.5 8.5a6 6 0 0 0 0 7M20.5 8.5a6 6 0 0 1 0 7"/></svg></div>
+        <div style="flex:1;min-width:0"><h3 style="margin:0">Share with your phone</h3>
+          <div class="shsub" id="shStatus">Let a phone or tablet use all your connections together.</div></div>
+        <button class="tog" id="shTog" role="switch" aria-label="Share the merged internet"></button>
+      </div>
+      <div id="shWarn"></div>
+      <div id="shBody"></div>
+    </section>
+
+    <!-- USAGE -->
+    <section class="page" id="pg-usage" hidden>
+      <div id="usSum" class="usgrid"></div>
+      <div class="card" style="margin:16px 0">
+        <h3 style="margin-bottom:2px">Monthly allowance</h3>
+        <div class="hint" style="color:var(--mute);font-size:13px;margin-bottom:12px">Optional. Set how much data each connection may use per month and NetMerge warns you at 80% and 100%, or leaves the connection out of the merge when it runs out. Leave a box empty for no limit.</div>
+        <div id="usQuota"></div>
+      </div>
+      <h3 style="margin:0 0 8px">Daily usage <span id="usPeriod" style="font-weight:400;color:var(--mute);font-size:13px"></span> <span id="usUnit" style="font-weight:400;color:var(--mute);font-size:13px"></span></h3>
+      <div class="scrollbox" style="max-height:460px"><table class="tbl" id="usTbl"></table></div>
+    </section>
+
+    <!-- LOGS -->
+    <section class="page" id="pg-log" hidden>
+      <div class="row"><div class="seg" id="logSel"><button data-v="app" class="sel">NetMerge</button><button data-v="engine">Engine</button><button data-v="rates">Speed</button></div><div class="spacer"></div><button class="btn" id="logRefresh">Refresh</button></div>
+      <pre class="log" id="logBox"></pre>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="qr.js"></script>
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const ICONS = {
+  ethernet:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="13" rx="2"/><path d="M8 17v3M16 17v3M12 17v3M8 9v3M12 9v3M16 9v3"/></svg>',
+  wifi:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.6 16a5 5 0 0 1 6.8 0"/><circle cx="12" cy="19.3" r="1.1" fill="currentColor"/></svg>',
+  mobile:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>'
+};
+const PAGES = {
+  overview:['Overview','Live speed of every connection'],
+  apps:['Apps','Decide which connection each app uses'],
+  test:['Speed test','Measure what your connections can really do'],
+  usage:['Usage','Data used by each connection, day by day'],
+  share:['Share','Let your phone use the merged internet'],
+  rules:['Protection','Keep VPNs, servers and logins working perfectly'],
+  block:['Blocking','Stop ads, trackers and unsafe sites for every app'],
+  settings:['Settings','Startup, appearance and maintenance'],
+  log:['Logs','What NetMerge has been doing']
+};
+let S = null, local = null, saveTimer = null, busyPower = false, page = 'overview', logWhich = 'app', pollFails = 0, hover = -1, chartGeo = null;
+
+/* ---------- helpers ---------- */
+const mbps = b => b*8/1e6;
+const fmt = v => v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
+const fmtM = b => fmt(mbps(b));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const bytes = b => b >= 1e9 ? (b/1e9).toFixed(2)+' GB' : b >= 1e6 ? (b/1e6).toFixed(1)+' MB' : (b/1e3).toFixed(0)+' KB';
+const dur = s => { if (!s) return '—'; const h=Math.floor(s/3600), m=Math.floor(s%3600/60); return h ? `${h}h ${m}m` : m ? `${m}m ${s%60}s` : `${s}s`; };
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const pal = () => [1,2,3,4,5].map(i => css('--l'+i));
+const colorOf = name => { const i = (local?.links||[]).findIndex(l => l.name === name); return pal()[(i<0?0:i) % 5]; };
+const labelOf = name => (local?.links||[]).find(l => l.name === name)?.label || name;
+const setHTML = (el, html) => { if (el.dataset.h !== html) { el.dataset.h = html; el.innerHTML = html; } };
+
+let toastT;
+function toast(msg, bad){ const t=$('#toast'); t.textContent=msg; t.className='toast show'+(bad?' bad':''); clearTimeout(toastT); toastT=setTimeout(()=>t.className='toast',2800); }
+
+async function api(path, body){
+  const r = await fetch('/api/'+path, body===undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-NetMerge':'1'}, body:JSON.stringify(body)});
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+  return j;
+}
+function saveSoon(msg){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try { await api('settings', local); toast(msg || 'Saved'); }
+    catch(e){ toast(e.message, true); }
+    saveTimer = null;
+  }, 350);
+}
+
+/* ---------- theme ---------- */
+function applyTheme(t){ document.documentElement.dataset.theme = t; try { localStorage.setItem('nm-theme', t); } catch(e){} $$('#theme button').forEach(b => b.classList.toggle('sel', b.dataset.v === t)); if (S) render(); }
+try { const t = localStorage.getItem('nm-theme'); if (t) document.documentElement.dataset.theme = t; } catch(e){}
+$$('#theme button').forEach(b => b.onclick = () => applyTheme(b.dataset.v));
+
+/* ---------- navigation ---------- */
+function go(p){
+  page = p;
+  $$('.nav').forEach(n => n.classList.toggle('sel', n.dataset.p === p));
+  $$('.page').forEach(s => s.hidden = s.id !== 'pg-'+p);
+  $('#pageTitle').textContent = PAGES[p][0]; $('#pageSub').textContent = PAGES[p][1];
+  if (p === 'log') loadLog();
+  if (p === 'block') loadBlock();
+  if (p === 'usage') loadUsage();
+  if (p === 'share') loadShare();
+  if (S) render();
+}
+$$('.nav').forEach(n => n.onclick = () => go(n.dataset.p));
+
+/* ---------- power ---------- */
+async function togglePower(){
+  if (!S || busyPower) return;
+  const want = !S.snap.running;
+  busyPower = true; $('#power').classList.add('busy'); $('#powerText').textContent = want ? 'Starting…' : 'Stopping…';
+  try { await api('power', {on:want}); toast(want ? 'Merging is on' : 'Merging is off'); }
+  catch(e){ toast(e.message, true); }
+  busyPower = false; $('#power').classList.remove('busy'); poll(true);
+}
+$('#power').onclick = togglePower;
+$('#power').onkeydown = e => { if (e.key===' '||e.key==='Enter'){ e.preventDefault(); togglePower(); } };
+
+/* ---------- render ---------- */
+function activeLinks(){ return S.snap.links.filter(l => l.enabled && l.present); }
+
+function render(){
+  updateHeld(S.snap);
+  const sn = S.snap, run = sn.running, act = activeLinks();
+  const P = pal();
+
+  // header + sidebar status
+  const p = $('#power'); p.classList.toggle('is-on', run); p.setAttribute('aria-checked', run);
+  if (!busyPower) $('#powerText').textContent = run ? 'Merging on' : 'Merging off';
+  $('#sfTitle').textContent = run ? `${act.length} connection${act.length===1?'':'s'} merged` : 'Merging is off';
+  $('#sfText').textContent = run ? `${fmtM(sn.totalDown)} Mbps right now` : 'Turn it on to combine your internet.';
+
+  // alerts
+  const al = [];
+  if (pollFails >= 3) al.push(`<div class="note bad"><b>Lost contact with NetMerge.</b> It may have been closed. Open it again from the desktop shortcut.</div>`);
+  if (S.conflict) al.push(`<div class="note bad"><span style="flex:1">${esc(S.conflict)}</span><button class="btn" id="fixConf">Close it for me</button></div>`);
+  if (sn.error && !run && sn.error !== S.conflict) al.push(`<div class="note bad">${esc(sn.error)}</div>`);
+  if (run && act.length < 2 && !local.mode.startsWith('link:')) al.push(`<div class="note warn"><b>Only one connection is active.</b> Plug in or turn on a second connection to start merging.</div>`);
+  setHTML($('#alerts'), al.join(''));
+  renderBlockBadge();
+  if (page === 'block') renderBlock();
+
+  if (page === 'overview') renderOverview(sn, run, act, P);
+  if (page === 'apps') renderApps();
+  if (page === 'test') renderTest();
+  if (page === 'rules') renderRules();
+  if (page === 'settings') renderSettings();
+}
+
+function statusLine(sn, run){
+  if (!run) return ['', 'Merging is off', 'Turn it on to combine your connections.'];
+  const ls = sn.links.filter(l => l.enabled && l.present);
+  const bad = ls.filter(l => l.healthy === false), out = ls.filter(l => l.quotaOut), gone = sn.links.filter(l => l.enabled && !l.present);
+  const names = a => a.map(l => l.label).join(' and ');
+  if (gone.length) return ['warn', `${names(gone)} ${gone.length>1?'are':'is'} disconnected`, `Using ${ls.length} connection${ls.length===1?'':'s'} for now. Plug it back in and it joins automatically.`];
+  if (bad.length) return ['bad', `${names(bad)} ${bad.length>1?'have':'has'} no internet`, 'It is left out until it works again, so nothing slows down.'];
+  if (out.length) return ['warn', `${names(out)} used up its allowance`, 'It is left out of the merge until the allowance renews.'];
+  if (ls.length < 2) return ['warn', 'Only one connection is active', 'Connect a second one to start merging.'];
+  const n = (S.share && S.share.devices) || 0;
+  return ['good', `All ${ls.length} connections healthy`, `${fmtM(sn.totalDown)} Mbps down · ${fmtM(sn.totalUp)} Mbps up right now`];
+}
+function renderOverview(sn, run, act, P){
+  const st = statusLine(sn, run);
+  setHTML($('#statusLine'), `<span class="dot ${st[0]}"></span><b>${esc(st[1])}</b><span class="hint2">${esc(st[2])}</span>`);
+  $('#totalDown').innerHTML = `${fmtM(sn.totalDown)}<small>Mbps</small>`;
+  $('#totalUp').textContent = fmtM(sn.totalUp)+' Mbps';
+  $('#peak').textContent = fmtM(sn.peakDown)+' Mbps';
+  $('#session').textContent = bytes(sn.links.reduce((a,l)=>a+(l.totalRx||0),0));
+  $('#uptime').textContent = run ? dur(sn.uptime) : '—';
+  setHTML($('#legend'), sn.links.filter(l=>l.present && l.enabled).map(l => `<div><i style="background:${colorOf(l.name)}"></i>${esc(l.label)}<b>${fmtM(l.down)}</b></div>`).join(''));
+  $('#connHint').textContent = sn.links.length ? 'Turn a connection off to leave it out of the merge.' : '';
+  const ms = $('#mode');
+  if (document.activeElement !== ms) {
+    const opts = [['fast','Combine all · fastest'], ['stable','Combine all · steady sites']].concat(local.links.map(l => ['link:'+l.name, 'Only '+l.label + (S.snap.links.find(x=>x.name===l.name)?.present === false ? ' (not connected)' : '')]));
+    setHTML(ms, opts.map(([v,t]) => `<option value="${esc(v)}"${v===local.mode?' selected':''}>${esc(t)}</option>`).join(''));
+  }
+  $('#modeDesc').textContent = local.mode.startsWith('link:')
+    ? `Everything uses ${labelOf(local.mode.slice(5))} only. The other connection stays ready as a backup if it drops. Apps with their own rule keep that rule.`
+    : local.mode === 'stable'
+    ? 'Each website sticks to one connection. Safest for logins, slightly lower peak speed.'
+    : 'Every new connection alternates between your links. Best speed for downloads and speed tests.';
+  renderLinks(sn, act, P); drawChart();
+}
+
+/* values that should never blink in and out: keep the last good reading and smooth the traffic share */
+const held = {};
+function holdFor(name){ return held[name] ||= {delay:0, publicIP:'', ema:0, share:null, activeAt:0}; }
+function updateHeld(sn){
+  const now = Date.now();
+  sn.links.forEach(l => {
+    const h = holdFor(l.name);
+    if (l.delay) h.delay = l.delay;
+    if (l.publicIP) h.publicIP = l.publicIP;
+    h.ema = h.ema*0.8 + (l.present ? l.down : 0)*0.2;
+    if (mbps(l.down) > 0.3 || mbps(l.up) > 0.3) h.activeAt = now;
+  });
+  const tot = sn.links.reduce((a,l) => a + holdFor(l.name).ema, 0);
+  if (tot > 12500) sn.links.forEach(l => holdFor(l.name).share = Math.round(holdFor(l.name).ema/tot*100));
+}
+function statusOf(l, run){
+  if (!l.present) return ['Disconnected', 'var(--warn)'];
+  if (!l.enabled) return ['Off', 'var(--dim)'];
+  if (!run) return ['Ready', 'var(--mute)'];
+  if (l.quotaOut) return ['Allowance used up', 'var(--warn)'];
+  if (l.healthy === false) return ['No internet', 'var(--bad)'];
+  if (Date.now() - holdFor(l.name).activeAt < 5000) return ['Active', 'var(--good)'];
+  return ['Online · idle', 'var(--info)'];
+}
+
+function renderLinks(sn, act, P){
+  const box = $('#links'), run = sn.running;
+  const keys = sn.links.map(l=>l.name).join('|');
+  if (box.dataset.keys !== keys){
+    box.dataset.keys = keys;
+    box.innerHTML = sn.links.map(l => `
+      <div class="lk" data-n="${esc(l.name)}">
+        <div class="lk-h">
+          <div class="ico">${ICONS[l.kind]||ICONS.ethernet}</div>
+          <div style="flex:1;min-width:0">
+            <input class="lbl" value="${esc(l.label)}" spellcheck="false" aria-label="Connection name" title="Click to rename">
+            <div class="desc" data-f="desc"></div>
+          </div>
+          <button class="tog" data-f="tog" role="switch" aria-label="Use this connection"></button>
+        </div>
+        <div class="lk-s"><span class="num" data-f="down">0</span><small>Mbps</small><span class="up" data-f="up"></span></div>
+        <canvas class="spark" data-f="spark"></canvas>
+        <div class="meta"><span class="chip" data-f="status"></span><span data-f="tags" style="display:contents"></span></div>
+        <div data-f="missing"></div>
+        <div class="share">
+          <div class="share-h"><span>Share of new connections<b data-f="pct"></b></span>
+            <div class="step" data-f="step"><button data-f="minus" aria-label="Give this connection a smaller share">−</button><b class="num" data-f="w"></b><button data-f="plus" aria-label="Give this connection a bigger share">+</button></div></div>
+          <div class="share-bar"><div data-f="bar"></div></div>
+        </div>
+      </div>`).join('');
+    box.querySelectorAll('.lk').forEach(card => {
+      const name = card.dataset.n, L = () => local.links.find(x => x.name === name);
+      const lbl = card.querySelector('.lbl');
+      lbl.onchange = e => { L().label = e.target.value.trim() || name; saveSoon('Renamed'); };
+      lbl.onkeydown = e => { if (e.key==='Enter') e.target.blur(); };
+      card.querySelector('[data-f=tog]').onclick = () => {
+        const l = L(); if (l.enabled && local.links.filter(x=>x.enabled).length===1) return toast('At least one connection must stay on', true);
+        l.enabled = !l.enabled; saveSoon(l.enabled ? `${l.label} added to the merge` : `${l.label} left out of the merge`); render();
+      };
+      card.querySelector('[data-f=minus]').onclick = () => { const l=L(); if (l.weight>1){ l.weight--; saveSoon('Share updated'); render(); } };
+      card.querySelector('[data-f=plus]').onclick = () => { const l=L(); if (l.weight<5){ l.weight++; saveSoon('Share updated'); render(); } };
+    });
+  }
+  const totalW = local.links.filter(l => l.enabled && sn.links.find(s=>s.name===l.name)?.present).reduce((a,l)=>a+l.weight,0) || 1;
+  const totalDown = sn.links.reduce((a,l)=>a+(l.present?l.down:0),0) || 1;
+  sn.links.forEach((l,i) => {
+    const card = box.querySelector(`.lk[data-n="${CSS.escape(l.name)}"]`); if (!card) return;
+    const ll = local.links.find(x=>x.name===l.name) || l, c = P[i%5];
+    card.style.setProperty('--c', c);
+    card.classList.toggle('off', !ll.enabled || !l.present);
+    const f = n => card.querySelector(`[data-f=${n}]`);
+    const [st, sc] = statusOf({...l, enabled: ll.enabled}, run);
+    f('status').textContent = st; f('status').style.setProperty('--c', sc);
+    f('tog').classList.toggle('on', ll.enabled); f('tog').setAttribute('aria-checked', ll.enabled);
+    f('desc').textContent = l.present ? `${l.desc}${l.linkRate ? ' · '+l.linkRate : ''}` : 'Not connected';
+    f('down').textContent = fmtM(l.down);
+    f('up').textContent = '↑ '+fmtM(l.up)+' Mbps';
+    const h = holdFor(l.name), on = l.present && ll.enabled;
+    const tag = (txt, title, dim) => `<span class="tag${dim ? ' dim' : ''}" title="${title}">${txt}</span>`;
+    setHTML(f('tags'), [
+      tag(l.present ? esc(l.ip) : '—', 'Local address', !l.present),
+      tag(h.publicIP ? esc(h.publicIP) : 'public IP…', 'Public address (what websites see)', !h.publicIP),
+      tag((h.delay ? h.delay : '—') + ' ms', 'Response time', !(run && on && h.delay)),
+      tag(bytes(l.useDay||0) + ' today', 'Data used on this connection today (this month: ' + bytes(l.useMonth||0) + ')', !l.useDay),
+      tag((h.share == null ? '—' : h.share) + '% of traffic', 'Share of the traffic over the last few seconds', !(run && on && h.share != null))
+    ].join(''));
+    f('missing').innerHTML = l.present ? '' : '<div class="warn-line">Unplugged or no internet. It rejoins by itself when it comes back.</div>';
+    f('w').textContent = '×'+ll.weight;
+    f('minus').disabled = ll.weight <= 1; f('plus').disabled = ll.weight >= 5;
+    const smart = !!sn.smart && !local.mode.startsWith('link:') && local.mode !== 'stable';
+    f('step').style.display = smart ? 'none' : '';
+    const single = local.mode.startsWith('link:'), pct = single ? (local.mode === 'link:'+l.name ? 100 : 0) : smart ? ((ll.enabled && l.present) ? Math.round((l.slots||0)/8*100) : 0) : ((ll.enabled && l.present) ? Math.round(ll.weight/totalW*100) : 0);
+    f('pct').textContent = (ll.enabled && l.present) ? pct+'%' : '—';
+    f('bar').style.width = pct+'%';
+    spark(f('spark'), l.history, c);
+  });
+}
+
+function setupCanvas(c){
+  const r = c.getBoundingClientRect(), d = devicePixelRatio || 1;
+  if (c.width !== Math.round(r.width*d) || c.height !== Math.round(r.height*d)){ c.width = Math.round(r.width*d); c.height = Math.round(r.height*d); }
+  const g = c.getContext('2d'); g.setTransform(d,0,0,d,0,0); g.clearRect(0,0,r.width,r.height);
+  return [g, r.width, r.height];
+}
+function spark(c, h, col){
+  const [g,w,ht] = setupCanvas(c); if (!h || !h.length || w < 5) return;
+  const n = 90, max = Math.max(...h, 125000), x = i => (i + n - h.length)/(n-1)*w, y = v => ht - 3 - v/max*(ht-8);
+  g.beginPath(); h.forEach((v,i) => i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v)));
+  g.strokeStyle = col; g.lineWidth = 1.7; g.lineJoin = 'round'; g.stroke();
+  g.lineTo(x(h.length-1), ht); g.lineTo(x(0), ht); g.closePath();
+  const gr = g.createLinearGradient(0,0,0,ht); gr.addColorStop(0, col+'55'); gr.addColorStop(1, col+'00'); g.fillStyle = gr; g.fill();
+}
+function niceMax(v){ for (const s of [1,2,5,10,20,25,40,50,80,100,150,200,250,400,500,800,1000,2000]) if (v<=s) return s; return Math.ceil(v/1000)*1000; }
+
+function drawChart(){
+  const c = $('#chart'); const [g,w,h] = setupCanvas(c);
+  const P = pal(), links = S.snap.links.filter(l => l.enabled && l.history && l.history.length);
+  const n = 90, padT = 30, padB = 24, padL = 16, padR = 62;
+  const len = Math.max(0, ...links.map(l => l.history.length));
+  const stack = []; let acc = new Array(len).fill(0);
+  links.forEach(l => { const off = len - l.history.length; const idx = S.snap.links.findIndex(s=>s.name===l.name);
+    const top = acc.map((a,i) => a + (i>=off ? l.history[i-off] : 0)); stack.push({l, col:P[idx%5], base:acc, top}); acc = top; });
+  const maxM = niceMax(mbps(Math.max(...acc, 125000)) * 1.12);
+  const X = i => padL + (i + n - len)/(n-1) * (w-padL-padR), Y = b => h - padB - (mbps(b)/maxM) * (h-padT-padB);
+  g.font = '11px ' + css('--mono'); g.textAlign = 'left';
+  for (let k=0;k<=4;k++){ const v = maxM*k/4, yy = Math.round(h - padB - (k/4)*(h-padT-padB)) + .5;
+    g.strokeStyle = css('--line'); g.lineWidth = 1; g.beginPath(); g.moveTo(padL, yy); g.lineTo(w-padR, yy); g.stroke();
+    g.fillStyle = css('--dim'); g.fillText(fmt(v)+' Mb', w-padR+8, yy+4); }
+  chartGeo = {len, X, Y, w, h, padL, padR, stack, acc, n};
+  if (!len) return;
+  stack.forEach(({col,base,top}) => {
+    g.beginPath(); top.forEach((v,i)=> i? g.lineTo(X(i),Y(v)) : g.moveTo(X(i),Y(v)));
+    for (let i=len-1;i>=0;i--) g.lineTo(X(i), Y(base[i]));
+    g.closePath(); const gr = g.createLinearGradient(0,padT,0,h); gr.addColorStop(0,col+'77'); gr.addColorStop(1,col+'1c'); g.fillStyle = gr; g.fill();
+    g.beginPath(); top.forEach((v,i)=> i? g.lineTo(X(i),Y(v)) : g.moveTo(X(i),Y(v))); g.strokeStyle = col; g.lineWidth = 1.7; g.lineJoin='round'; g.stroke();
+  });
+  const i = hover >= 0 ? Math.min(hover, len-1) : len-1;
+  g.fillStyle = css('--text'); g.beginPath(); g.arc(X(i), Y(acc[i]||0), 3.4, 0, 7); g.fill();
+  if (hover >= 0){ g.strokeStyle = css('--line2'); g.setLineDash([4,4]); g.beginPath(); g.moveTo(X(i)+.5, padT-6); g.lineTo(X(i)+.5, h-padB); g.stroke(); g.setLineDash([]); }
+}
+const cv = $('#chart');
+cv.addEventListener('mousemove', e => {
+  if (!chartGeo || !chartGeo.len) return;
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, G = chartGeo;
+  const idx = Math.round((x - G.padL)/(G.w-G.padL-G.padR)*(G.n-1)) - (G.n - G.len);
+  if (idx < 0 || idx >= G.len) { hover = -1; $('#tip').hidden = true; drawChart(); return; }
+  hover = idx; drawChart();
+  const tip = $('#tip');
+  tip.innerHTML = G.stack.map(s => `<div><span><i style="background:${s.col}"></i>${esc(s.l.label)}</span><b class="num">${fmtM(s.l.history[idx-(G.len-s.l.history.length)]||0)}</b></div>`).join('') + `<div class="t"><span>Total</span><b class="num">${fmtM(G.acc[idx])} Mbps</b></div>`;
+  tip.hidden = false;
+  const tw = tip.offsetWidth; tip.style.left = Math.min(Math.max(8, G.X(idx) - tw/2), G.w - tw - 8) + 'px'; tip.style.top = '34px';
+});
+cv.addEventListener('mouseleave', () => { hover = -1; $('#tip').hidden = true; if (S) drawChart(); });
+
+/* ---------- apps ---------- */
+function targetOptions(sel, withDefault){
+  const o = [];
+  if (withDefault) o.push(['', 'Automatic']);
+  o.push(['fast','Combine · fastest'], ['stable','Combine · steady']);
+  local.links.forEach(l => o.push(['link:'+l.name, 'Only '+l.label]));
+  o.push(['bypass','Skip NetMerge']);
+  return o.map(([v,t]) => `<option value="${esc(v)}"${v===sel?' selected':''}>${esc(t)}</option>`).join('');
+}
+function renderApps(){
+  const at = $('#appTarget');
+  if (!at.dataset.init || at.dataset.links !== local.links.map(l=>l.name).join('|')){
+    at.dataset.init = 1; at.dataset.links = local.links.map(l=>l.name).join('|');
+    const pref = local.links.find(l => l.name !== local.links[0]?.name) || local.links[0];
+    at.innerHTML = targetOptions(pref ? 'link:'+pref.name : 'fast', false);
+  }
+  setHTML($('#seenApps'), (local.seenApps||[]).map(a => `<option value="${esc(a)}">`).join(''));
+  const rt = $('#rulesTbl');
+  if (!(document.activeElement && rt.contains(document.activeElement))){
+    setHTML(rt, '<tr><th>App</th><th>Uses</th><th style="width:44px"></th></tr>' + (local.appRules.length ? local.appRules.map((r,i) => `
+      <tr><td class="proc">${esc(r.process)}</td><td><select class="sel" data-i="${i}" aria-label="Rule for ${esc(r.process)}">${targetOptions(r.target, false)}</select></td><td><button class="x" data-del="${i}" title="Remove rule" aria-label="Remove rule">✕</button></td></tr>`).join('')
+      : '<tr><td colspan="3" class="empty">No rules yet — apps follow the Overview setting.</td></tr>'));
+    rt.querySelectorAll('select').forEach(s => s.onchange = () => { local.appRules[s.dataset.i].target = s.value; saveSoon('Rule updated'); s.blur(); });
+    rt.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { local.appRules.splice(b.dataset.del,1); rt.dataset.h=''; renderApps(); saveSoon('Rule removed'); });
+  }
+  const tb = $('#appsTbl'), apps = S.snap.apps || [], P = pal();
+  if (document.activeElement && tb.contains(document.activeElement)) return;
+  setHTML(tb, '<tr><th>App</th><th>Connections used</th><th class="r">Download</th><th class="r">Upload</th><th>Rule</th></tr>' +
+    (!S.snap.running ? '<tr><td colspan="5" class="empty">Turn merging on to see which apps are using the internet.</td></tr>' :
+     !apps.length ? '<tr><td colspan="5" class="empty">No traffic right now.</td></tr>' :
+     apps.map(a => {
+       const tot = Object.values(a.links).reduce((x,y)=>x+y,0) || 1;
+       const split = Object.entries(a.links).map(([n,c]) => `<i title="${esc(n==='bypass'?'Skip NetMerge':labelOf(n))}: ${c}" style="width:${c/tot*100}%;background:${n==='bypass'?'var(--dim)':colorOf(n)}"></i>`).join('');
+       const names = Object.keys(a.links).map(n => n==='bypass' ? 'Skip' : labelOf(n)).join(' + ');
+       const rule = local.appRules.find(r => r.process === a.process)?.target || '';
+       return `<tr><td class="proc">${esc(a.process)}</td><td><div class="split" aria-hidden="true">${split}</div><div style="font-size:12px;color:var(--dim);margin-top:3px">${esc(names)} · ${a.conns} conn</div></td><td class="r num">${fmtM(a.down)} Mbps</td><td class="r num">${fmtM(a.up)} Mbps</td>
+         <td>${a.process==='system'?'':`<select class="sel" data-p="${esc(a.process)}" aria-label="Rule for ${esc(a.process)}">${targetOptions(rule, true)}</select>`}</td></tr>`;
+     }).join('')));
+  tb.querySelectorAll('select').forEach(s => s.onchange = () => {
+    const p = s.dataset.p, i = local.appRules.findIndex(r => r.process === p);
+    if (!s.value){ if (i>=0) local.appRules.splice(i,1); } else if (i>=0) local.appRules[i].target = s.value; else local.appRules.push({process:p, target:s.value});
+    $('#rulesTbl').dataset.h = ''; saveSoon(`Rule for ${p} saved`); s.blur();
+  });
+}
+$('#appAdd').onclick = () => {
+  let p = $('#appInput').value.trim().toLowerCase(); if (!p) return toast('Type an app name first', true);
+  if (!p.endsWith('.exe')) p += '.exe';
+  const t = $('#appTarget').value, i = local.appRules.findIndex(r => r.process === p);
+  if (i>=0) local.appRules[i].target = t; else local.appRules.push({process:p, target:t});
+  $('#appInput').value=''; $('#rulesTbl').dataset.h=''; renderApps(); saveSoon(`Rule for ${p} added`);
+};
+$('#appInput').onkeydown = e => { if (e.key==='Enter') $('#appAdd').click(); };
+
+/* ---------- speed test ---------- */
+function renderTest(){
+  const t = S.test, run = t.running;
+  $('#testBtn').disabled = run; $('#testBtn').textContent = run ? 'Testing…' : (t.phase==='Done' ? 'Test again' : 'Start test');
+  $('#testProg').hidden = !run; $('#testProg').firstElementChild.style.width = ((t.progress||0)*100)+'%';
+  $('#testPhase').textContent = run ? `${t.phase}…  ${t.live ? t.live.toFixed(1)+' Mbps' : ''}` : '';
+  const rows = (t.results||[]).map(r => ({t:r.label, s:(r.error||('public '+(r.ip||'?')+' · 1 stream '+r.single+' Mbps')), v:r.mbps, c:colorOf(r.name)}));
+  if (t.phase==='Done'){
+    if (t.combined) rows.push({t:'All together', s:'the most your lines can do at once', v:t.combined, c:'var(--text)'});
+    (t.scaling||[]).forEach(p => rows.push({t:'Through NetMerge', s:p.streams+' parallel streams', v:p.mbps, c:'var(--accent)'}));
+    if (!(t.scaling||[]).length) rows.push({t:'Through NetMerge', s:'merging was off', v:0, c:'var(--accent)'});
+  }
+  const max = Math.max(1, ...rows.map(r=>r.v));
+  setHTML($('#testBars'), rows.map(r => `<div class="bar-r"><div class="t">${esc(r.t)}<small>${esc(r.s)}</small></div><div class="track"><div class="fill" style="width:${r.v/max*100}%;--c:${r.c}"></div></div><div class="v">${r.v ? r.v.toFixed(1) : '—'} <small style="color:var(--mute);font-size:12px">Mbps</small></div></div>`).join(''));
+  let notes = '';
+  if (t.warning) notes += `<div class="note warn">${esc(t.warning)}</div>`;
+  if (t.phase==='Done' && t.suggest && Object.keys(t.suggest).length > 1){
+    const cur = local.links.filter(l => t.suggest[l.name]).every(l => l.weight === t.suggest[l.name]);
+    const txt = local.links.filter(l => t.suggest[l.name]).map(l => `${esc(l.label)} ×${t.suggest[l.name]}`).join(', ');
+    notes += cur ? `<div class="note info">Shares already match your connection speeds (${txt}).</div>`
+      : `<div class="note info"><span>Suggested shares from this test: <b>${txt}</b></span><span class="spacer"></span><button class="btn pri" id="applyW">Apply</button></div>`;
+  }
+  if (t.phase==='Done' && t.merged && t.combined && t.merged < t.combined*0.6 && S.snap.running)
+    notes += `<div class="note warn">NetMerge reached ${t.merged.toFixed(1)} of a possible ${t.combined.toFixed(1)} Mbps. Test servers sometimes limit repeated tests — a real download is the best check.</div>`;
+  const nt = $('#testNotes');
+  if (nt.dataset.h !== notes){ nt.dataset.h = notes; nt.innerHTML = notes; const b=$('#applyW'); if (b) b.onclick = async () => { try { await api('applyweights',{}); await poll(true); toast('Shares updated'); } catch(e){ toast(e.message,true); } }; }
+}
+$('#testBtn').onclick = async () => { try { await api('speedtest',{}); poll(true); } catch(e){ toast(e.message,true); } };
+
+/* ---------- protection ---------- */
+function chipList(el, arr, key){
+  const k = JSON.stringify(arr); if (el.dataset.k === k) return; el.dataset.k = k;
+  el.innerHTML = arr.length ? arr.map((v,i) => `<span class="tag">${esc(v)}<button class="x" data-i="${i}" title="Remove" aria-label="Remove ${esc(v)}">✕</button></span>`).join('') : '<span style="color:var(--dim);font-size:13px">Nothing added.</span>';
+  el.querySelectorAll('.x').forEach(b => b.onclick = () => { local[key].splice(b.dataset.i,1); renderRules(); saveSoon('Removed'); });
+}
+function renderRules(){
+  chipList($('#ipList'), local.bypassIPs, 'bypassIPs');
+  chipList($('#domList'), local.stableDomains, 'stableDomains');
+  const v = $('#vpnLink'); if (document.activeElement !== v) setHTML(v, `<option value="">Automatic (wired first)</option>` + local.links.map(l => `<option value="${esc(l.name)}"${local.vpnLink===l.name?' selected':''}>${esc(l.label)}</option>`).join(''));
+  $('#dnsTog').classList.toggle('on', local.builtinDNS); $('#dnsTog').setAttribute('aria-checked', !!local.builtinDNS);
+  $('#dnsTxt').textContent = local.builtinDNS ? 'On' : 'Off (Windows handles DNS)';
+}
+const addTo = (inp, key, test, msg) => { const v = $(inp).value.trim(); if (!v) return; if (!test(v)) return toast('That does not look right', true); local[key].push(v); $(inp).value=''; renderRules(); saveSoon(msg); };
+$('#ipAdd').onclick = () => addTo('#ipInput','bypassIPs', v => /^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/.test(v), 'Address will skip NetMerge');
+$('#domAdd').onclick = () => addTo('#domInput','stableDomains', v => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(v.replace(/^https?:\/\//,'').replace(/\/.*$/,'')), 'Website kept on one connection');
+$('#ipInput').onkeydown = e => { if (e.key==='Enter') $('#ipAdd').click(); };
+$('#domInput').onkeydown = e => { if (e.key==='Enter') $('#domAdd').click(); };
+$('#vpnLink').onchange = e => { local.vpnLink = e.target.value; saveSoon('VPN connection set'); };
+$('#dnsTog').onclick = () => { local.builtinDNS = !local.builtinDNS; renderRules(); saveSoon('DNS setting applied'); };
+
+/* ---------- settings ---------- */
+function renderSettings(){
+  [['#autoTog','autoStart'],['#launchTog','mergeOnLaunch'],['#debugTog','debugLog']].forEach(([id,k]) => { $(id).classList.toggle('on', !!local[k]); $(id).setAttribute('aria-checked', !!local[k]); });
+  $$('#theme button').forEach(b => b.classList.toggle('sel', b.dataset.v === document.documentElement.dataset.theme));
+  if (document.activeElement !== $('#balSel')) $('#balSel').value = local.classicBalance ? 'classic' : 'smart';
+  if (document.activeElement !== $('#stackSel')) $('#stackSel').value = (local.tunStack === 'mixed' ? '' : (local.tunStack || ''));
+  $('#engineVer').textContent = S.snap.version ? 'mihomo ' + S.snap.version + ' (running)' : 'Not running';
+}
+$('#autoTog').onclick = () => { local.autoStart = !local.autoStart; renderSettings(); saveSoon(local.autoStart ? 'Will start with Windows' : 'Will not start with Windows'); };
+$('#launchTog').onclick = () => { local.mergeOnLaunch = !local.mergeOnLaunch; renderSettings(); saveSoon('Saved'); };
+$('#balSel').onchange = e => { local.classicBalance = e.target.value === 'classic'; saveSoon(local.classicBalance ? 'Classic balancing' : 'Smart balancing'); };
+$('#stackSel').onchange = e => { local.tunStack = e.target.value; saveSoon('Engine mode changed - reconnecting…'); };
+$('#debugTog').onclick = () => { local.debugLog = !local.debugLog; renderSettings(); saveSoon(local.debugLog ? 'Detailed logging on' : 'Detailed logging off'); };
+$('#rescan').onclick = async () => { await api('rescan',{}); await poll(true); toast('Connections scanned'); };
+$('#quit').onclick = async () => {
+  if (!confirm('Stop merging and quit NetMerge?\nYour normal internet will be restored.')) return;
+  await api('quit',{}); clearInterval(timer);
+  document.body.innerHTML = '<div style="display:grid;place-items:center;height:100vh;text-align:center;color:var(--mute);font-size:16px"><div><div style="font-size:22px;color:var(--text);margin-bottom:8px">NetMerge has stopped</div>Your normal internet is restored. You can close this window.</div></div>';
+};
+
+/* ---------- logs ---------- */
+async function loadLog(){ try { const j = await api('log?f='+logWhich); const b=$('#logBox'); b.textContent = j.text || (logWhich==='app' ? '(empty)' : '(empty — turn on Detailed logging in Settings to record this)'); b.scrollTop = b.scrollHeight; } catch(e){ toast(e.message, true); } }
+$$('#logSel button').forEach(b => b.onclick = () => { logWhich = b.dataset.v; $$('#logSel button').forEach(x=>x.classList.toggle('sel',x===b)); loadLog(); });
+$('#logRefresh').onclick = loadLog;
+
+/* ---------- mode ---------- */
+$('#mode').onchange = e => { local.mode = e.target.value; render(); e.target.blur(); saveSoon(local.mode.startsWith('link:') ? `Everything now uses ${labelOf(local.mode.slice(5))} only` : local.mode==='fast' ? 'Combining all connections · fastest' : 'Combining all connections · steady sites'); };
+
+/* ---------- blocking ---------- */
+let B = null, blockBusy = false;
+function renderBlockBadge(){
+  const b = $('#blkBadge'), n = S.block?.enabled ? S.block.today : 0;
+  b.hidden = !n; b.textContent = n > 999 ? (n/1000).toFixed(1)+'k' : n;
+}
+async function loadBlock(){ try { B = await api('block'); renderBlock(); } catch(e){} }
+const ago = t => { const s = Math.max(0, Math.floor(Date.now()/1000 - t)); return s < 60 ? s+'s ago' : s < 3600 ? Math.floor(s/60)+'m ago' : Math.floor(s/3600)+'h ago'; };
+function renderBlock(){
+  if (!B) return;
+  const on = B.enabled, run = S.snap.running;
+  $('#blkTog').classList.toggle('on', on); $('#blkTog').setAttribute('aria-checked', on);
+  $('#blkToday').textContent = (S.block?.today ?? B.today).toLocaleString(); $('#blkTotal').textContent = (S.block?.total ?? B.total).toLocaleString();
+  setHTML($('#blkHint'), !on ? '<div class="note warn" style="margin:0">Blocking is off.</div>' : !run ? '<div class="note info" style="margin:0">Blocking works while merging is on. Turn merging on to start blocking.</div>' : '');
+  setHTML($('#blkPacks'), B.packs.map(p => {
+    const meta = p.builtin ? `${p.count.toLocaleString()} sites` : p.updating ? 'Updating…' : p.error ? `<span style="color:var(--bad)" title="${esc(p.error)}">Update failed</span>` : p.updated ? `${p.count.toLocaleString()} sites · ${ago(p.updated)}` : (p.enabled ? 'Downloading…' : '');
+    return `<div class="pack"><div class="t"><b>${esc(p.name)}</b><span>${esc(p.desc)}</span></div><div class="m">${meta}</div>${p.builtin ? '' : `<button class="tog${p.enabled?' on':''}" data-pack="${esc(p.id)}" role="switch" aria-label="${esc(p.name)}"></button>`}</div>`;
+  }).join(''));
+  $('#blkPacks').querySelectorAll('[data-pack]').forEach(b => b.onclick = () => blockPost({packs:{[b.dataset.pack]: !B.packs.find(p=>p.id===b.dataset.pack).enabled}}, 'Saved'));
+  setHTML($('#blkTop'), B.top?.length ? B.top.map(t => `<div class="pack" style="padding:8px 0"><div class="t"><b style="font-weight:500">${esc(t.host)}</b></div><div class="m">${t.count.toLocaleString()}</div></div>`).join('') : '<p class="d" style="margin:0">Nothing blocked yet.</p>');
+  const rec = (B.recent || []).slice(0, 20);
+  setHTML($('#blkRecent'), rec.length ? '<tr><th>Website</th><th>App</th><th class="r">Times</th><th>Last</th><th></th></tr>' + rec.map(r => `<tr><td class="proc">${esc(r.host)}</td><td>${esc(r.app || '')}</td><td class="r num">${r.count.toLocaleString()}</td><td style="color:var(--dim)">${ago(r.time)}</td><td class="r"><button class="btn sm" data-allow="${esc(r.host)}">Allow</button></td></tr>`).join('') : '<tr><td class="empty" colspan="5">No blocked connections yet.</td></tr>');
+  $('#blkRecent').querySelectorAll('[data-allow]').forEach(b => b.onclick = async () => { try { B = await api('block/allow', {domain: b.dataset.allow}); toast(b.dataset.allow + ' is now allowed'); renderBlock(); fillLists(true); } catch(e){ toast(e.message, true); } });
+  fillLists(false);
+}
+function fillLists(force){
+  for (const [id, key] of [['#blkMine','blocklist'],['#blkAllow','allowlist']]) {
+    const el = $(id); if (force || (document.activeElement !== el && el.dataset.dirty !== '1')) { if (el.value !== B[key]) el.value = B[key]; }
+  }
+}
+$('#blkMine').oninput = e => e.target.dataset.dirty = '1';
+$('#blkAllow').oninput = e => e.target.dataset.dirty = '1';
+async function blockPost(body, msg){
+  if (blockBusy) return; blockBusy = true;
+  try { B = await api('block', body); toast(msg); renderBlock(); poll(true); } catch(e){ toast(e.message, true); }
+  blockBusy = false;
+}
+$('#blkTog').onclick = () => B && blockPost({enabled: !B.enabled}, B.enabled ? 'Blocking is off' : 'Blocking is on');
+$('#blkUpdate').onclick = async () => { try { await api('block/update', {}); toast('Updating lists…'); setTimeout(loadBlock, 1500); } catch(e){ toast(e.message, true); } };
+$('#blkSaveMine').onclick = async () => { await blockPost({blocklist: $('#blkMine').value}, 'Block list saved'); $('#blkMine').dataset.dirty = ''; fillLists(true); };
+$('#blkSaveAllow').onclick = async () => { await blockPost({allowlist: $('#blkAllow').value}, 'Allow list saved'); $('#blkAllow').dataset.dirty = ''; fillLists(true); };
+$('#alerts').addEventListener('click', async e => {
+  if (e.target.id !== 'fixConf') return;
+  e.target.disabled = true; e.target.textContent = 'Working…';
+  try { await api('fixconflict', {}); toast('Closed. You can turn merging on now.'); } catch(err){ toast(err.message, true); }
+  poll(true);
+});
+setInterval(() => { if (page === 'block') loadBlock(); }, 3000);
+/* ---------- share ---------- */
+let SH = null, shAddrSel = '', shKey = '', shPlat = 'android';
+async function loadShare(){ try { SH = await api('share'); renderShare(); } catch(e){} }
+async function shareSet(body, msg){ try { SH = await api('share', body); renderShare(); toast(msg); } catch(e){ toast(e.message, true); } }
+function copyText(t){ try { navigator.clipboard.writeText(t); toast('Copied'); } catch(e){ toast('Select the text and press Ctrl+C', true); } }
+function shIP(){ const l = (SH.addresses||[]); return (l.find(a => a.ip === shAddrSel) || l.find(a => a.ip.startsWith('192.168.1.')) || l[0] || {}).ip || ''; }
+function shLink(){
+  const ip = shIP(); if (!ip) return '';
+  // standard Shadowsocks link (SIP002): every proxy app can import it
+  const ui = btoa((SH.cipher||'aes-128-gcm')+':'+SH.pass).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  return `ss://${ui}@${ip}:${SH.ssPort||8388}#NetMerge`;
+}
+function drawQR(cv, text){
+  const q = new QRLib.QRCode(-1, QRLib.ECL.M); q.addData(text); q.make();
+  const n = q.getModuleCount(), quiet = 2, sz = cv.width, cell = Math.floor(sz/(n+quiet*2)), off = Math.floor((sz-cell*n)/2), g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0,0,sz,sz); g.fillStyle = '#111';
+  for (let r=0;r<n;r++) for (let c=0;c<n;c++) if (q.isDark(r,c)) g.fillRect(off+c*cell, off+r*cell, cell, cell);
+}
+const APPS = {
+  android: { name:'Android', apps:'Hiddify or v2rayNG (both free)', how:'Open the app, tap <b>+</b> and choose <b>Scan QR code</b> (in v2rayNG: <b>Import config from QR code</b>).' },
+  iphone:  { name:'iPhone',  apps:'Hiddify, Streisand or Shadowrocket', how:'Open the app, go to its add-profile screen and choose <b>Scan QR code</b>.' }
+};
+function buildShare(){
+  const rows = (SH.addresses||[]).map(a => `<div class="shk"><span>${esc(a.iface)}</span><code>${esc(a.ip)}</code><button class="btn sm" data-copy="${esc(a.ip)}">Copy</button></div>`).join('') || '<div class="shk"><span>No network address found</span></div>';
+  $('#shBody').innerHTML = `
+    <div class="shgrid">
+      <div class="card shsteps2">
+        <div class="stp"><i>1</i><div><b>Get a free app on your phone</b>
+          <div class="seg" id="shPlat" style="margin:8px 0 6px"><button data-v="android">Android</button><button data-v="iphone">iPhone</button></div>
+          <div class="hint2" id="shApps"></div></div></div>
+        <div class="stp"><i>2</i><div><b>Scan this code</b>
+          <div class="hint2" id="shHow"></div></div></div>
+        <div class="qrbox"><canvas id="qr-hid" width="260" height="260" aria-label="QR code to scan with your phone"></canvas></div>
+        <div class="qrmeta">
+          <label class="hint2" for="shAddr">PC address in the code</label>
+          <select class="sel" id="shAddr">${(SH.addresses||[]).map(a => `<option value="${esc(a.ip)}">${esc(a.ip)} · ${esc(a.iface)}</option>`).join('')}</select>
+          <button class="btn" id="shCopyLink">Copy link instead</button>
+        </div>
+        <div class="stp"><i>3</i><div><b>Connect</b>
+          <div class="hint2">Tap the connect button in the app and allow the VPN request. Your phone is now using every connection.</div></div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+        <div class="card"><h3 style="margin:0 0 8px">Connected now</h3><div id="shDev"></div></div>
+        <div class="card"><h3 style="margin:0 0 6px">Good to know</h3>
+          <ul class="tips">
+            <li>The phone and this PC must be on the <b>same network</b> (same Wi-Fi or router).</li>
+            <li>NetMerge must be <b>merging</b> for sharing to work.</li>
+            <li>The code contains your password. If anyone else has seen it, make a new one below.</li>
+            <li>Only one VPN app can run on the phone at a time.</li>
+          </ul></div>
+        <details class="card adv"><summary>Manual setup &amp; password</summary>
+          <div class="hint2" style="margin:8px 0">Use these if you prefer to type the details, or want to set the phone's Wi-Fi proxy by hand (Settings → Wi-Fi → network → Proxy → Manual).</div>
+          ${rows}
+          <div class="shk"><span>Proxy port</span><code>${SH.port}</code><button class="btn sm" data-copy="${SH.port}">Copy</button></div>
+          <div class="shk"><span>User name</span><code>${esc(SH.user)}</code><button class="btn sm" data-copy="${esc(SH.user)}">Copy</button></div>
+          <div class="shk"><span>Password</span><code>${esc(SH.pass)}</code><button class="btn sm" data-copy="${esc(SH.pass)}">Copy</button></div>
+          <div style="margin-top:12px"><button class="btn" id="shNew">Make a new password</button></div>
+        </details>
+      </div>
+    </div>`;
+  $('#shBody').querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copyText(b.dataset.copy));
+  $('#shNew').onclick = () => shareSet({newPass:true}, 'New password made - scan the code again on your phone');
+  $('#shCopyLink').onclick = () => copyText(shLink());
+  $$('#shPlat button').forEach(b => b.onclick = () => { shPlat = b.dataset.v; paintShare(); });
+  const sa = $('#shAddr'); sa.onchange = () => { shAddrSel = sa.value; paintShare(); };
+}
+// the parts that change without rebuilding the page (so open sections and the selected address stay as they are)
+function paintShare(){
+  const A = APPS[shPlat];
+  $$('#shPlat button').forEach(b => b.classList.toggle('sel', b.dataset.v === shPlat));
+  $('#shApps').innerHTML = `Install <b>${A.apps}</b> from the ${shPlat==='iphone'?'App Store':'Play Store'}.`;
+  $('#shHow').innerHTML = A.how;
+  const sa = $('#shAddr'); if (sa && document.activeElement !== sa) sa.value = shIP();
+  const l = shLink(), cv = $('#qr-hid');
+  if (cv && l && cv.dataset.l !== l){ cv.dataset.l = l; try { drawQR(cv, l); } catch(e){} }
+  if (shEdit) return; // don't redraw while a name is being typed
+  const dev = SH.devices || [];
+  const icon = d => '📱';
+  setHTML($('#shDev'), dev.length ? dev.map(d => {
+    const sub = [d.ip, d.mac, d.vendor || (d.private ? 'private address' : ''), `${d.conns} connection${d.conns===1?'':'s'}`].filter(Boolean).join(' · ');
+    return `<div class="dev"><div class="dic">${icon(d)}</div><div style="flex:1;min-width:0">
+      <div class="dname"><b>${esc(d.name || 'Unnamed device')}</b><button class="lnk" data-ren="${esc(d.id)}" data-cur="${esc(d.source==='you'?d.name:'')}">${d.source==='you'?'Rename':'Name it'}</button></div>
+      <div class="hint2">${esc(sub)}</div></div>
+      <div class="num">${fmtM(d.down)}<small> Mbps ↓</small></div></div>`; }).join('')
+    : '<div class="hint2">No device connected yet. Scan the code on your phone and connect.</div>');
+}
+let shEdit = false;
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-ren]'); if (!b) return;
+  const row = b.closest('.dname'); shEdit = true;
+  row.innerHTML = `<input class="inp" id="shNm" maxlength="40" placeholder="e.g. My phone" value="${esc(b.dataset.cur)}" style="flex:1;min-width:0"><button class="btn sm" id="shNmOk">Save</button><button class="btn sm" id="shNmNo">Cancel</button>`;
+  const inp = $('#shNm'); inp.focus(); inp.select();
+  const done = async save => { const v = inp.value; shEdit = false; if (save) await shareSet({name:{id:b.dataset.ren, name:v}}, 'Saved'); else renderShare(); };
+  $('#shNmOk').onclick = () => done(true); $('#shNmNo').onclick = () => done(false);
+  inp.onkeydown = ev => { if (ev.key === 'Enter') done(true); if (ev.key === 'Escape') done(false); };
+});
+function renderShare(){
+  if (!SH) return;
+  const tog = $('#shTog'); tog.classList.toggle('on', SH.enabled); tog.setAttribute('aria-checked', SH.enabled);
+  const n = (SH.devices||[]).length;
+  $('#shStatus').innerHTML = !SH.enabled ? 'Let a phone or tablet use all your connections together.'
+    : !SH.running ? '<span class="dot warn"></span>Turn merging on to start sharing'
+    : n ? `<span class="dot good"></span>Sharing · ${n} device${n===1?'':'s'} connected`
+    : '<span class="dot good"></span>Sharing is on · waiting for a device';
+  if (!SH.enabled){
+    shKey = '';
+    $('#shBody').innerHTML = `<div class="card shoff"><div class="big">📱 ⇄ 💻</div><h3>Use your merged internet on your phone</h3>
+      <div class="hint2" style="max-width:520px;margin:6px auto 16px">Turn sharing on, scan one QR code with a free app, and your phone gets the combined speed of all your connections, with ads and trackers blocked.</div>
+      <button class="btn primary" id="shOn">Turn on sharing</button></div>`;
+    $('#shOn').onclick = () => shareSet({enabled:true}, 'Sharing on');
+    return;
+  }
+  setHTML($('#shWarn'), (SH.publicNets||[]).length ? `<div class="note warn"><b>Windows treats ${esc(SH.publicNets.join(' and '))} as a Public network.</b> Only share on a network you trust (your home), not in a café or hotel.</div>` : '');
+  const key = [SH.pass, SH.port, SH.ssPort, (SH.addresses||[]).map(a=>a.ip).join(',')].join('|');
+  if (key !== shKey || !$('#shAddr')){ shKey = key; buildShare(); }
+  paintShare();
+}
+$('#shTog').onclick = () => shareSet({enabled: !(SH && SH.enabled)}, (SH && SH.enabled) ? 'Sharing off' : 'Sharing on');
+setInterval(() => { if (page === 'share') loadShare(); }, 2500);
+
+/* ---------- usage ---------- */
+let U = null;
+async function loadUsage(){ try { U = await api('usage'); renderUsage(); } catch(e){} }
+// One unit for everything on screen, and totals are added up from the values that are SHOWN, so the numbers
+// always add up exactly (LAN + Wi-Fi + … = Total, download + upload = connection total).
+function mkFmt(maxBytes){
+  const G = maxBytes >= 1e9, div = G ? 1e7 : 1e6;
+  return { q: b => Math.round((b||0)/div), show: n => n === 0 ? '—' : G ? (n/100).toFixed(2)+' GB' : n.toLocaleString()+' MB', zero: G ? '0.00 GB' : '0 MB',
+           cell: n => n === 0 ? '—' : G ? (n/100).toFixed(2) : n.toLocaleString(), unit: G ? 'GB' : 'MB' };
+}
+function usForecast(l){
+  const DAY = 864e5, s = new Date(U.start+'T00:00:00'), e = new Date(U.end+'T00:00:00'), now = new Date();
+  const el = (now - s)/DAY, tot = (e - s)/DAY;
+  if (el < 0.5 || l.used <= 0) return '';
+  const rate = l.used/el, proj = rate*tot, q = l.quotaGB*1e9;
+  if (q > 0 && l.used < q && proj > q){
+    const d = new Date(s.getTime() + q/rate*DAY);
+    return `<div class="s fc bad">At this pace it reaches the limit around ${d.toLocaleDateString(undefined,{day:'numeric',month:'short'})}</div>`;
+  }
+  const g = proj >= 1e9 ? (proj/1e9).toFixed(1)+' GB' : Math.round(proj/1e6)+' MB';
+  return `<div class="s fc">${q > 0 && l.used < q ? 'On track: ' : ''}about ${g} by renewal at this pace</div>`;
+}
+function renderUsage(){
+  if (!U || !local) return;
+  const P = pal(), L = U.links, shown = L.filter(l => l.enabled || l.used > 0);
+  // ----- cards (this allowance period)
+  const F = mkFmt(shown.reduce((a,l)=>a+l.used,0));
+  let tD = 0, tU = 0;
+  const cards = shown.map(l => {
+    const d = F.q(l.rx), u = F.q(l.tx); tD += d; tU += u;
+    const pct = l.quotaGB > 0 ? Math.min(100, l.used/(l.quotaGB*1e9)*100) : 0;
+    return `<div class="us${l.out?' out':''}" style="--c:${P[L.indexOf(l)%5]}"><div class="n">${esc(l.label)}</div><div class="v">${d+u === 0 ? F.zero : F.show(d+u)}</div>
+      <div class="s">↓ ${F.show(d)} &nbsp;·&nbsp; ↑ ${F.show(u)}</div>
+      ${l.quotaGB > 0 ? `<div class="share-bar" style="margin-top:8px"><div style="width:${pct}%"></div></div><div class="s">${pct.toFixed(0)}% of ${l.quotaGB} GB${l.out ? ' · left out of the merge' : ''}</div>` : '<div class="s">No limit set</div>'}${usForecast(l)}</div>`;
+  }).join('');
+  setHTML($('#usSum'), cards + `<div class="us tot"><div class="n">Total · ${shown.map(l=>esc(l.label)).join(' + ')}</div><div class="v">${tD+tU === 0 ? F.zero : F.show(tD+tU)}</div><div class="s">↓ ${F.show(tD)} &nbsp;·&nbsp; ↑ ${F.show(tU)}</div><div class="s">${esc(U.start)} to ${esc(U.end)} · renews on day ${U.reset}</div></div>`);
+  $('#usPeriod').textContent = '· last 31 days, newest first';
+  // ----- daily table: download / upload for every connection, then the total
+  let maxDay = 0;
+  U.days.forEach(d => { let t = 0; shown.forEach(l => { const v = d.links?.[l.name] || [0,0]; t += v[0]+v[1]; }); maxDay = Math.max(maxDay, t); });
+  const T = mkFmt(Math.max(maxDay, 1e9));   // table always in GB
+  const grp = shown.map((l,i) => `<th class="num grp" colspan="2" style="--c:${P[L.indexOf(l)%5]}">${esc(l.label)}</th>`).join('');
+  const head = `<tr><th rowspan="2">Date</th>${grp}<th class="num grp tot" colspan="3">Total</th></tr>
+    <tr class="sub">${shown.map(()=>'<th class="num">↓ Down</th><th class="num">↑ Up</th>').join('')}<th class="num tot">↓ Down</th><th class="num">↑ Up</th><th class="num">All</th></tr>`;
+  const loc = new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const rows = U.days.map(d => {
+    let sd = 0, su = 0;
+    const cells = shown.map(l => { const v = d.links?.[l.name] || [0,0], a = T.q(v[0]), b = T.q(v[1]); sd += a; su += b; return `<td class="num">${T.cell(a)}</td><td class="num">${T.cell(b)}</td>`; }).join('');
+    return `<tr class="${d.date===loc?'today':''}"><td>${d.date===loc?'Today':esc(d.date)}</td>${cells}<td class="num tot">${T.cell(sd)}</td><td class="num">${T.cell(su)}</td><td class="num"><b>${T.cell(sd+su)}</b></td></tr>`;
+  }).join('');
+  setHTML($('#usTbl'), head + rows);
+  $('#usUnit').textContent = '· all values in GB';
+  // allowance controls: rebuilt only when the set of connections changes, so typing is never interrupted
+  const q = $('#usQuota'), keys = local.links.map(l=>l.name).join('|');
+  if (q.dataset.keys !== keys){
+    q.dataset.keys = keys;
+    q.innerHTML = local.links.map(l => `<div class="qrow"><b>${esc(l.label)}</b><input class="inp" type="number" min="0" step="1" inputmode="numeric" placeholder="No limit" data-n="${esc(l.name)}" aria-label="Monthly allowance for ${esc(l.label)} in GB"> <span style="color:var(--mute)">GB per month</span></div>`).join('') +
+      `<div class="qrow"><b>Renews on day</b><select class="sel" id="qReset" style="min-width:90px">${Array.from({length:28},(_,i)=>`<option>${i+1}</option>`).join('')}</select>
+       <b style="min-width:0;margin-left:12px">When used up</b><select class="sel" id="qAct"><option value="warn">Only warn me</option><option value="leave">Leave it out of the merge</option></select></div>`;
+    q.querySelectorAll('input[data-n]').forEach(inp => inp.onchange = () => {
+      const l = local.links.find(x => x.name === inp.dataset.n); l.quotaGB = Math.max(0, parseFloat(inp.value) || 0);
+      saveSoon('Allowance saved'); setTimeout(loadUsage, 900);
+    });
+    $('#qReset').onchange = e => { local.quotaReset = +e.target.value; saveSoon('Saved'); setTimeout(loadUsage, 900); };
+    $('#qAct').onchange = e => { local.quotaAction = e.target.value; saveSoon('Saved'); setTimeout(loadUsage, 900); };
+  }
+  q.querySelectorAll('input[data-n]').forEach(inp => { if (document.activeElement !== inp){ const l = local.links.find(x => x.name === inp.dataset.n); inp.value = l && l.quotaGB > 0 ? l.quotaGB : ''; } });
+  if (document.activeElement !== $('#qReset')) $('#qReset').value = local.quotaReset || 1;
+  if (document.activeElement !== $('#qAct')) $('#qAct').value = local.quotaAction || 'warn';
+}
+setInterval(() => { if (page === 'usage') loadUsage(); }, 5000);
+
+
+/* ---------- updates ---------- */
+let UP = null, updShownErr = '';
+async function loadUpdate(){ try { UP = await api('update'); renderUpdate(); } catch(e){} }
+function updAgo(t){ if(!t) return 'never'; const m = Math.round((Date.now()/1000 - t)/60); return m < 1 ? 'just now' : m < 60 ? m+' min ago' : Math.round(m/60)+' h ago'; }
+function renderUpdate(){
+  if (!UP) return;
+  const busy = UP.status === 'downloading' || UP.status === 'installing' || UP.status === 'checking';
+  let b = '';
+  if (UP.available || UP.status === 'downloading' || UP.status === 'installing'){
+    const notes = (UP.notes||'').trim().split('\n').filter(Boolean).slice(0,6).map(l => '<li>'+esc(l.replace(/^[-*#\s]+/,''))+'</li>').join('');
+    b = `<div class="note updb"><div style="flex:1;min-width:0"><b>NetMerge ${esc(UP.latest)} is available</b> <span class="hint2">(you have ${esc(UP.current)})</span>
+      ${notes ? `<details style="margin-top:6px"><summary class="hint2" style="cursor:pointer">What's new</summary><ul class="tips" style="margin-top:6px">${notes}</ul></details>` : ''}
+      ${UP.status === 'downloading' ? `<div class="share-bar" style="margin-top:8px"><div style="width:${UP.progress}%"></div></div>` : ''}</div>
+      <button class="btn primary" id="updGo" ${busy?'disabled':''}>${UP.status==='downloading' ? 'Downloading '+UP.progress+'%' : UP.status==='installing' ? 'Restarting…' : 'Update now'}</button></div>`;
+  }
+  if (UP.engineDl === 'downloading') b = `<div class="note updb"><div style="flex:1"><b>Downloading the network engine…</b> <span class="hint2">first start only</span><div class="share-bar" style="margin-top:8px"><div style="width:${UP.enginePct}%"></div></div></div></div>` + b;
+  else if (UP.engineDl === 'error') b = `<div class="note bad"><span style="flex:1"><b>Could not download the network engine.</b> ${esc(UP.engineErr)}</span><button class="btn" id="engRetry">Try again</button></div>` + b;
+  setHTML($('#updBanner'), b);
+  const er = $('#engRetry'); if (er) er.onclick = async () => { UP = await api('update',{action:'engine'}); renderUpdate(); };
+  const g = $('#updGo'); if (g) g.onclick = async () => { try { UP = await api('update',{action:'install'}); renderUpdate(); toast('Downloading the update…'); } catch(e){ toast(e.message, true); } };
+  $('#appVer').textContent = 'v'+UP.current;
+  $('#updInfo').textContent = UP.status === 'checking' ? 'Checking…' : UP.error ? UP.error : UP.available ? `Version ${UP.latest} is available.` : UP.checked ? `You have the latest version. Checked ${updAgo(UP.checked)}.` : 'Not checked yet.';
+  $('#updCheck').disabled = busy;
+  $('#updTog').classList.toggle('on', UP.auto); $('#updTog').setAttribute('aria-checked', UP.auto);
+}
+$('#updCheck').onclick = async () => { try { UP = await api('update',{action:'check'}); renderUpdate(); if (!UP.error) toast(UP.available ? 'Update found' : 'You are up to date'); } catch(e){ toast(e.message, true); } };
+$('#updTog').onclick = () => { local.noUpdateCheck = !local.noUpdateCheck; if (UP) { UP.auto = !local.noUpdateCheck; renderUpdate(); } saveSoon(local.noUpdateCheck ? 'Automatic update checks off' : 'Automatic update checks on'); };
+setInterval(loadUpdate, 4000); setTimeout(loadUpdate, 800);
+
+/* ---------- loop ---------- */
+let hidTick = 0;
+async function poll(resync){
+  if (document.hidden && !resync && ++hidTick % 8) return; // window hidden: refresh only now and then
+  try {
+    S = await api('state'); pollFails = 0;
+    if (!local || resync || (!saveTimer && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'SELECT')) {
+      const keepSeen = S.settings.seenApps;
+      local = JSON.parse(JSON.stringify(S.settings)); local.seenApps = keepSeen;
+      local.appRules ||= []; local.bypassIPs ||= []; local.stableDomains ||= []; local.links ||= [];
+    }
+    render();
+  } catch(e){
+    pollFails++;
+    if (S && local) render();
+  }
+}
+const timer = setInterval(poll, 1000);
+addEventListener('resize', () => { if (S && local) render(); });
+go('overview');
+poll(true);
+</script>
+</body>
+</html>
