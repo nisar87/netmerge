@@ -1233,11 +1233,17 @@ $('#updTog').onclick = () => { local.noUpdateCheck = !local.noUpdateCheck; if (U
 setInterval(loadUpdate, 4000); setTimeout(loadUpdate, 800);
 
 /* ---------- loop ---------- */
-let hidTick = 0;
+let hidTick = 0, bootApp = '';
 async function poll(resync){
   if (document.hidden && !resync && ++hidTick % 8) return; // window hidden: refresh only now and then
   try {
+    const wasDown = pollFails >= 3;
     S = await api('state'); pollFails = 0;
+    // NetMerge restarted (an update, or it was closed and opened again): load the window again so it matches
+    if (wasDown || (bootApp && S.snap.app && S.snap.app !== bootApp)) { location.reload(); return; }
+    if (!bootApp) bootApp = S.snap.app || '';
+    // right after a start the numbers are not ready yet: treat missing lists as empty
+    for (const k of ['links','apps','devices','total','sameIsp']) if (!S.snap[k]) S.snap[k] = [];
     if (!local || resync || (!saveTimer && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'SELECT')) {
       const keepSeen = S.settings.seenApps;
       local = JSON.parse(JSON.stringify(S.settings)); local.seenApps = keepSeen;

@@ -60,6 +60,7 @@ type AppStat struct {
 type Snapshot struct {
 	Running   bool         `json:"running"`
 	Version   string       `json:"version"`
+	App       string       `json:"app"` // NetMerge version (the window reloads itself when it changes)
 	Error     string       `json:"error"`
 	Uptime    int64        `json:"uptime"`
 	Links     []LinkStat   `json:"links"`
@@ -367,7 +368,7 @@ func sample(slow bool) {
 	if running {
 		up = int64(time.Since(started).Seconds())
 	}
-	snap = Snapshot{Running: running, Version: version, Error: errMsg, Uptime: up, Links: links, Apps: appList,
+	snap = Snapshot{Running: running, Version: version, App: appVersion, Error: errMsg, Uptime: up, Links: links, Apps: appList,
 		TotalDown: totDown, TotalUp: totUp, PeakDown: peak, Conns: len(mc.Connections),
 		Total: append([]float64(nil), totalHist...)}
 	_, snap.Smart = dispatchSlotsOf("")

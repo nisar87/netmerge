@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.2
+- After an update or restart the open window reloads itself, so it never shows an old page or a stale "Lost contact" message.
+- The updater waits a little longer before starting the new version.
+
 ## 2.2.1
 - Connection cards: the details are laid out in a fixed grid and the "Share of new connections" and "Use this line" rows line up across cards, whatever the data length.
 

@@ -295,7 +295,7 @@ func startUpdater(newExe, curExe, prevExe string) error {
 $ErrorActionPreference = 'Stop'
 try { Wait-Process -Id $ProcId -Timeout 40 } catch {}
 Get-Process mihomo -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Sleep 2
+Start-Sleep 4
 try {
   Copy-Item -Force $Cur $Prev
   Move-Item -Force $New $Cur
