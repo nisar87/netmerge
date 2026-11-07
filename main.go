@@ -114,6 +114,8 @@ func main() {
 	go safely("events", eventsLoop)
 	go dnsGuardLoop()
 	go presetScheduleLoop()
+	dlMgr.load()
+	dlMgr.startLoop()
 	if engineMissing() {
 		go safely("engine download", downloadEngine)
 	}
@@ -135,6 +137,7 @@ func main() {
 	usageSave()
 	eventsSave()
 	historySave()
+	dlMgr.shutdown()
 	engine.Stop()
 	_ = srv.Close()
 }

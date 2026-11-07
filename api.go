@@ -170,6 +170,7 @@ func routes() http.Handler {
 	registerBackupRoutes(mux)
 	registerPresetRoutes(mux)
 	registerDNSRoutes(mux)
+	registerDownloadRoutes(mux)
 	mux.HandleFunc("/api/events", guard(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"events": allEvents()})
 	}))

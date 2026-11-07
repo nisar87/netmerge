@@ -312,3 +312,11 @@ Start-Process $Cur
 	c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow | 0x00000200}
 	return c.Start()
 }
+
+// openPath opens a file with its normal program, or shows it selected in Explorer.
+func openPath(path string, reveal bool) error {
+	if reveal {
+		return hiddenCmd("explorer.exe", "/select,"+path).Start()
+	}
+	return hiddenCmd("rundll32.exe", "url.dll,FileProtocolHandler", path).Start()
+}
