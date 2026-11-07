@@ -119,7 +119,7 @@ func (e *Engine) Start() error {
 		}
 		return fmt.Errorf("%s", e.lastError)
 	}
-	if msg := detectConflict(); msg != "" {
+	if msg := detectConflictNow(); msg != "" {
 		e.lastError = msg
 		logf("not starting: %s", msg)
 		return fmt.Errorf("%s", msg)

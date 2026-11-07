@@ -110,6 +110,7 @@ func buildConfig(s Settings) ([]byte, error) {
 
 	groups := []map[string]any{}
 	fast, stable := "DIRECT", "DIRECT"
+	callTarget := ""
 	if len(links) > 0 {
 		// No engine-side health checks: NetMerge probes each link itself (health.go) and rebuilds these lists.
 		lb := func(name, strategy string, members []string) map[string]any {
@@ -137,6 +138,10 @@ func buildConfig(s Settings) ([]byte, error) {
 					groups = append(groups, map[string]any{"name": n, "type": "select", "proxies": members})
 				}
 				groups = append(groups, lb("AUTO", "round-robin", slots))
+				// CALL: the one line that meeting apps use. NetMerge points it at the steadiest line and keeps
+				// other new connections away from it while a call is running (dispatch.go).
+				groups = append(groups, map[string]any{"name": "CALL", "type": "select", "proxies": members})
+				callTarget = "CALL"
 				fast = "AUTO"
 			}
 		}
@@ -219,7 +224,12 @@ func buildConfig(s Settings) ([]byte, error) {
 	for _, r := range s.AppRules {
 		rules = append(rules, procRule(r.Process, target(r.Target)))
 	}
-	rules = append(rules, callRules(s, stable)...)
+	rules = append(rules, callRules(s, func() string {
+		if callTarget != "" {
+			return callTarget
+		}
+		return stable
+	}())...)
 	for _, d := range s.StableDomains {
 		rules = append(rules, "DOMAIN-SUFFIX,"+d+","+stable)
 	}

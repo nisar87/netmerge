@@ -51,6 +51,8 @@ var (
 	dispWantN  int
 	dispSwitch int
 	dispShare  = map[string]float64{}
+	dispCall   string // proxy the CALL group points at
+	callBetter int
 )
 
 func dispatchLoop() {
@@ -123,6 +125,9 @@ func dispatchTick() {
 	// the engine was (re)loaded: its selectors start again from their first member, so assert every slot again
 	seen := fmt.Sprintf("%s|%d", engine.AppliedKey(), started.Unix())
 	force := seen != dispSeen
+	if force {
+		dispCall = ""
+	}
 
 	var set []*dispLink
 	statsMu.Lock()
@@ -133,6 +138,14 @@ func dispatchTick() {
 		}
 	}
 	busyAll := allLoad > 1.5e6
+	callActive := false
+	if !s.NoCallProtect {
+		for _, a := range snap.Apps {
+			if isCallApp(a.Process) && a.Down+a.Up > 20e3 {
+				callActive = true
+			}
+		}
+	}
 	for _, l := range ls {
 		d := dispLinks[l.Name]
 		if d == nil {
@@ -178,6 +191,10 @@ func dispatchTick() {
 		}
 	}
 	pen := delayPenalty(set)
+	callName := ""
+	if !s.NoCallProtect {
+		callName = chooseCallLink(set)
+	}
 
 	// which direction is busy decides which spare capacity counts
 	saveCaps(set)
@@ -205,6 +222,9 @@ func dispatchTick() {
 			}
 		}
 		w *= pen[i]
+		if callActive && d.proxy == callName && callName != "" {
+			w *= 0.3 // keep the call's line free: new downloads go elsewhere while the call runs
+		}
 		weights[i] = w
 		sum += w
 	}
@@ -634,4 +654,68 @@ func slowFlags(set []*dispLink) []bool {
 		}
 	}
 	return out
+}
+
+func isCallApp(proc string) bool {
+	for _, p := range callApps {
+		if strings.EqualFold(p, proc) {
+			return true
+		}
+	}
+	return false
+}
+
+// chooseCallLink points CALL at the steadiest line (low delay, no loss, not slow) and keeps it there; it only moves
+// when that line is gone or another one is clearly better for a few seconds in a row, so a running call is not
+// moved around. Returns the proxy name now used.
+func chooseCallLink(set []*dispLink) string {
+	slow := slowFlags(set)
+	score := func(i int) float64 {
+		d := set[i]
+		ms := float64(health[d.name].delay)
+		if ms == 0 {
+			ms = 200
+		}
+		qualMu.Lock()
+		q := qualityOf(qual[d.name])
+		qualMu.Unlock()
+		v := ms + q.Loss*20 + float64(q.Jitter)
+		if slow[i] {
+			v += 1000
+		}
+		return v
+	}
+	best, cur := -1, -1
+	statsMu.Lock()
+	for i, d := range set {
+		if best < 0 || score(i) < score(best) {
+			best = i
+		}
+		if d.proxy == dispCall {
+			cur = i
+		}
+	}
+	statsMu.Unlock()
+	if best < 0 {
+		return ""
+	}
+	target := set[best].proxy
+	if cur >= 0 && target != dispCall {
+		if statsScore := func() bool { statsMu.Lock(); defer statsMu.Unlock(); return score(best) < 0.5*score(cur) }(); statsScore {
+			callBetter++
+		} else {
+			callBetter = 0
+		}
+		if callBetter < 4 {
+			target = dispCall
+		}
+	}
+	if target != dispCall {
+		if _, code, err := apiReq("PUT", "/proxies/CALL", map[string]string{"name": target}); err == nil && (code == 204 || code == 200) {
+			dispCall, callBetter = target, 0
+		} else {
+			return dispCall
+		}
+	}
+	return dispCall
 }

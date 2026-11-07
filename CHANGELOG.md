@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.0
+- Calls protection now keeps downloads off the call's line: meeting apps use a dedicated CALL line (the steadiest one, moved only when clearly needed) and new connections of other apps steer away from it while a call is running.
+- Fixed: the engine could start while a crash-prone driver (AdGuard) was loaded and was stopped a moment later.
+- Speed readings taken right after a stall of the sampler are no longer shown (periodic false spikes); stalls are written to the log.
+- A line that is far slower or poorer than the others shows a one-click "Use it only when busy" hint.
+- Usage page: "Last 7 days" card (total, daily average, busiest day, change on the week before).
+
 ## 2.3.3
 - Setup guide names the real number of connections found (it said "Two connections found" while listing three).
 

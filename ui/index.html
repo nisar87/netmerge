@@ -501,7 +501,7 @@ details.adv[open] summary::before{content:"▾ "}
         <div class="opt"><div><b>Look for new connections</b><span>Plugged in another adapter or phone? NetMerge also checks by itself every few seconds.</span></div><button class="btn" id="rescan">Scan now</button></div>
         <div class="opt"><div><b>Connection balancing</b><span>Smart gives each new connection to the link with the most spare speed right now. Classic splits them by the fixed shares (×1–×5) on the Overview page.</span></div><select class="sel" id="balSel" aria-label="Connection balancing"><option value="smart">Smart (recommended)</option><option value="classic">Classic (fixed shares)</option></select></div>
         <div class="opt"><div><b>Network engine mode</b><span>How the engine handles your traffic. Normal is best for most PCs. If single downloads feel slow, try System.</span></div><select class="sel" id="stackSel" aria-label="Network engine mode"><option value="">Normal (recommended)</option><option value="system">System</option><option value="gvisor">Compatibility</option></select></div>
-        <div class="opt"><div><b>Protect calls and meetings</b><span>Keeps Teams, Zoom, Discord, Skype and similar on one steady connection so a call does not hop between lines. Your own per-app rules still win. It does not stop a busy download from filling the line.</span></div><button class="tog" id="callTog" role="switch" aria-label="Protect calls and meetings"></button></div>
+        <div class="opt"><div><b>Protect calls and meetings</b><span>Keeps Teams, Zoom, Discord, Skype and similar on one steady connection so a call does not hop between lines. While a call is running, new downloads are steered to the other lines. Your own per-app rules still win.</span></div><button class="tog" id="callTog" role="switch" aria-label="Protect calls and meetings"></button></div>
         <div class="opt"><div><b>Detailed logging</b><span>Records every connection and a speed line per second. Only for troubleshooting.</span></div><button class="tog" id="debugTog" role="switch" aria-label="Detailed logging"></button></div>
         <div class="opt"><div><b>Engine</b><span id="engineVer">—</span></div></div>
         <div class="opt"><div><b>NetMerge <span id="appVer"></span></b><span id="updInfo">—</span></div><button class="btn" id="updCheck">Check for updates</button></div>
@@ -754,7 +754,7 @@ function renderLinks(sn, act, P){
             <div class="step" data-f="step"><button data-f="minus" aria-label="Give this connection a smaller share">−</button><b class="num" data-f="w"></b><button data-f="plus" aria-label="Give this connection a bigger share">+</button></div></div>
           <div class="share-bar"><div data-f="bar"></div></div>
         </div>
-        <div class="role"><label title="Always: used all the time. Only when busy: joins when the other lines are nearly full. Backup only: used only if the other lines fail.">Use this line<select class="sel" data-f="role" aria-label="When to use this connection"><option value="">Always</option><option value="busy">Only when busy</option><option value="backup">Backup only</option></select></label></div>
+        <div class="role"><label title="Always: used all the time. Only when busy: joins when the other lines are nearly full. Backup only: used only if the other lines fail.">Use this line<select class="sel" data-f="role" aria-label="When to use this connection"><option value="">Always</option><option value="busy">Only when busy</option><option value="backup">Backup only</option></select></label><div class="hint2 slowHint" data-f="slowHint" hidden>This line is much slower or less steady than the others. <button class="btn" data-f="slowBtn" style="padding:2px 8px;font-size:12px">Use it only when busy</button></div></div>
       </div>`).join('');
     box.querySelectorAll('.lk').forEach(card => {
       const name = card.dataset.n, L = () => local.links.find(x => x.name === name);
@@ -765,6 +765,7 @@ function renderLinks(sn, act, P){
         const l = L(); if (l.enabled && local.links.filter(x=>x.enabled).length===1) return toast('At least one connection must stay on', true);
         l.enabled = !l.enabled; saveSoon(l.enabled ? `${l.label} added to the merge` : `${l.label} left out of the merge`); render();
       };
+      card.querySelector('[data-f=slowBtn]').onclick = () => { const l = L(); l.role = 'busy'; saveSoon(`${l.label} will join when the others are busy`); };
       card.querySelector('[data-f=role]').onchange = e => { const l = L(); l.role = e.target.value; saveSoon(l.role === 'backup' ? `${l.label} is now a backup line` : l.role === 'busy' ? `${l.label} will join when the others are busy` : `${l.label} is used all the time`); };
       card.querySelector('[data-f=minus]').onclick = () => { const l=L(); if (l.weight>1){ l.weight--; saveSoon('Share updated'); render(); } };
       card.querySelector('[data-f=plus]').onclick = () => { const l=L(); if (l.weight<5){ l.weight++; saveSoon('Share updated'); render(); } };
@@ -796,6 +797,7 @@ function renderLinks(sn, act, P){
     f('missing').innerHTML = l.present ? '' : '<div class="warn-line">Unplugged or no internet. It rejoins by itself when it comes back.</div>';
     f('w').textContent = '×'+ll.weight;
     { const r = f('role'); if (document.activeElement !== r) r.value = ll.role || ''; }
+    { const poor = run && on && !ll.role && (l.slow || (l.quality && l.quality.label === 'Poor')); f('slowHint').hidden = !poor; }
     f('minus').disabled = ll.weight <= 1; f('plus').disabled = ll.weight >= 5;
     const smart = !!sn.smart && !local.mode.startsWith('link:') && local.mode !== 'stable';
     f('step').style.display = smart ? 'none' : '';
@@ -1198,7 +1200,12 @@ function renderUsage(){
       <div class="s">↓ ${F.show(d)} &nbsp;·&nbsp; ↑ ${F.show(u)}</div>
       ${l.quotaGB > 0 ? `<div class="share-bar" style="margin-top:8px"><div style="width:${pct}%"></div></div><div class="s">${pct.toFixed(0)}% of ${l.quotaGB} GB${l.out ? ' · left out of the merge' : ''}</div>` : '<div class="s">No limit set</div>'}${usForecast(l)}</div>`;
   }).join('');
-  setHTML($('#usSum'), cards + `<div class="us tot"><div class="n">Total · ${shown.map(l=>esc(l.label)).join(' + ')}</div><div class="v">${tD+tU === 0 ? F.zero : F.show(tD+tU)}</div><div class="s">↓ ${F.show(tD)} &nbsp;·&nbsp; ↑ ${F.show(tU)}</div><div class="s">${esc(U.start)} to ${esc(U.end)} · renews on day ${U.reset}</div></div>`);
+  const dayTot = d => shown.reduce((a,l) => { const v = d.links?.[l.name] || [0,0]; return a + v[0] + v[1]; }, 0);
+  const wk = U.days.slice(0,7).map(dayTot), pw = U.days.slice(7,14).map(dayTot);
+  const wkSum = wk.reduce((a,b)=>a+b,0), pwSum = pw.reduce((a,b)=>a+b,0), top = Math.max(...wk, 0);
+  const topDay = top > 0 ? U.days[wk.indexOf(top)].date : '';
+  const wkCard = wkSum > 0 ? `<div class="us"><div class="n">Last 7 days</div><div class="v">${F.show(F.q(wkSum))}</div><div class="s">about ${F.show(F.q(wkSum/7))} a day</div><div class="s">Busiest: ${esc(topDay)} (${F.show(F.q(top))})</div>${pwSum > 0 ? `<div class="s">${wkSum >= pwSum ? 'Up' : 'Down'} ${Math.abs(Math.round((wkSum/pwSum-1)*100))}% on the week before</div>` : ''}</div>` : '';
+  setHTML($('#usSum'), cards + wkCard + `<div class="us tot"><div class="n">Total · ${shown.map(l=>esc(l.label)).join(' + ')}</div><div class="v">${tD+tU === 0 ? F.zero : F.show(tD+tU)}</div><div class="s">↓ ${F.show(tD)} &nbsp;·&nbsp; ↑ ${F.show(tU)}</div><div class="s">${esc(U.start)} to ${esc(U.end)} · renews on day ${U.reset}</div></div>`);
   $('#usPeriod').textContent = '· last 31 days, newest first';
   // ----- daily table: download / upload for every connection, then the total
   let maxDay = 0;

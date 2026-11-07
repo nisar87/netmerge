@@ -211,6 +211,9 @@ func sample(slow bool) {
 	if !lastCounterAt.IsZero() {
 		dtC = cNow.Sub(lastCounterAt).Seconds()
 	}
+	if dtC > 2.2 {
+		logf("sampler was held up for %.1f s", dtC)
+	}
 	lastCounterAt = cNow
 	running, errMsg, started, version := engine.Status()
 
@@ -263,9 +266,6 @@ func sample(slow bool) {
 	}
 	if dtConn < 0.2 {
 		dtConn = 0.2
-	}
-	if dtC < 0.2 {
-		dtC = 0.2
 	}
 
 	statsMu.Lock()
@@ -368,7 +368,12 @@ func sample(slow bool) {
 			if c, ok := counters[a.Index]; ok {
 				if tr.have {
 					dr, dtx := c[0]-tr.lastRx, c[1]-tr.lastTx // uint32 wrap-safe
-					tr.rx, tr.tx = float64(dr)/dtC, float64(dtx)/dtC
+					// A reading that comes right after a stall (no sample for >2.2 s) or right behind another one
+					// (<0.5 s) is not trusted for the speed shown: the previous speed is kept for that tick. The
+					// bytes still count towards the totals, so usage stays exact.
+					if dtC >= 0.5 && dtC <= 2.2 {
+						tr.rx, tr.tx = float64(dr)/dtC, float64(dtx)/dtC
+					}
 					tr.totRx += uint64(dr)
 					tr.totTx += uint64(dtx)
 					usageAdd(l.Name, uint64(dr), uint64(dtx))

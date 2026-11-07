@@ -39,6 +39,22 @@ func conflictMessage(c conflictDef) string {
 // detectConflict returns a user-facing message when a known-bad driver is active ("" = all clear).
 var conflictBusy bool
 
+// detectConflictNow checks right now (used before the engine starts: a stale "all clear" must never let it start
+// while a crash-prone driver is loaded).
+func detectConflictNow() string {
+	msg := ""
+	for _, c := range knownConflicts {
+		if serviceRunning(c.Driver) {
+			msg = conflictMessage(c)
+			break
+		}
+	}
+	conflictMu.Lock()
+	conflictAt, conflictCache = time.Now(), msg
+	conflictMu.Unlock()
+	return msg
+}
+
 // detectConflict returns the last result at once; a stale one is refreshed in the background, so the status call
 // the window makes every second never waits for the service check.
 func detectConflict() string {
