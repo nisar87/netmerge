@@ -1328,7 +1328,7 @@ function wizSteps(){
   const sn = S.snap, present = sn.links.filter(l => l.present && l.enabled).length;
   const eng = !(UP && (UP.engineDl === 'downloading' || UP.engineDl === 'error')) && !/not installed/i.test(sn.error || '');
   return [
-    [present >= 2, 'Two connections found', present >= 2 ? 'NetMerge sees ' + present + ' connections to merge.' : 'Plug in or join a second connection (a cable and Wi-Fi, for example). NetMerge picks it up by itself.'],
+    [present >= 2, present >= 2 ? present + ' connections found' : (present === 1 ? 'Only one connection found' : 'No connection found'), present >= 2 ? 'NetMerge can merge them.' : 'Plug in or join a second connection (a cable and Wi-Fi, for example). NetMerge picks it up by itself.'],
     [eng, 'Network engine ready', eng ? 'The part that does the merging is installed.' : 'Downloading it now. This happens once and needs no action.'],
     [!!local.autoStart, 'Start with Windows', 'Optional. NetMerge starts quietly when you sign in.'],
     [!!local.mergeOnLaunch, 'Merge automatically', 'Optional. Merging turns on as soon as NetMerge starts.'],

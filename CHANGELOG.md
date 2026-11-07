@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.3.3
+- Setup guide names the real number of connections found (it said "Two connections found" while listing three).
+
 ## 2.3.2
 - Speeds on the connection cards are measured between the real counter readings, so they no longer jump to 200+ Mbps and back to zero when the engine answers slowly.
 - The window keeps updating every second even when the engine's connection list is slow; the status check no longer waits for the service check.
