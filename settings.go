@@ -14,6 +14,7 @@ type Link struct {
 	Enabled bool    `json:"enabled"` // part of the merge
 	Weight  int     `json:"weight"`  // 1..5, share of new connections (classic balancing)
 	QuotaGB float64 `json:"quotaGB"` // monthly data allowance in GB (0 = no limit)
+	Role    string  `json:"role"`    // "" (always used) | "busy" (only when the other lines are busy) | "backup" (only when the others are down)
 }
 
 type AppRule struct {
@@ -57,7 +58,6 @@ func defaultSettings() Settings {
 		AppRules: []AppRule{
 			{Process: "mstsc.exe", Target: "stable"},
 		},
-		BypassIPs: []string{"132.120.111.46/32"},
 		StableDomains: []string{
 			"accounts.google.com", "login.live.com", "login.microsoftonline.com",
 			"paypal.com", "appleid.apple.com", "whatsapp.net", "web.whatsapp.com",
@@ -128,6 +128,11 @@ func updateSettings(fn func(s *Settings)) Settings {
 }
 
 func normalizeLocked() {
+	for i := range settings.Links {
+		if r := settings.Links[i].Role; r != "busy" && r != "backup" {
+			settings.Links[i].Role = ""
+		}
+	}
 	for k, v := range settings.DeviceNames {
 		v = strings.TrimSpace(v)
 		if len([]rune(v)) > 40 {

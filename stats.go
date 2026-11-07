@@ -36,6 +36,8 @@ type LinkStat struct {
 	UseDay   uint64    `json:"useDay"`   // bytes today
 	UseMonth uint64    `json:"useMonth"` // bytes in the current allowance period
 	QuotaOut bool      `json:"quotaOut"` // allowance used up and the connection is left out
+	Role     string    `json:"role"`
+	Standby  bool      `json:"standby"` // role says it is not needed right now
 }
 
 // DeviceStat is another device (a phone) whose traffic arrives through proxy sharing.
@@ -69,6 +71,7 @@ type Snapshot struct {
 	Total     []float64    `json:"total"`
 	Devices   []DeviceStat `json:"devices"` // other devices using proxy sharing
 	Smart     bool         `json:"smart"`   // the smart dispatcher is steering new connections
+	SameISP   []string     `json:"sameIsp"` // labels of lines that show the same public address (probably one provider)
 }
 
 type linkTrack struct {
@@ -288,6 +291,7 @@ func sample(slow bool) {
 			PublicIP: publicIPs[l.Name]}
 		ls.UseDay, ls.UseMonth = usageSum(l.Name, s.QuotaReset)
 		ls.QuotaOut = isQuotaOut(l.Name)
+		ls.Role, ls.Standby = l.Role, running && l.Enabled && present && isStandby(l)
 		if n, ok := dispatchSlotsOf(l.Name); ok {
 			ls.Slots = n
 		}
@@ -367,6 +371,7 @@ func sample(slow bool) {
 		TotalDown: totDown, TotalUp: totUp, PeakDown: peak, Conns: len(mc.Connections),
 		Total: append([]float64(nil), totalHist...)}
 	_, snap.Smart = dispatchSlotsOf("")
+	snap.SameISP = sameProviderLines(links)
 	for _, dv := range devs {
 		snap.Devices = append(snap.Devices, *dv)
 	}

@@ -11,6 +11,9 @@ NetMerge wraps the open-source [mihomo](https://github.com/MetaCubeX/mihomo) eng
 - **Usage tab.** Download and upload per connection per day, monthly allowance, warnings and a forecast.
 - **Share with your phone.** Scan a QR code with a free app (Hiddify, v2rayNG, Streisand, Shadowrocket) and the phone uses the merged connection too. Connected devices are listed and can be named.
 - **Ad and tracker blocking** with downloadable filter lists.
+- **Link roles.** Use a line always, only when the others are busy, or only as a backup (for example a phone hotspot with limited data).
+- **Same-provider warning.** If two lines leave through the same public address, NetMerge tells you merging cannot add speed.
+- **Diagnostics export.** One click saves the logs, settings (without passwords) and a summary.
 - **Health checks.** A line without internet is left out until it works again.
 - **Tray icon, start with Windows, speed test, update notifications.**
 

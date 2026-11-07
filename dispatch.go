@@ -113,6 +113,7 @@ func dispatchTick() {
 		dispSeen = ""
 		return
 	}
+	ls = applyBusyRole(ls)
 
 	// the engine was (re)loaded: its selectors start again from their first member, so assert every slot again
 	seen := fmt.Sprintf("%s|%d", engine.AppliedKey(), started.Unix())
@@ -411,4 +412,86 @@ func saveCaps(set []*dispLink) {
 	}
 	b, _ := json.Marshal(m)
 	_ = os.WriteFile(capFile(), b, 0o644)
+}
+
+var (
+	busyMu sync.Mutex
+	busyOn = map[string]bool{}
+)
+
+// isStandby: the line has a role that keeps it out for now (backup while the others work, busy-only while they have room).
+func isStandby(l Link) bool {
+	switch l.Role {
+	case "backup":
+		for _, a := range activeLinks(getSettings()) {
+			if a.Name == l.Name {
+				return a.Dead && !isDead(l.Name) && !isQuotaOut(l.Name)
+			}
+		}
+	case "busy":
+		busyMu.Lock()
+		defer busyMu.Unlock()
+		s := getSettings()
+		return !s.ClassicBalance && s.Mode == "fast" && !busyOn[l.Name]
+	}
+	return false
+}
+
+// applyBusyRole leaves out lines whose role is "busy" until the other lines are close to full, and switches them
+// off again once the others have room (with a gap between the two limits so it does not flap).
+func applyBusyRole(ls []activeLink) []activeLink {
+	var main []activeLink
+	hasBusy := false
+	for _, l := range ls {
+		if l.Role == "busy" {
+			hasBusy = true
+		} else {
+			main = append(main, l)
+		}
+	}
+	if !hasBusy || len(main) == 0 {
+		return ls
+	}
+	statsMu.Lock()
+	var load, capSum float64
+	for _, l := range main {
+		d := dispLinks[l.Name]
+		if d == nil {
+			continue
+		}
+		if d.capRx == 0 {
+			capSum += neutralCap
+		}
+		if d.emaTx > d.emaRx {
+			load += d.emaTx
+			capSum += d.capTx
+		} else {
+			load += d.emaRx
+			capSum += d.capRx
+		}
+	}
+	statsMu.Unlock()
+	ratio := 0.0
+	if capSum > 0 {
+		ratio = load / capSum
+	}
+	var out []activeLink
+	for _, l := range ls {
+		if l.Role != "busy" {
+			out = append(out, l)
+			continue
+		}
+		busyMu.Lock()
+		if busyOn[l.Name] && ratio < 0.5 {
+			busyOn[l.Name] = false
+		} else if !busyOn[l.Name] && ratio > 0.75 {
+			busyOn[l.Name] = true
+		}
+		on := busyOn[l.Name]
+		busyMu.Unlock()
+		if on {
+			out = append(out, l)
+		}
+	}
+	return out
 }

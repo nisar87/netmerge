@@ -148,3 +148,52 @@ func TestArpParse(t *testing.T) {
 		}
 	}
 }
+
+func TestBackupRole(t *testing.T) {
+	rootDir = t.TempDir()
+	settings = defaultSettings()
+	settings.Links = []Link{{Name: "Ethernet", Label: "LAN", Enabled: true, Weight: 1}, {Name: "Wi-Fi", Label: "Wi-Fi", Enabled: true, Weight: 1, Role: "backup"}}
+	ls := activeLinks(getSettings())
+	if len(ls) < 2 {
+		t.Skip("no adapters in this environment")
+	}
+	if ls[0].Dead || !ls[1].Dead {
+		t.Fatalf("backup should stand by while the main line works: %+v", ls)
+	}
+	probeMu.Lock()
+	probes["Ethernet"] = probeState{dead: true}
+	probeMu.Unlock()
+	defer func() { probeMu.Lock(); delete(probes, "Ethernet"); probeMu.Unlock() }()
+	ls = activeLinks(getSettings())
+	if !ls[0].Dead || ls[1].Dead {
+		t.Fatalf("backup should take over when the main line is down: %+v", ls)
+	}
+}
+
+func TestBusyRole(t *testing.T) {
+	statsMu.Lock()
+	dispLinks["A"] = &dispLink{name: "A", capRx: 100e6 / 8, capTx: 100e6 / 8, emaRx: 10e6 / 8}
+	statsMu.Unlock()
+	ls := []activeLink{{Link: Link{Name: "A"}}, {Link: Link{Name: "B", Role: "busy"}}}
+	if got := applyBusyRole(ls); len(got) != 1 {
+		t.Fatalf("idle main line: busy line should stay out, got %d", len(got))
+	}
+	statsMu.Lock()
+	dispLinks["A"].emaRx = 90e6 / 8
+	statsMu.Unlock()
+	if got := applyBusyRole(ls); len(got) != 2 {
+		t.Fatalf("full main line: busy line should join, got %d", len(got))
+	}
+	statsMu.Lock()
+	dispLinks["A"].emaRx = 60e6 / 8
+	statsMu.Unlock()
+	if got := applyBusyRole(ls); len(got) != 2 {
+		t.Fatal("between the limits it must stay on (no flapping)")
+	}
+	statsMu.Lock()
+	dispLinks["A"].emaRx = 20e6 / 8
+	statsMu.Unlock()
+	if got := applyBusyRole(ls); len(got) != 1 {
+		t.Fatal("main line has room again: busy line should leave")
+	}
+}

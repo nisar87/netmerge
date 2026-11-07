@@ -105,6 +105,7 @@ func routes() http.Handler {
 					if il.Name == s.Links[i].Name {
 						s.Links[i].Label, s.Links[i].Enabled, s.Links[i].Weight = il.Label, il.Enabled, il.Weight
 						s.Links[i].QuotaGB = il.QuotaGB
+						s.Links[i].Role = il.Role
 					}
 				}
 			}
@@ -162,6 +163,7 @@ func routes() http.Handler {
 	registerUsageRoutes(mux)
 	registerShareRoutes(mux)
 	registerUpdateRoutes(mux)
+	registerDiagnosticsRoutes(mux)
 
 	mux.HandleFunc("/api/rescan", guard(func(w http.ResponseWriter, r *http.Request) {
 		syncLinks(getAdapters(true))

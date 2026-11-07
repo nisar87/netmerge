@@ -109,6 +109,7 @@ func main() {
 		updateAPI = v
 	}
 	go safely("updates", updateLoop)
+	go safely("providers", providerLoop)
 	if engineMissing() {
 		go safely("engine download", downloadEngine)
 	}

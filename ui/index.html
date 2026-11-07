@@ -173,6 +173,7 @@ textarea.inp{width:100%;min-height:140px;resize:vertical;font-family:ui-monospac
 .scrollbox{height:340px;overflow:auto;border:1px solid var(--line);border-radius:var(--r)}
 .scrollbox .tbl{border:0;border-radius:0}
 .scrollbox .tbl th{position:sticky;top:0;z-index:1}
+a.btn{text-decoration:none;color:inherit;display:inline-block}
 .btn.sm{padding:4px 11px;font-size:12.5px}
 /* ---------- tables ---------- */
 .tbl{width:100%;border-collapse:separate;border-spacing:0;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
@@ -254,6 +255,9 @@ pre.log{background:var(--inset);border:1px solid var(--line);border-radius:var(-
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:var(--dim)}
 .statusline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
 .updb{display:flex;align-items:center;gap:14px;background:var(--accent-soft);border-color:var(--accent)}
+.role{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
+.role label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--mute)}
+.role .sel{min-width:0;max-width:62%;font-size:12.5px;padding:5px 8px}
 .fc{margin-top:4px}.fc.bad{color:var(--warn)}
 .dot.bad{background:var(--bad)}
 .dot.good{background:var(--good)} .dot.warn{background:var(--warn)}
@@ -394,7 +398,7 @@ details.adv[open] summary::before{content:"▾ "}
         <div class="card">
           <h3>Never merge these addresses</h3>
           <p class="d">Traffic to these IPs skips NetMerge and uses normal Windows routing — for example a Remote Desktop server reached through your VPN.</p>
-          <div class="row" style="flex-wrap:nowrap"><input class="inp" id="ipInput" placeholder="132.120.111.46 or 10.20.0.0/16" style="flex:1" aria-label="IP address"><button class="btn" id="ipAdd">Add</button></div>
+          <div class="row" style="flex-wrap:nowrap"><input class="inp" id="ipInput" placeholder="203.0.113.5 or 10.20.0.0/16" style="flex:1" aria-label="IP address"><button class="btn" id="ipAdd">Add</button></div>
           <div class="listchips" id="ipList"></div>
         </div>
         <div class="card">
@@ -474,6 +478,7 @@ details.adv[open] summary::before{content:"▾ "}
         <div class="opt"><div><b>Engine</b><span id="engineVer">—</span></div></div>
         <div class="opt"><div><b>NetMerge <span id="appVer"></span></b><span id="updInfo">—</span></div><button class="btn" id="updCheck">Check for updates</button></div>
         <div class="opt"><div><b>Check for updates automatically</b><span>Looks for a new version a few times a day and tells you. Nothing is installed until you click Update.</span></div><button class="tog" id="updTog" role="switch" aria-label="Check for updates automatically"></button></div>
+        <div class="opt"><div><b>Diagnostics</b><span>Saves a zip with the logs, your settings (without passwords) and a summary, for troubleshooting. Logs can contain website names, so look before you send it to anyone.</span></div><a class="btn" id="diagDl" href="/api/diagnostics" download>Download</a></div>
         <div class="opt"><div><b>Quit NetMerge</b><span>Closing the window keeps merging running in the background. Quit stops merging and exits.</span></div><button class="btn danger" id="quit">Quit</button></div>
       </div>
     </section>
@@ -633,6 +638,7 @@ function statusLine(sn, run){
   if (gone.length) return ['warn', `${names(gone)} ${gone.length>1?'are':'is'} disconnected`, `Using ${ls.length} connection${ls.length===1?'':'s'} for now. Plug it back in and it joins automatically.`];
   if (bad.length) return ['bad', `${names(bad)} ${bad.length>1?'have':'has'} no internet`, 'It is left out until it works again, so nothing slows down.'];
   if (out.length) return ['warn', `${names(out)} used up its allowance`, 'It is left out of the merge until the allowance renews.'];
+  if ((sn.sameIsp||[]).length > 1) return ['warn', `${sn.sameIsp.join(' and ')} look like the same provider`, 'They probably leave through the same provider or router, so merging cannot add speed. Two different providers are needed.'];
   if (ls.length < 2) return ['warn', 'Only one connection is active', 'Connect a second one to start merging.'];
   const n = (S.share && S.share.devices) || 0;
   return ['good', `All ${ls.length} connections healthy`, `${fmtM(sn.totalDown)} Mbps down · ${fmtM(sn.totalUp)} Mbps up right now`];
@@ -680,6 +686,7 @@ function statusOf(l, run){
   if (!l.enabled) return ['Off', 'var(--dim)'];
   if (!run) return ['Ready', 'var(--mute)'];
   if (l.quotaOut) return ['Allowance used up', 'var(--warn)'];
+  if (l.standby) return ['Standing by', 'var(--info)'];
   if (l.healthy === false) return ['No internet', 'var(--bad)'];
   if (Date.now() - holdFor(l.name).activeAt < 5000) return ['Active', 'var(--good)'];
   return ['Online · idle', 'var(--info)'];
@@ -709,6 +716,7 @@ function renderLinks(sn, act, P){
             <div class="step" data-f="step"><button data-f="minus" aria-label="Give this connection a smaller share">−</button><b class="num" data-f="w"></b><button data-f="plus" aria-label="Give this connection a bigger share">+</button></div></div>
           <div class="share-bar"><div data-f="bar"></div></div>
         </div>
+        <div class="role"><label>Use this line<select class="sel" data-f="role" aria-label="When to use this connection"><option value="">Always</option><option value="busy">Only when the others are busy</option><option value="backup">Backup: only if the others fail</option></select></label></div>
       </div>`).join('');
     box.querySelectorAll('.lk').forEach(card => {
       const name = card.dataset.n, L = () => local.links.find(x => x.name === name);
@@ -719,6 +727,7 @@ function renderLinks(sn, act, P){
         const l = L(); if (l.enabled && local.links.filter(x=>x.enabled).length===1) return toast('At least one connection must stay on', true);
         l.enabled = !l.enabled; saveSoon(l.enabled ? `${l.label} added to the merge` : `${l.label} left out of the merge`); render();
       };
+      card.querySelector('[data-f=role]').onchange = e => { const l = L(); l.role = e.target.value; saveSoon(l.role === 'backup' ? `${l.label} is now a backup line` : l.role === 'busy' ? `${l.label} will join when the others are busy` : `${l.label} is used all the time`); };
       card.querySelector('[data-f=minus]').onclick = () => { const l=L(); if (l.weight>1){ l.weight--; saveSoon('Share updated'); render(); } };
       card.querySelector('[data-f=plus]').onclick = () => { const l=L(); if (l.weight<5){ l.weight++; saveSoon('Share updated'); render(); } };
     });
@@ -748,6 +757,7 @@ function renderLinks(sn, act, P){
     ].join(''));
     f('missing').innerHTML = l.present ? '' : '<div class="warn-line">Unplugged or no internet. It rejoins by itself when it comes back.</div>';
     f('w').textContent = '×'+ll.weight;
+    { const r = f('role'); if (document.activeElement !== r) r.value = ll.role || ''; }
     f('minus').disabled = ll.weight <= 1; f('plus').disabled = ll.weight >= 5;
     const smart = !!sn.smart && !local.mode.startsWith('link:') && local.mode !== 'stable';
     f('step').style.display = smart ? 'none' : '';

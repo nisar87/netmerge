@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.0
+- Link roles: set a line to "Always", "Only when the others are busy" or "Backup: only if the others fail" on its card on the Overview page.
+- Warning when two lines show the same public address (same provider or router), because merging them cannot add speed.
+- Diagnostics: one click in Settings saves a zip with logs, settings (without passwords) and a summary.
+- Overview status line shows standby lines and provider warnings.
+- Removed a personal default bypass address from new installs.
+
 ## 2.1.1
 - First release delivered through the in-app updater (no changes to merging).
 

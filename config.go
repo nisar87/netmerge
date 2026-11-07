@@ -49,6 +49,18 @@ func activeLinks(s Settings) []activeLink {
 		}
 		out = append(out, activeLink{Link: l, Proxy: linkProxyName(i), Kind: a.Kind, Dead: isDead(l.Name) || isQuotaOut(l.Name)})
 	}
+	// a backup line is only used while no other line works
+	primary := false
+	for _, l := range out {
+		if l.Role != "backup" && !l.Dead {
+			primary = true
+		}
+	}
+	for i := range out {
+		if out[i].Role == "backup" && primary {
+			out[i].Dead = true
+		}
+	}
 	return out
 }
 
