@@ -143,8 +143,10 @@ func quotaCheck() {
 					msg += " It is left out of the merge until the allowance renews."
 				}
 				trayBalloon("Allowance used up", msg)
+				note("warn", "%s", msg)
 				logf("quota: %s", msg)
 			} else {
+				note("warn", "%s has used %.0f%% of its allowance", l.Label, pct)
 				trayBalloon("Allowance almost used", fmt.Sprintf("%s has used %.0f%% of its %.0f GB allowance.", l.Label, pct, l.QuotaGB))
 				logf("quota: %s at %.0f%%", l.Label, pct)
 			}

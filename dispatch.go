@@ -267,6 +267,7 @@ func dispatchTick() {
 	} else {
 		dispSeen = ""
 	}
+	explainSplit(set, cur, want, force)
 	cur = map[string]int{}
 	for _, p := range dispSlot {
 		cur[p]++
@@ -482,16 +483,66 @@ func applyBusyRole(ls []activeLink) []activeLink {
 			continue
 		}
 		busyMu.Lock()
+		wasOn := busyOn[l.Name]
 		if busyOn[l.Name] && ratio < 0.5 {
 			busyOn[l.Name] = false
 		} else if !busyOn[l.Name] && ratio > 0.75 {
 			busyOn[l.Name] = true
 		}
 		on := busyOn[l.Name]
+		changed := on != wasOn
 		busyMu.Unlock()
+		if changed {
+			if on {
+				note("info", "%s joins: the other lines are nearly full (%.0f%% used)", labelFor(getSettings(), l.Name), ratio*100)
+			} else {
+				note("info", "%s stands by again: the other lines have room (%.0f%% used)", labelFor(getSettings(), l.Name), ratio*100)
+			}
+		}
 		if on {
 			out = append(out, l)
 		}
 	}
 	return out
+}
+
+var lastSplitNote time.Time
+
+// explainSplit writes one line to the activity list when the split between lines really changes, saying why
+// (which line is busier). At most every 20 seconds, and never for the first assignment after a start.
+func explainSplit(set []*dispLink, before, after map[string]int, force bool) {
+	if force || len(set) < 2 || time.Since(lastSplitNote) < 20*time.Second {
+		return
+	}
+	var up, down *dispLink
+	bigUp, bigDown := 0, 0
+	for _, d := range set {
+		diff := after[d.proxy] - before[d.proxy]
+		if diff >= 2 && diff > bigUp {
+			up, bigUp = d, diff
+		}
+		if diff <= -2 && -diff > bigDown {
+			down, bigDown = d, -diff
+		}
+	}
+	if up == nil || down == nil {
+		return
+	}
+	load := func(d *dispLink) float64 {
+		a, b := 0.0, 0.0
+		if d.capRx > 0 {
+			a = d.emaRx / d.capRx
+		}
+		if d.capTx > 0 {
+			b = d.emaTx / d.capTx
+		}
+		if b > a {
+			a = b
+		}
+		return a * 100
+	}
+	s := getSettings()
+	lastSplitNote = time.Now()
+	note("info", "More new connections go to %s (%d/%d): %s is busier (%.0f%% used) than %s (%.0f%%)",
+		labelFor(s, up.name), after[up.proxy], dispatchSlots, labelFor(s, down.name), load(down), labelFor(s, up.name), load(up))
 }

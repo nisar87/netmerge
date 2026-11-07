@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.0
+- Sleep and resume: after the PC wakes up, NetMerge re-checks every connection and refreshes addresses and the engine.
+- Quality score for each connection (loss, jitter, delay from the last 30 checks).
+- Recent activity on the Overview page: what NetMerge changed and why.
+- Captive portal detection: a hotel or café Wi-Fi that needs a sign-in page is flagged instead of counted as working.
+- Protect calls and meetings: Teams, Zoom, Discord, Skype, Slack, WhatsApp, Webex and Meet stay on one steady line (your own app rules win; switch off in Settings). It does not stop a busy download from filling the line.
+- Last 24 hours: speed graph per connection, saved across restarts.
+- Back up and restore settings (no passwords).
+- First-run setup guide (can be reopened from Settings).
+
 ## 2.2.2
 - After an update or restart the open window reloads itself, so it never shows an old page or a stale "Lost contact" message.
 - The updater waits a little longer before starting the new version.

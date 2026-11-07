@@ -38,6 +38,8 @@ type LinkStat struct {
 	QuotaOut bool      `json:"quotaOut"` // allowance used up and the connection is left out
 	Role     string    `json:"role"`
 	Standby  bool      `json:"standby"` // role says it is not needed right now
+	Quality  Quality   `json:"quality"`
+	Portal   bool      `json:"portal"` // the network wants a sign-in page first (hotel / café Wi-Fi)
 }
 
 // DeviceStat is another device (a phone) whose traffic arrives through proxy sharing.
@@ -58,21 +60,22 @@ type AppStat struct {
 }
 
 type Snapshot struct {
-	Running   bool         `json:"running"`
-	Version   string       `json:"version"`
-	App       string       `json:"app"` // NetMerge version (the window reloads itself when it changes)
-	Error     string       `json:"error"`
-	Uptime    int64        `json:"uptime"`
-	Links     []LinkStat   `json:"links"`
-	Apps      []AppStat    `json:"apps"`
-	TotalDown float64      `json:"totalDown"`
-	TotalUp   float64      `json:"totalUp"`
-	PeakDown  float64      `json:"peakDown"`
-	Conns     int          `json:"conns"`
-	Total     []float64    `json:"total"`
-	Devices   []DeviceStat `json:"devices"` // other devices using proxy sharing
-	Smart     bool         `json:"smart"`   // the smart dispatcher is steering new connections
-	SameISP   []string     `json:"sameIsp"` // labels of lines that show the same public address (probably one provider)
+	Running   bool            `json:"running"`
+	Version   string          `json:"version"`
+	App       string          `json:"app"` // NetMerge version (the window reloads itself when it changes)
+	Error     string          `json:"error"`
+	Uptime    int64           `json:"uptime"`
+	Links     []LinkStat      `json:"links"`
+	Apps      []AppStat       `json:"apps"`
+	TotalDown float64         `json:"totalDown"`
+	TotalUp   float64         `json:"totalUp"`
+	PeakDown  float64         `json:"peakDown"`
+	Conns     int             `json:"conns"`
+	Total     []float64       `json:"total"`
+	Devices   []DeviceStat    `json:"devices"` // other devices using proxy sharing
+	Smart     bool            `json:"smart"`   // the smart dispatcher is steering new connections
+	Activity  []ActivityEvent `json:"activity"`
+	SameISP   []string        `json:"sameIsp"` // labels of lines that show the same public address (probably one provider)
 }
 
 type linkTrack struct {
@@ -114,7 +117,12 @@ func push(h []float64, v float64) []float64 {
 func statsLoop() {
 	t := time.NewTicker(time.Second)
 	n, changed := 0, 0
+	var last time.Time
 	for range t.C {
+		if now := time.Now(); resumeDetected(last, now) {
+			onResume()
+		}
+		last = time.Now()
 		safely("sampler", func() { sample(n%5 == 0) })
 		if n%5 == 0 {
 			safely("engine check", func() {
@@ -292,6 +300,8 @@ func sample(slow bool) {
 			PublicIP: publicIPs[l.Name]}
 		ls.UseDay, ls.UseMonth = usageSum(l.Name, s.QuotaReset)
 		ls.QuotaOut = isQuotaOut(l.Name)
+		ls.Quality = qualityFor(l.Name)
+		ls.Portal = isPortal(l.Name)
 		ls.Role, ls.Standby = l.Role, running && l.Enabled && present && isStandby(l)
 		if n, ok := dispatchSlotsOf(l.Name); ok {
 			ls.Slots = n
@@ -373,6 +383,7 @@ func sample(slow bool) {
 		Total: append([]float64(nil), totalHist...)}
 	_, snap.Smart = dispatchSlotsOf("")
 	snap.SameISP = sameProviderLines(links)
+	snap.Activity = recentActivity(8)
 	for _, dv := range devs {
 		snap.Devices = append(snap.Devices, *dv)
 	}

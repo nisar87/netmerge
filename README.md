@@ -14,6 +14,9 @@ NetMerge wraps the open-source [mihomo](https://github.com/MetaCubeX/mihomo) eng
 - **Link roles.** Use a line always, only when the others are busy, or only as a backup (for example a phone hotspot with limited data).
 - **Same-provider warning.** If two lines leave through the same public address, NetMerge tells you merging cannot add speed.
 - **Diagnostics export.** One click saves the logs, settings (without passwords) and a summary.
+- **Quality score, activity log and 24-hour graph.** See how steady each line is and what NetMerge changed.
+- **Calls protection.** Meeting apps stay on one steady line.
+- **Backup and restore** of settings, plus a first-run guide.
 - **Health checks.** A line without internet is left out until it works again.
 - **Tray icon, start with Windows, speed test, update notifications.**
 

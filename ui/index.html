@@ -265,6 +265,18 @@ pre.log{background:var(--inset);border:1px solid var(--line);border-radius:var(-
 .updb{display:flex;align-items:center;gap:14px;background:var(--accent-soft);border-color:var(--accent)}
 .role label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:var(--mute);min-height:32px}
 .role .sel{min-width:0;width:200px;max-width:62%;font-size:12.5px;padding:5px 8px}
+.wiz{position:fixed;inset:0;background:#0009;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
+.wiz .card{max-width:520px;width:100%;box-shadow:0 20px 60px #0006}
+.wiz ol{list-style:none;margin:14px 0;padding:0;display:grid;gap:10px}
+.wiz li{display:flex;gap:10px;align-items:flex-start;font-size:13.5px}
+.wiz li i{flex:none;width:20px;height:20px;border-radius:50%;background:var(--inset);border:1px solid var(--line2);display:grid;place-items:center;font-style:normal;font-size:12px}
+.wiz li i.ok{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+#histSvg{width:100%;height:150px;display:block}
+.act{display:flex;align-items:baseline;gap:10px;padding:6px 0;font-size:13.5px;border-top:1px solid var(--line)}
+.act:first-child{border-top:0}
+.act .at{color:var(--dim);font-family:var(--mono);font-size:12px;flex:none}
+.act .dot{flex:none;align-self:center}
+.dot.warn{background:var(--warn)}
 .fc{margin-top:4px}.fc.bad{color:var(--warn)}
 .dot.bad{background:var(--bad)}
 .dot.good{background:var(--good)} .dot.warn{background:var(--warn)}
@@ -361,6 +373,14 @@ details.adv[open] summary::before{content:"▾ "}
           <div class="spacer"></div>
           <select class="sel" id="mode" aria-label="How to share traffic" style="min-width:230px"></select>
         </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3 style="margin:0 0 8px">Last 24 hours <span class="hint2" style="font-weight:400">download speed per connection, one point per minute</span></h3>
+        <div id="histBox"></div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3 style="margin:0 0 8px">Recent activity</h3>
+        <div id="actList"></div>
       </div>
     </section>
 
@@ -481,10 +501,13 @@ details.adv[open] summary::before{content:"▾ "}
         <div class="opt"><div><b>Look for new connections</b><span>Plugged in another adapter or phone? NetMerge also checks by itself every few seconds.</span></div><button class="btn" id="rescan">Scan now</button></div>
         <div class="opt"><div><b>Connection balancing</b><span>Smart gives each new connection to the link with the most spare speed right now. Classic splits them by the fixed shares (×1–×5) on the Overview page.</span></div><select class="sel" id="balSel" aria-label="Connection balancing"><option value="smart">Smart (recommended)</option><option value="classic">Classic (fixed shares)</option></select></div>
         <div class="opt"><div><b>Network engine mode</b><span>How the engine handles your traffic. Normal is best for most PCs. If single downloads feel slow, try System.</span></div><select class="sel" id="stackSel" aria-label="Network engine mode"><option value="">Normal (recommended)</option><option value="system">System</option><option value="gvisor">Compatibility</option></select></div>
+        <div class="opt"><div><b>Protect calls and meetings</b><span>Keeps Teams, Zoom, Discord, Skype and similar on one steady connection so a call does not hop between lines. Your own per-app rules still win. It does not stop a busy download from filling the line.</span></div><button class="tog" id="callTog" role="switch" aria-label="Protect calls and meetings"></button></div>
         <div class="opt"><div><b>Detailed logging</b><span>Records every connection and a speed line per second. Only for troubleshooting.</span></div><button class="tog" id="debugTog" role="switch" aria-label="Detailed logging"></button></div>
         <div class="opt"><div><b>Engine</b><span id="engineVer">—</span></div></div>
         <div class="opt"><div><b>NetMerge <span id="appVer"></span></b><span id="updInfo">—</span></div><button class="btn" id="updCheck">Check for updates</button></div>
         <div class="opt"><div><b>Check for updates automatically</b><span>Looks for a new version a few times a day and tells you. Nothing is installed until you click Update.</span></div><button class="tog" id="updTog" role="switch" aria-label="Check for updates automatically"></button></div>
+        <div class="opt"><div><b>Back up settings</b><span>Saves your connections, app rules and options to a file (no passwords). Restore it here after a reinstall or on another PC.</span></div><div class="row"><a class="btn" href="/api/backup" download>Save</a><button class="btn" id="restBtn">Restore…</button><input type="file" id="restFile" accept=".json,application/json" hidden></div></div>
+        <div class="opt"><div><b>Setup guide</b><span>Walks through the first-run checklist again.</span></div><button class="btn" id="wizBtn">Open</button></div>
         <div class="opt"><div><b>Diagnostics</b><span>Saves a zip with the logs, your settings (without passwords) and a summary, for troubleshooting. Logs can contain website names, so look before you send it to anyone.</span></div><a class="btn" id="diagDl" href="/api/diagnostics" download>Download</a></div>
         <div class="opt"><div><b>Quit NetMerge</b><span>Closing the window keeps merging running in the background. Quit stops merging and exits.</span></div><button class="btn danger" id="quit">Quit</button></div>
       </div>
@@ -630,7 +653,8 @@ function render(){
   renderBlockBadge();
   if (page === 'block') renderBlock();
 
-  if (page === 'overview') renderOverview(sn, run, act, P);
+  if (page === 'overview') { renderOverview(sn, run, act, P); loadHistory(); }
+  renderWizard();
   if (page === 'apps') renderApps();
   if (page === 'test') renderTest();
   if (page === 'rules') renderRules();
@@ -650,7 +674,12 @@ function statusLine(sn, run){
   const n = (S.share && S.share.devices) || 0;
   return ['good', `All ${ls.length} connections healthy`, `${fmtM(sn.totalDown)} Mbps down · ${fmtM(sn.totalUp)} Mbps up right now`];
 }
+function renderActivity(sn){
+  const a = sn.activity || [];
+  setHTML($('#actList'), a.length ? a.map(e => { const d = new Date(e.time*1000); return `<div class="act"><span class="dot ${e.kind==='info'?'':e.kind}"></span><span class="at">${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span><span>${esc(e.text)}</span></div>`; }).join('') : '<div class="hint2">Nothing yet. NetMerge writes here whenever it changes something and says why.</div>');
+}
 function renderOverview(sn, run, act, P){
+  renderActivity(sn);
   const st = statusLine(sn, run);
   setHTML($('#statusLine'), `<span class="dot ${st[0]}"></span><b>${esc(st[1])}</b><span class="hint2">${esc(st[2])}</span>`);
   $('#totalDown').innerHTML = `${fmtM(sn.totalDown)}<small>Mbps</small>`;
@@ -694,6 +723,7 @@ function statusOf(l, run){
   if (!run) return ['Ready', 'var(--mute)'];
   if (l.quotaOut) return ['Allowance used up', 'var(--warn)'];
   if (l.standby) return ['Standing by', 'var(--info)'];
+  if (l.portal) return ['Needs sign-in', 'var(--warn)'];
   if (l.healthy === false) return ['No internet', 'var(--bad)'];
   if (Date.now() - holdFor(l.name).activeAt < 5000) return ['Active', 'var(--good)'];
   return ['Online · idle', 'var(--info)'];
@@ -758,7 +788,7 @@ function renderLinks(sn, act, P){
     setHTML(f('tags'), [
       tag(l.present ? esc(l.ip) : '—', 'Local address', !l.present),
       tag(h.publicIP ? esc(h.publicIP) : 'public IP…', 'Public address (what websites see)', !h.publicIP),
-      tag((h.delay ? h.delay : '—') + ' ms', 'Response time', !(run && on && h.delay)),
+      tag((h.delay ? h.delay : '—') + ' ms' + (l.quality && l.quality.label ? ' · ' + l.quality.label : ''), l.quality && l.quality.label ? `Response time and line quality: ${l.quality.label} (${l.quality.loss.toFixed(0)}% lost, jitter ${l.quality.jitter} ms, last few minutes)` : 'Response time', !(run && on && h.delay)),
       tag(bytes(l.useDay||0) + ' today', 'Data used on this connection today (this month: ' + bytes(l.useMonth||0) + ')', !l.useDay),
       tag((h.share == null ? '—' : h.share) + '% of traffic', 'Share of the traffic over the last few seconds', !(run && on && h.share != null))
     ].join(''));
@@ -936,6 +966,7 @@ $('#dnsTog').onclick = () => { local.builtinDNS = !local.builtinDNS; renderRules
 
 /* ---------- settings ---------- */
 function renderSettings(){
+  $('#callTog').classList.toggle('on', !local.noCallProtect); $('#callTog').setAttribute('aria-checked', !local.noCallProtect);
   [['#autoTog','autoStart'],['#launchTog','mergeOnLaunch'],['#debugTog','debugLog']].forEach(([id,k]) => { $(id).classList.toggle('on', !!local[k]); $(id).setAttribute('aria-checked', !!local[k]); });
   $$('#theme button').forEach(b => b.classList.toggle('sel', b.dataset.v === document.documentElement.dataset.theme));
   if (document.activeElement !== $('#balSel')) $('#balSel').value = local.classicBalance ? 'classic' : 'smart';
@@ -946,6 +977,7 @@ $('#autoTog').onclick = () => { local.autoStart = !local.autoStart; renderSettin
 $('#launchTog').onclick = () => { local.mergeOnLaunch = !local.mergeOnLaunch; renderSettings(); saveSoon('Saved'); };
 $('#balSel').onchange = e => { local.classicBalance = e.target.value === 'classic'; saveSoon(local.classicBalance ? 'Classic balancing' : 'Smart balancing'); };
 $('#stackSel').onchange = e => { local.tunStack = e.target.value; saveSoon('Engine mode changed - reconnecting…'); };
+$('#callTog').onclick = () => { local.noCallProtect = !local.noCallProtect; renderSettings(); saveSoon(local.noCallProtect ? 'Call protection off' : 'Call protection on'); };
 $('#debugTog').onclick = () => { local.debugLog = !local.debugLog; renderSettings(); saveSoon(local.debugLog ? 'Detailed logging on' : 'Detailed logging off'); };
 $('#rescan').onclick = async () => { await api('rescan',{}); await poll(true); toast('Connections scanned'); };
 $('#quit').onclick = async () => {
@@ -1255,6 +1287,72 @@ async function poll(resync){
     if (S && local) render();
   }
 }
+
+/* ---------- 24-hour history ---------- */
+let histAt = 0, histPts = null;
+async function loadHistory(){
+  if (Date.now() - histAt < 55000) return; histAt = Date.now();
+  try { histPts = (await api('history')).points || []; } catch(e){ return; }
+  paintHistory();
+}
+function paintHistory(){
+  const box = $('#histBox'); if (!box || !local) return;
+  const pts = histPts || [];
+  if (pts.length < 3) { setHTML(box, '<div class="hint2">Collecting data. The graph fills in as NetMerge runs.</div>'); return; }
+  const W = 800, H = 150, now = Date.now()/1000, t0 = now - 86400;
+  const names = local.links.filter(l => l.enabled).map(l => l.name);
+  let mx = 1; pts.forEach(p => names.forEach(n => { mx = Math.max(mx, (p.d||{})[n]||0); }));
+  const X = t => Math.max(0, (t - t0) / 86400 * W), Y = v => H - 6 - v / mx * (H - 14);
+  const lines = names.map(n => {
+    let d = '', prev = 0;
+    pts.forEach(p => { const v = (p.d||{})[n]; if (v == null) return; d += (p.t - prev > 180 || !d ? 'M' : 'L') + X(p.t).toFixed(1) + ' ' + Y(v).toFixed(1) + ' '; prev = p.t; });
+    return `<path d="${d}" fill="none" stroke="${colorOf(n)}" stroke-width="1.6" stroke-linejoin="round"/>`;
+  }).join('');
+  const lab = ['24 h ago','18 h','12 h','6 h','now'].map((t,i) => `<span>${t}</span>`).join('');
+  setHTML(box, `<svg id="histSvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Download speed over the last 24 hours"><line x1="0" x2="${W}" y1="${H-6}" y2="${H-6}" stroke="var(--line)"/>${lines}</svg><div class="row" style="justify-content:space-between;font-size:12px;color:var(--mute)">${lab}<span style="position:absolute"></span></div><div class="hint2">Highest point: ${fmtM(mx*1e6/8)} Mbps</div>`);
+}
+
+/* ---------- settings backup ---------- */
+$('#restBtn').onclick = () => $('#restFile').click();
+$('#restFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const j = JSON.parse(await f.text()); await api('restore', j); toast('Settings restored'); poll(true); }
+  catch(err){ toast(err.message || 'Not a NetMerge settings file', true); }
+  e.target.value = '';
+};
+
+/* ---------- first-run guide ---------- */
+let wizOpen = false, wizSkip = false;
+function wizSteps(){
+  const sn = S.snap, present = sn.links.filter(l => l.present && l.enabled).length;
+  const eng = !(UP && (UP.engineDl === 'downloading' || UP.engineDl === 'error')) && !/not installed/i.test(sn.error || '');
+  return [
+    [present >= 2, 'Two connections found', present >= 2 ? 'NetMerge sees ' + present + ' connections to merge.' : 'Plug in or join a second connection (a cable and Wi-Fi, for example). NetMerge picks it up by itself.'],
+    [eng, 'Network engine ready', eng ? 'The part that does the merging is installed.' : 'Downloading it now. This happens once and needs no action.'],
+    [!!local.autoStart, 'Start with Windows', 'Optional. NetMerge starts quietly when you sign in.'],
+    [!!local.mergeOnLaunch, 'Merge automatically', 'Optional. Merging turns on as soon as NetMerge starts.'],
+  ];
+}
+function renderWizard(force){
+  if (force) { wizOpen = true; wizSkip = false; }
+  let el = $('#wiz');
+  if (!local || !S) return;
+  if (!(wizOpen || (!local.setupDone && !wizSkip))) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'wiz'; el.className = 'wiz'; document.body.appendChild(el); }
+  const st = wizSteps();
+  setHTML(el, `<div class="card" role="dialog" aria-modal="true" aria-label="Setup guide"><h3 style="margin:0">Welcome to NetMerge</h3><div class="hint2">A quick check that everything is ready.</div><ol>${st.map((x,i) => `<li><i class="${x[0]?'ok':''}">${x[0]?'✓':''}</i><div><b>${esc(x[1])}</b><div class="hint2">${esc(x[2])}</div>${i>=2?`<button class="btn" data-w="${i}" style="margin-top:6px">${x[0]?'Turn off':'Turn on'}</button>`:''}</div></li>`).join('')}</ol><div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" id="wizSkip">Skip</button><button class="btn" id="wizDone" style="background:var(--accent);color:var(--accent-ink);border-color:var(--accent)">${st[0][0]?'Start merging':'Done'}</button></div></div>`);
+}
+document.addEventListener('click', async e => {
+  const w = e.target.closest('[data-w]');
+  if (w) { const k = w.dataset.w === '2' ? 'autoStart' : 'mergeOnLaunch'; local[k] = !local[k]; try { await api('settings', local); } catch(err){ toast(err.message, true); } renderWizard(); return; }
+  if (e.target.id === 'wizSkip' || e.target.id === 'wizDone') {
+    const start = e.target.id === 'wizDone' && wizSteps()[0][0] && !S.snap.running;
+    wizOpen = false; wizSkip = true; local.setupDone = true; $('#wiz')?.remove();
+    try { await api('settings', local); if (start) await api('power', {on:true}).catch(()=>{}); } catch(err){ toast(err.message, true); }
+  }
+  if (e.target.id === 'wizBtn') renderWizard(true);
+});
+
 const timer = setInterval(poll, 1000);
 addEventListener('resize', () => { if (S && local) render(); });
 go('overview');

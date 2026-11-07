@@ -43,6 +43,8 @@ type Settings struct {
 	DeviceNames    map[string]string `json:"deviceNames,omitempty"` // names you gave to phones, keyed by hardware address
 	QuotaReset     int               `json:"quotaReset"`            // day of the month the allowance renews (1-28)
 	QuotaAction    string            `json:"quotaAction"`           // "warn" | "leave" (leave the connection out of the merge)
+	SetupDone      bool              `json:"setupDone"`             // the first-run guide was finished or skipped
+	NoCallProtect  bool              `json:"noCallProtect"`         // true = do not keep call apps (Teams, Zoom...) on one steady line
 	NoUpdateCheck  bool              `json:"noUpdateCheck"`         // true = do not look for new versions by itself
 	ClassicBalance bool              `json:"classicBalance"`        // true = old fixed round-robin instead of the smart dispatcher
 }

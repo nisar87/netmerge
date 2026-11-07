@@ -110,6 +110,7 @@ func main() {
 	}
 	go safely("updates", updateLoop)
 	go safely("providers", providerLoop)
+	go safely("history", historyLoop)
 	if engineMissing() {
 		go safely("engine download", downloadEngine)
 	}

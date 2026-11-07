@@ -23,7 +23,7 @@ import (
 
 // Set at build time:  -ldflags "-X main.appVersion=2.2.0 -X main.updateRepo=owner/netmerge"
 var (
-	appVersion = "2.2.2"
+	appVersion = "2.3.0"
 	updateRepo = "nisar87/netmerge" // "owner/repo" of the GitHub project (the release build sets it too)
 )
 
@@ -201,6 +201,7 @@ func checkUpdate(manual bool) {
 	updMu.Unlock()
 	if notify {
 		logf("update available: %s (this is %s)", ver, appVersion)
+		note("info", "NetMerge %s is available", ver)
 		trayBalloon("NetMerge update", "Version "+ver+" is available. Open NetMerge to install it.")
 	}
 }

@@ -197,3 +197,61 @@ func TestBusyRole(t *testing.T) {
 		t.Fatal("main line has room again: busy line should leave")
 	}
 }
+
+func TestPortalResponse(t *testing.T) {
+	g := "http://www.gstatic.com/generate_204"
+	if portalResponse(g, 204, 0) {
+		t.Fatal("204 is the real internet")
+	}
+	if !portalResponse(g, 302, 0) || !portalResponse(g, 200, 120) {
+		t.Fatal("a redirect or a page instead of 204 is a sign-in page")
+	}
+	if portalResponse(g, 200, 0) {
+		t.Fatal("200 with no body is not proof of a portal")
+	}
+	if portalResponse("http://www.msftconnecttest.com/connecttest.txt", 200, 20) {
+		t.Fatal("200 is the normal answer of that address")
+	}
+}
+
+func TestQuality(t *testing.T) {
+	var good, bad []qSample
+	for i := 0; i < 20; i++ {
+		good = append(good, qSample{true, 20 + i%3})
+		bad = append(bad, qSample{i%4 != 0, 150 + (i%2)*120})
+	}
+	g, b := qualityOf(good), qualityOf(bad)
+	if g.Label != "Excellent" {
+		t.Fatalf("steady fast line: %+v", g)
+	}
+	if b.Score >= g.Score || b.Loss < 20 {
+		t.Fatalf("lossy jumpy line should score lower: %+v vs %+v", b, g)
+	}
+	if q := qualityOf(good[:3]); q.Label != "" {
+		t.Fatal("too few probes to judge")
+	}
+}
+
+func TestResumeDetected(t *testing.T) {
+	now := time.Now()
+	if resumeDetected(now.Add(-2*time.Second), now) || !resumeDetected(now.Add(-90*time.Second), now) || resumeDetected(time.Time{}, now) {
+		t.Fatal("sleep detection wrong")
+	}
+}
+
+func TestCallRules(t *testing.T) {
+	s := Settings{AppRules: []AppRule{{Process: "zoom.exe", Target: "fast"}}}
+	r := callRules(s, "STABLE")
+	for _, x := range r {
+		if strings.Contains(strings.ToLower(x), "zoom.exe") {
+			t.Fatal("user rule must win")
+		}
+	}
+	if len(r) == 0 {
+		t.Fatal("no call rules")
+	}
+	s.NoCallProtect = true
+	if len(callRules(s, "STABLE")) != 0 {
+		t.Fatal("should be off")
+	}
+}

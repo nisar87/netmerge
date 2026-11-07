@@ -124,6 +124,8 @@ func routes() http.Handler {
 			s.BuiltinDNS, s.DebugLog = in.BuiltinDNS, in.DebugLog
 			s.ClassicBalance = in.ClassicBalance
 			s.NoUpdateCheck = in.NoUpdateCheck
+			s.NoCallProtect = in.NoCallProtect
+			s.SetupDone = s.SetupDone || in.SetupDone
 			s.QuotaReset, s.QuotaAction = in.QuotaReset, in.QuotaAction
 			if in.TunStack != s.TunStack {
 				switch in.TunStack {
@@ -164,6 +166,8 @@ func routes() http.Handler {
 	registerShareRoutes(mux)
 	registerUpdateRoutes(mux)
 	registerDiagnosticsRoutes(mux)
+	registerHistoryRoutes(mux)
+	registerBackupRoutes(mux)
 
 	mux.HandleFunc("/api/rescan", guard(func(w http.ResponseWriter, r *http.Request) {
 		syncLinks(getAdapters(true))
