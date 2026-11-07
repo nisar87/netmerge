@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.4.1
+- Every 10 seconds NetMerge checks that the engine's slots match the split it set, and sets them again (with a line in the log) if they differ.
+- Learned line speeds start fresh: values inflated by earlier false spikes are discarded once.
+
 ## 2.4.0
 - Calls protection now keeps downloads off the call's line: meeting apps use a dedicated CALL line (the steadiest one, moved only when clearly needed) and new connections of other apps steer away from it while a call is running.
 - Fixed: the engine could start while a crash-prone driver (AdGuard) was loaded and was stopped a moment later.

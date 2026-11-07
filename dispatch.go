@@ -52,6 +52,7 @@ var (
 	dispSwitch int
 	dispShare  = map[string]float64{}
 	dispCall   string // proxy the CALL group points at
+	verifyN    int
 	callBetter int
 )
 
@@ -121,6 +122,9 @@ func dispatchTick() {
 		return
 	}
 	ls = applyBusyRole(ls)
+	if verifyN++; verifyN%10 == 0 && dispSeen != "" {
+		verifySlots()
+	}
 
 	// the engine was (re)loaded: its selectors start again from their first member, so assert every slot again
 	seen := fmt.Sprintf("%s|%d", engine.AppliedKey(), started.Unix())
@@ -435,7 +439,8 @@ func buildInfo(set []*dispLink, cur map[string]int) string {
 // learned capacities survive a restart (data\\capacity.json), so the first minutes after start are not blind.
 var capSaved time.Time
 
-func capFile() string { return filepath.Join(rootDir, "data", "capacity.json") }
+// capacity2.json: the first file (capacity.json) held speeds inflated by false counter spikes in older versions
+func capFile() string { return filepath.Join(rootDir, "data", "capacity2.json") }
 
 func loadCaps(d *dispLink) {
 	if d.capRx != 0 {
@@ -718,4 +723,29 @@ func chooseCallLink(set []*dispLink) string {
 		}
 	}
 	return dispCall
+}
+
+// verifySlots asks the engine what each slot really points at. If it differs from what NetMerge set (the engine
+// was reloaded, a call failed silently), the whole split is asserted again on the next tick.
+func verifySlots() {
+	b, code, err := apiReq("GET", "/proxies", nil)
+	if err != nil || code != 200 {
+		return
+	}
+	var r struct {
+		Proxies map[string]struct {
+			Now string `json:"now"`
+		} `json:"proxies"`
+	}
+	if json.Unmarshal(b, &r) != nil {
+		return
+	}
+	for i := 0; i < dispatchSlots; i++ {
+		n := fmt.Sprintf("SLOT%d", i+1)
+		if p, ok := r.Proxies[n]; ok && dispSlot[i] != "" && p.Now != dispSlot[i] {
+			logf("slot check: %s points at %s in the engine but NetMerge set %s - setting it again", n, p.Now, dispSlot[i])
+			dispSeen = ""
+			return
+		}
+	}
 }
