@@ -1,7 +1,11 @@
 name: Release
-# Publish a release by pushing a tag such as v2.2.0. The app on everybody's PC finds it and offers the update.
+# To publish a new version: change the number in the VERSION file, add a "## x.y.z" section to CHANGELOG.md and
+# push to main. This workflow builds NetMerge.exe, publishes release vX.Y.Z (once per version) and every
+# installed NetMerge finds it and offers the update. (Pushing a tag vX.Y.Z by hand works too.)
 on:
   push:
+    branches: [main]
+    paths: [VERSION]
     tags: ["v*"]
 permissions:
   contents: write
@@ -13,19 +17,35 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go vet ./... && go test ./...
-      - name: Build
+      - name: Work out the version
+        id: v
         run: |
-          VER="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then VER="${GITHUB_REF_NAME#v}"; else VER="$(tr -d ' \r\n' < VERSION)"; fi
+          echo "ver=${VER}" >> "$GITHUB_OUTPUT"
+          if gh release view "v${VER}" >/dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Check
+        if: steps.v.outputs.exists == 'false'
+        run: |
+          grep -q "appVersion = \"${{ steps.v.outputs.ver }}\"" update.go || { echo "update.go appVersion must equal VERSION"; exit 1; }
+          go vet ./... && go test ./...
+      - name: Build
+        if: steps.v.outputs.exists == 'false'
+        run: |
           GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
-            -ldflags "-s -w -H=windowsgui -X main.appVersion=${VER} -X main.updateRepo=${GITHUB_REPOSITORY}" -o NetMerge.exe .
+            -ldflags "-s -w -H=windowsgui -X main.appVersion=${{ steps.v.outputs.ver }} -X main.updateRepo=${GITHUB_REPOSITORY}" -o NetMerge.exe .
           sha256sum NetMerge.exe > NetMerge.exe.sha256
           cat NetMerge.exe.sha256
       - name: Release notes
+        if: steps.v.outputs.exists == 'false'
         run: |
-          awk -v v="${GITHUB_REF_NAME#v}" '$0 ~ "^## \\[?"v"\\]?" {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
+          awk -v v="${{ steps.v.outputs.ver }}" '$0 ~ "^## \\[?"v"\\]?" {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
           [ -s notes.md ] || echo "See CHANGELOG.md" > notes.md
       - name: Publish
+        if: steps.v.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" NetMerge.exe NetMerge.exe.sha256 --title "NetMerge ${GITHUB_REF_NAME#v}" --notes-file notes.md
+        run: |
+          gh release create "v${{ steps.v.outputs.ver }}" NetMerge.exe NetMerge.exe.sha256 \
+            --title "NetMerge ${{ steps.v.outputs.ver }}" --notes-file notes.md --target "${GITHUB_SHA}"

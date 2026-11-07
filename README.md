@@ -48,9 +48,9 @@ The window (HTML, CSS, JavaScript) is embedded from `ui/`. You can run the app o
 
 ### Publish a release
 
-1. Update `CHANGELOG.md` with a `## 2.2.0` section.
-2. `git tag v2.2.0 && git push origin v2.2.0`
-3. The *Release* workflow builds `NetMerge.exe` and `NetMerge.exe.sha256`, and publishes them. Everyone's app finds it.
+1. Change the number in `VERSION` (and `appVersion` in `update.go`, which CI checks matches).
+2. Add a `## x.y.z` section to `CHANGELOG.md` (it becomes the release notes and the "What's new" in the app).
+3. Push to `main`. The *Release* workflow builds `NetMerge.exe` and `NetMerge.exe.sha256` and publishes release `vx.y.z`. Everyone's app finds it within hours (or at once with *Settings → Check for updates*).
 
 ## Safety notes
 
