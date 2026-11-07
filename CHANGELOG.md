@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.5.1
+- Presets page starts with a "Default · my settings" card: your own settings from before any preset, one click to return to them.
+
 ## 2.5.0
 - Presets page: Normal, Work from home, Gaming, Max speed, Travel / limited data and Safe browsing, each one click. A preset adds to your settings (your own app rules always win) and "Back to my settings" undoes it.
 - Save your current settings as your own preset (up to 12).
