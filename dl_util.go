@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -179,11 +180,13 @@ func dlHostOf(link string) string {
 	return strings.ToLower(u.Hostname())
 }
 
+var dlRedactURL = regexp.MustCompile(`(https?://[^\s"?]+)\?[^\s"]*`)
+
 func dlFmtErr(err error) string {
 	if err == nil {
 		return ""
 	}
-	s := err.Error()
+	s := dlRedactURL.ReplaceAllString(err.Error(), "$1?…")
 	if len(s) > 200 {
 		s = s[:200]
 	}

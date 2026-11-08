@@ -46,7 +46,8 @@ type dlSpec struct {
 	Lines      []string // allowed lines, empty = all
 	MaxPerLine int
 	// Pick chooses the final path once the server has told us the file name (used when Path is empty).
-	Pick func(dlInfo) (string, error)
+	NoPrivate bool // links that lead into the local network are refused even if typed (links sent by a web page)
+	Pick      func(dlInfo) (string, error)
 	// OnInfo reports what the server said (size, name, final path).
 	OnInfo func(dlInfo, string)
 }
@@ -73,6 +74,9 @@ func (e dlHTTPErr) Error() string {
 }
 
 var errDlChanged = errors.New("the file on the server changed while downloading")
+
+// dlNoLineGrace: how long a download waits with every line down before it reports that no connection is available.
+var dlNoLineGrace = 25 * time.Second
 
 var dlUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetMerge/" + appVersion
 
@@ -272,6 +276,7 @@ type dlPiece struct {
 	start, end int64 // inclusive
 	have       int64
 	done       bool
+	fails      int
 	atts       []*dlAtt
 }
 
@@ -327,26 +332,28 @@ type dlTask struct {
 	hdr     map[string]string
 	private bool
 
-	mu         sync.Mutex
-	pieces     []*dlPiece
-	pieceSize  int64
-	runs       map[string]*dlRun
-	order      []string
-	file       *os.File
-	fatal      error
-	single     bool // use one line only
-	note       string
-	finalPath  string
-	started    time.Time
-	dirty      int32
-	stream     bool
-	lastRefuse dlHTTPErr
-	streamN    int64
-	ctx        context.Context
-	cancelAll  context.CancelFunc
-	wg         sync.WaitGroup
-	doneCh     chan struct{}
-	doneOnce   sync.Once
+	mu           sync.Mutex
+	pieces       []*dlPiece
+	pieceSize    int64
+	probeClients []*http.Client
+	runs         map[string]*dlRun
+	order        []string
+	file         *os.File
+	fatal        error
+	single       bool // use one line only
+	note         string
+	finalPath    string
+	started      time.Time
+	dirty        int32
+	stream       bool
+	lastRefuse   dlHTTPErr
+	idleSince    time.Time
+	streamN      int64
+	ctx          context.Context
+	cancelAll    context.CancelFunc
+	wg           sync.WaitGroup
+	doneCh       chan struct{}
+	doneOnce     sync.Once
 }
 
 func newDlTask(spec dlSpec, env dlEnv) *dlTask {
@@ -354,7 +361,7 @@ func newDlTask(spec dlSpec, env dlEnv) *dlTask {
 		spec.MaxPerLine = 8
 	}
 	t := &dlTask{spec: spec, env: env, hdr: dlCleanHeader(spec.Header), doneCh: make(chan struct{}), runs: map[string]*dlRun{}}
-	t.private = dlLocalHost(dlHostOf(spec.URL))
+	t.private = dlLocalHost(dlHostOf(spec.URL)) && !spec.NoPrivate
 	return t
 }
 
@@ -396,10 +403,24 @@ func (t *dlTask) fail(err error) {
 	t.cancelAll()
 }
 
+func (t *dlTask) closeIdle() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, r := range t.runs {
+		if r.client != nil {
+			r.client.CloseIdleConnections()
+		}
+	}
+	for _, c := range t.probeClients {
+		c.CloseIdleConnections()
+	}
+}
+
 // Run downloads until the file is complete (nil), the context ends (ctx error), or something cannot be recovered.
 func (t *dlTask) Run(ctx context.Context) error {
 	t.ctx, t.cancelAll = context.WithCancel(ctx)
 	defer t.cancelAll()
+	defer t.closeIdle() // do not leave kept-alive connections behind
 	t.started = time.Now()
 
 	lines := t.usableLines()
@@ -410,7 +431,11 @@ func (t *dlTask) Run(ctx context.Context) error {
 	var perr error
 	for _, l := range lines {
 		pctx, c := context.WithTimeout(t.ctx, 30*time.Second)
-		info, err := dlProbe(pctx, dlLineClient(l, t.private), t.spec.URL, t.hdr)
+		pc := dlLineClient(l, t.private)
+		t.mu.Lock()
+		t.probeClients = append(t.probeClients, pc)
+		t.mu.Unlock()
+		info, err := dlProbe(pctx, pc, t.spec.URL, t.hdr)
 		c()
 		if err == nil {
 			t.info, perr = info, nil
@@ -495,7 +520,8 @@ func (t *dlTask) prepareFile() error {
 	haveState := false
 	if b, err := os.ReadFile(dlStatePath(t.spec.Path)); err == nil && json.Unmarshal(b, &st) == nil && st.V == 1 {
 		fi, e := os.Stat(part)
-		same := e == nil && st.Size == t.info.Size && st.PieceSize > 0 && fi.Size() == t.info.Size
+		same := e == nil && st.Size == t.info.Size && fi.Size() == t.info.Size && t.info.Ranges &&
+			st.PieceSize >= dlMinPiece && st.PieceSize%65536 == 0 && (st.Size+st.PieceSize-1)/st.PieceSize <= 5000
 		if same && st.ETag != "" && t.info.ETag != "" && st.ETag != t.info.ETag {
 			same = false
 		}
@@ -503,6 +529,19 @@ func (t *dlTask) prepareFile() error {
 			same = false
 		}
 		haveState = same
+	}
+	if t.info.Size > 0 {
+		if free, err := dlFreeSpace(filepathDir(t.spec.Path)); err == nil {
+			need := t.info.Size + 32<<20
+			if haveState { // part of the file is already on the disk
+				if fi, e := os.Stat(part); e == nil {
+					need -= fi.Size()
+				}
+			}
+			if free < need {
+				return fmt.Errorf("not enough space on the disk: %d MB needed, %d MB free", t.info.Size>>20, free>>20)
+			}
+		}
 	}
 	flags := os.O_RDWR | os.O_CREATE
 	if !haveState {
@@ -520,14 +559,7 @@ func (t *dlTask) prepareFile() error {
 				return fmt.Errorf("not enough space or no permission to create the file: %v", err)
 			}
 		}
-		ps := t.info.Size / 48
-		ps = (ps + 65535) &^ 65535
-		if ps < dlMinPiece {
-			ps = dlMinPiece
-		}
-		if ps > dlMaxPiece {
-			ps = dlMaxPiece
-		}
+		ps := dlPieceSize(t.info.Size)
 		if haveState {
 			ps = st.PieceSize
 		}
@@ -608,10 +640,29 @@ func (t *dlTask) finish() error {
 		return fmt.Errorf("could not finish the file: %v", rerr)
 	}
 	_ = os.Remove(dlStatePath(t.spec.Path))
+	markFromInternet(final, t.spec.URL)
 	t.mu.Lock()
 	t.finalPath = final
 	t.mu.Unlock()
 	return nil
+}
+
+var dlFreeSpace = freeSpace // replaced in tests
+
+// dlPieceSize: small pieces for small files, bigger ones for huge files so there are never more than a few thousand.
+func dlPieceSize(size int64) int64 {
+	ps := size / 48
+	if min := (size + 4095) / 4096; ps < min {
+		ps = min
+	}
+	ps = (ps + 65535) &^ 65535
+	if ps < dlMinPiece {
+		ps = dlMinPiece
+	}
+	if ps > dlMaxPiece && size/dlMaxPiece < 4096 {
+		ps = dlMaxPiece
+	}
+	return ps
 }
 
 // ---- scheduling ----------------------------------------------------------------------------------------------------
@@ -636,6 +687,15 @@ func (t *dlTask) supervise() {
 			t.syncLines()
 			t.measure()
 			t.checkRefused()
+			if t.noLines() {
+				if t.idleSince.IsZero() {
+					t.idleSince = time.Now()
+				} else if time.Since(t.idleSince) > dlNoLineGrace {
+					t.fail(errors.New("no connection is available right now"))
+				}
+			} else {
+				t.idleSince = time.Time{}
+			}
 			if n%2 == 0 {
 				t.grow()
 			}
@@ -719,6 +779,18 @@ func (t *dlTask) syncLines() {
 			go t.worker(r)
 		}
 	}
+}
+
+// noLines: no line is able to carry this download right now.
+func (t *dlTask) noLines() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, r := range t.runs {
+		if !r.dead && !r.rejected {
+			return false
+		}
+	}
+	return true
 }
 
 func (t *dlTask) finishedLocked() bool {
@@ -905,7 +977,6 @@ func (t *dlTask) worker(r *dlRun) {
 			}
 		}
 		t.mu.Lock()
-		p.have += 0
 		failed := t.bumpFail(p)
 		r.errs++
 		if r.errs >= 4 {
@@ -936,14 +1007,9 @@ func minInt(a, b int) int {
 	return b
 }
 
-var dlFails sync.Map // *dlPiece -> int, only touched under t.mu through bumpFail
-
-func (t *dlTask) bumpFail(p *dlPiece) int {
-	v, _ := dlFails.Load(p)
-	n, _ := v.(int)
-	n++
-	dlFails.Store(p, n)
-	return n
+func (t *dlTask) bumpFail(p *dlPiece) int { // call with t.mu held
+	p.fails++
+	return p.fails
 }
 
 // handleReject: a line that is refused while another line was accepted is left out of this download (the server ties

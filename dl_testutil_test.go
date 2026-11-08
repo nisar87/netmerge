@@ -117,6 +117,7 @@ func (s *simSrv) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	s.live[ip]++
 	etag := s.etag
+	drop := s.dropEvery
 	if s.changeAfter > 0 && n > s.changeAfter {
 		etag = `"v2"`
 	}
@@ -180,7 +181,7 @@ func (s *simSrv) handle(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		s.seen[ip] += nn
 		s.mu.Unlock()
-		if s.dropEvery > 0 && sent >= s.dropEvery && off <= end {
+		if drop > 0 && sent >= drop && off <= end {
 			if hj, ok := w.(http.Hijacker); ok {
 				c, _, _ := hj.Hijack()
 				c.Close()
@@ -298,3 +299,5 @@ func mustOK(t *testing.T, tk *dlTask, err error, size int64) {
 }
 
 const MiB = 1 << 20
+
+func (s *simSrv) set(f func()) { s.mu.Lock(); f(); s.mu.Unlock() }

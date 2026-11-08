@@ -338,3 +338,31 @@ func dlPower(kind string) {
 }
 
 func dlPowerCancel() error { return hiddenCmd("shutdown.exe", "/a").Run() }
+
+// freeSpace returns the bytes a normal program can still write to the drive that holds dir.
+func freeSpace(dir string) (int64, error) {
+	p, err := syscall.UTF16PtrFromString(dir)
+	if err != nil {
+		return 0, err
+	}
+	var avail, total, free uint64
+	r, _, e := syscall.NewLazyDLL("kernel32.dll").NewProc("GetDiskFreeSpaceExW").Call(uintptr(unsafe.Pointer(p)),
+		uintptr(unsafe.Pointer(&avail)), uintptr(unsafe.Pointer(&total)), uintptr(unsafe.Pointer(&free)))
+	if r == 0 {
+		return 0, e
+	}
+	return int64(avail), nil
+}
+
+// markFromInternet writes the "this file came from the internet" mark that browsers write, so Windows SmartScreen
+// and Office protected view treat the file the way they treat any other download. Ignored where it is not supported.
+func markFromInternet(path, link string) {
+	ref := ""
+	if len(link) < 2000 && !strings.ContainsAny(link, "\r\n") {
+		if i := strings.IndexByte(link, '?'); i >= 0 {
+			link = link[:i]
+		}
+		ref = "HostUrl=" + link + "\r\n"
+	}
+	_ = os.WriteFile(path+":Zone.Identifier", []byte("[ZoneTransfer]\r\nZoneId=3\r\n"+ref), 0o644)
+}

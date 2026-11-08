@@ -67,6 +67,7 @@ type dlItem struct {
 	StartAt  int64             `json:"startAt"` // do not start before this time (unix), 0 = now
 	Hash     string            `json:"hash"`    // checksum the person gave
 	Verify   string            `json:"verify"`  // "" | "checking" | "ok" | "bad"
+	Web      bool              `json:"web"`
 }
 
 type dlEntry struct {
@@ -394,6 +395,15 @@ func (m *dlManager) save() {
 
 // ---- adding --------------------------------------------------------------------------------------------------------
 
+// dlCleanDir checks a folder given by the person or the page: a full path, no device paths.
+func dlCleanDir(d string) (string, error) {
+	d = strings.TrimSpace(d)
+	if !filepath.IsAbs(d) || strings.HasPrefix(d, `\\.\`) || strings.HasPrefix(d, `\\?\`) || strings.ContainsRune(d, 0) {
+		return "", errors.New("choose a full folder path, for example C:\\Downloads")
+	}
+	return filepath.Clean(d), nil
+}
+
 func dlCleanURL(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || len(raw) > 8000 {
@@ -417,6 +427,7 @@ type dlAdd struct {
 	Hash    string            `json:"hash"`
 	Force   bool              `json:"force"`
 	Limit   float64           `json:"limit"`
+	FromWeb bool              `json:"fromWeb"` // sent by the browser extension: local-network targets are refused
 }
 
 var errDlDuplicate = errors.New("this link is already in your list")
@@ -453,8 +464,12 @@ func (m *dlManager) add(a dlAdd) (*dlItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	if a.Dir != "" && !filepath.IsAbs(a.Dir) {
-		return nil, errors.New("choose a full folder path, for example C:\\Downloads")
+	if a.Dir != "" {
+		d, err := dlCleanDir(a.Dir)
+		if err != nil {
+			return nil, err
+		}
+		a.Dir = d
 	}
 	hash, err := dlCleanHash(a.Hash)
 	if err != nil {
@@ -465,6 +480,9 @@ func (m *dlManager) add(a dlAdd) (*dlItem, error) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if len(m.items) >= 5000 {
+		return nil, errors.New("the list is full (5000 downloads): clear the finished ones first")
+	}
 	if !a.Force {
 		for _, o := range m.items {
 			if o.URL == link {
@@ -474,7 +492,7 @@ func (m *dlManager) add(a dlAdd) (*dlItem, error) {
 	}
 	m.seq++
 	e := &dlEntry{}
-	e.Hash, e.Limit = hash, a.Limit
+	e.Hash, e.Limit, e.Web = hash, a.Limit, a.FromWeb
 	if a.StartAt > time.Now().Unix() {
 		e.StartAt = a.StartAt
 	}
@@ -569,7 +587,7 @@ func (m *dlManager) startLocked(e *dlEntry) {
 	e.cancel, e.running, e.wantPause, e.wantHold = cancel, true, false, false
 	e.State, e.Err, e.Note = "downloading", "", ""
 	e.doneCh = make(chan struct{})
-	spec := dlSpec{URL: e.URL, Header: e.Header, Path: e.Path, Lines: e.Lines, MaxPerLine: m.cfg.MaxPerLine}
+	spec := dlSpec{URL: e.URL, Header: e.Header, Path: e.Path, Lines: e.Lines, MaxPerLine: m.cfg.MaxPerLine, NoPrivate: e.Web}
 	spec.Pick = func(info dlInfo) (string, error) { return m.pickPath(e, info) }
 	spec.OnInfo = func(info dlInfo, path string) {
 		m.mu.Lock()
@@ -610,6 +628,7 @@ func (m *dlManager) finishRun(e *dlEntry, t *dlTask, err error) {
 	switch {
 	case err == nil:
 		e.State, e.Err, e.Finished = "done", "", time.Now().Unix()
+		e.Header = nil // sign-in cookies are not needed any more
 		if p := t.FinalPath(); p != "" {
 			e.Path = p
 			e.Name = filepath.Base(p)
@@ -1043,9 +1062,11 @@ func (m *dlManager) clearFinished() int {
 
 func (m *dlManager) setConfig(c dlConfig) error {
 	c = dlFixConfig(c)
-	if !filepath.IsAbs(c.Dir) {
-		return errors.New("choose a full folder path, for example C:\\Downloads")
+	d, err := dlCleanDir(c.Dir)
+	if err != nil {
+		return err
 	}
+	c.Dir = d
 	if err := os.MkdirAll(c.Dir, 0o755); err != nil {
 		return fmt.Errorf("cannot create that folder: %v", err)
 	}

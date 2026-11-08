@@ -193,8 +193,10 @@ func (m *dlManager) probe(link string, hdr map[string]string) (map[string]any, e
 	var perr error
 	for _, l := range lines {
 		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
-		info, perr = dlProbe(ctx, dlLineClient(l, private), link, h)
+		pc := dlLineClient(l, private)
+		info, perr = dlProbe(ctx, pc, link, h)
 		cancel()
+		pc.CloseIdleConnections()
 		if perr == nil {
 			break
 		}
