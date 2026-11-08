@@ -51,7 +51,7 @@ func registerDownloadRoutes(mux *http.ServeMux) {
 
 func (m *dlManager) snapshot() map[string]any {
 	act, sp := m.summary()
-	var lines []map[string]any
+	lines := []map[string]any{}
 	for _, l := range m.lines() {
 		lines = append(lines, map[string]any{"name": l.Name, "kind": l.Kind})
 	}

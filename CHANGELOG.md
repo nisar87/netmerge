@@ -1,5 +1,8 @@
 # Changelog
 
+## 3.4.1
+- Fixed: the Downloads page could show up empty (only the title) when no browser had been connected yet.
+
 ## 3.4.0
 - Downloads: **video streams** (HLS, ".m3u8" links). The many small parts of a stream are fetched over all your connections at once, decrypted when the stream uses plain AES-128, and joined into one video file (.ts, or .mp4 for fragmented streams). The best quality is chosen automatically, finished parts are kept when you pause or restart, and the "add" window shows the stream's length and quality.
 - Streams NetMerge cannot take are refused with a clear message: live streams, copy-protected (DRM) streams, streams with sound in a separate part, and DASH (".mpd").

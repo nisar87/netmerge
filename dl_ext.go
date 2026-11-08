@@ -161,7 +161,7 @@ func (s *extStore) setConfig(minMB int, off bool) error {
 func (s *extStore) view() map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var bs []map[string]any
+	bs := []map[string]any{}
 	for _, b := range s.Browsers {
 		bs = append(bs, map[string]any{"id": b.ID, "name": b.Name, "created": b.Created, "lastSeen": b.LastSeen})
 	}
