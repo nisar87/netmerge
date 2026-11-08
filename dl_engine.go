@@ -337,6 +337,7 @@ type dlTask struct {
 	mu           sync.Mutex
 	pieces       []*dlPiece
 	pieceSize    int64
+	hls          *hlsJob
 	probeClients []*http.Client
 	runs         map[string]*dlRun
 	order        []string
@@ -454,6 +455,14 @@ func (t *dlTask) Run(ctx context.Context) error {
 	}
 	if perr != nil {
 		return perr
+	}
+	if dlDASHLike(t.info) {
+		return errDASH
+	}
+	if dlHLSLike(t.info) {
+		if handled, err := t.runHLS(); handled {
+			return err
+		}
 	}
 	if t.spec.Path == "" {
 		if t.spec.Pick == nil {
@@ -1344,7 +1353,9 @@ func (t *dlTask) Progress() dlProgress {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	pr := dlProgress{Total: t.info.Size, Note: t.note}
-	if t.stream {
+	if t.hls != nil {
+		pr.Done, pr.Total = t.hls.progress()
+	} else if t.stream {
 		pr.Done = atomic.LoadInt64(&t.streamN)
 	} else {
 		for _, p := range t.pieces {

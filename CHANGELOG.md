@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.4.0
+- Downloads: **video streams** (HLS, ".m3u8" links). The many small parts of a stream are fetched over all your connections at once, decrypted when the stream uses plain AES-128, and joined into one video file (.ts, or .mp4 for fragmented streams). The best quality is chosen automatically, finished parts are kept when you pause or restart, and the "add" window shows the stream's length and quality.
+- Streams NetMerge cannot take are refused with a clear message: live streams, copy-protected (DRM) streams, streams with sound in a separate part, and DASH (".mpd").
+
 ## 3.3.0
 - New: **browser extension** for Chrome, Edge, Brave and Firefox. Big downloads are handed to NetMerge automatically (5 MB and more, changeable), right-click any link for "Download with NetMerge", and your browser keeps everything NetMerge should not take (small files, private windows, local addresses, sites you choose). If NetMerge is not running the browser just downloads as before.
 - Connect a browser in **Downloads → Download settings** with a one-time code. Tokens are stored hashed, only extensions (not web pages) can use the connection, wrong codes are limited, and each browser can be disconnected. The extension files come with every release.

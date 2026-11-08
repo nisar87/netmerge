@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -217,12 +218,44 @@ func (m *dlManager) probe(link string, hdr map[string]string) (map[string]any, e
 		msg, _ := dlFriendly(perr)
 		return map[string]any{"ok": false, "error": msg}, nil
 	}
+	var hls *hlsInfo
+	if dlDASHLike(info) {
+		return map[string]any{"ok": false, "error": string(errDASH)}, nil
+	}
+	if dlHLSLike(info) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		var herr error
+		for _, l := range lines {
+			pc := dlLineClient(l, private)
+			hls, herr = dlHLSInspect(ctx, pc, info.FinalURL, h)
+			pc.CloseIdleConnections()
+			if herr == nil {
+				break
+			}
+			var se dlStreamErr
+			if errors.As(herr, &se) {
+				break
+			}
+		}
+		cancel()
+		if herr != nil {
+			msg, _ := dlFriendly(herr)
+			return map[string]any{"ok": false, "error": msg}, nil
+		}
+		if hls != nil {
+			if i := strings.LastIndexByte(info.Name, '.'); i > 0 && strings.EqualFold(info.Name[i:], ".m3u8") {
+				info.Name = info.Name[:i]
+			}
+			info.Name += "." + hls.Kind
+			info.Size, info.Ranges, info.Type = -1, false, "video stream"
+		}
+	}
 	cfg := m.config()
 	dir := cfg.Dir
 	if cfg.UseCategories {
 		dir = filepath.Join(dir, dlCategory(info.Name))
 	}
-	return map[string]any{"ok": true, "info": info, "dir": dir, "category": dlCategory(info.Name), "lines": len(lines),
+	return map[string]any{"ok": true, "info": info, "hls": hls, "dir": dir, "category": dlCategory(info.Name), "lines": len(lines),
 		"locked": m.HostLocked(dlHostOf(link)), "duplicate": m.hasURL(link), "lineNames": dlNames(lines)}, nil
 }
 

@@ -675,7 +675,10 @@ func (m *dlManager) finishRun(e *dlEntry, t *dlTask, err error) {
 // dlFriendly turns an error into words a person understands. The bool says whether trying again could help.
 func dlFriendly(err error) (string, bool) {
 	var he dlHTTPErr
+	var se dlStreamErr
 	switch {
+	case errors.As(err, &se):
+		return string(se), false
 	case errors.Is(err, errDlChanged):
 		return "The file on the website changed while it was downloading. Start it again.", false
 	case errors.As(err, &he):
@@ -1035,6 +1038,8 @@ func (m *dlManager) remove(id string, deleteFiles bool) error {
 		if e.State != "done" { // unfinished: the partial files are of no use any more
 			_ = os.Remove(dlPartPath(e.Path))
 			_ = os.Remove(dlStatePath(e.Path))
+			_ = os.RemoveAll(hlsDir(e.Path))
+			_ = os.Remove(hlsStatePath(e.Path))
 		} else if deleteFiles {
 			_ = os.Remove(e.Path)
 		}
