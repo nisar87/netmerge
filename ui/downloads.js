@@ -166,11 +166,20 @@ document.addEventListener('keydown', e => {
 }, true);
 async function dlExtCode(){
   let r; try { r = await api('downloads', {action:'extCode'}); } catch(e){ return toast(e.message, true); }
-  dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Connect a browser" style="max-width:520px"><h3 style="margin:0">Connect a browser</h3>
-    <ol class="hint2" style="margin:12px 0;padding-left:20px;display:grid;gap:6px"><li>Install the <b>NetMerge Downloads</b> extension in your browser (the files are in the NetMerge release, see the README).</li><li>Click its icon in the toolbar and type this code:</li></ol>
+  const base = r.repo ? `https://github.com/${r.repo}/releases/latest/download/` : '';
+  const dl = (file, label) => base ? `<a class="btn pri" href="${esc(base + file)}" target="_blank" rel="noopener">${label}</a>` : '';
+  dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Connect a browser" style="max-width:560px;max-height:92vh;overflow:auto"><h3 style="margin:0">Connect a browser</h3>
+    <div class="hint2" style="margin:6px 0 12px">The extension hands big downloads from your browser to NetMerge. It is not in the browser stores yet, so you add it by hand (about a minute).</div>
+    <ol class="hint2" style="margin:0 0 12px;padding-left:20px;display:grid;grid-template-columns:minmax(0,1fr);gap:10px">
+      <li><div style="display:block"><b>Download the extension file</b><div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap">${dl('NetMerge-extension-chrome-edge.zip','Chrome / Edge / Brave') + dl('NetMerge-extension-firefox.zip','Firefox') || 'Get <code>NetMerge-extension-chrome-edge.zip</code> (or the Firefox one) from the latest NetMerge release page.'}</div></div></li>
+      <li><div style="display:block"><b>Chrome, Edge, Brave:</b> unzip it into a folder you will keep. Open the address <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>) <button class="btn" id="dlCopyExt" style="padding:2px 8px;margin-left:4px">Copy address</button>, switch on <b>Developer mode</b>, click <b>Load unpacked</b> and choose that folder.<br><b>Firefox:</b> open <code>about:debugging#/runtime/this-firefox</code>, click <b>Load Temporary Add-on</b> and choose the zip file (Firefox forgets it when it closes).</div></li>
+      <li><div style="display:block"><b>Pin the NetMerge icon</b> (puzzle-piece menu in the toolbar), click it and type this code:</div></li>
+    </ol>
     <div style="font:700 30px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.12em;text-align:center;padding:14px;border-radius:10px;background:var(--bg2,rgba(127,127,127,.12))" id="dlExtCodeBox">${esc(r.code)}</div>
     <div class="hint2" style="margin-top:8px;text-align:center" id="dlExtLeft"></div>
+    <div class="hint2" style="margin-top:10px">After that, downloads of 5 MB or more are taken over by NetMerge. Right-click any link and choose <b>Download with NetMerge</b> for the rest. If NetMerge is not running, the browser downloads as usual.</div>
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn pri" id="dlCancel">Done</button></div></div>`);
+  const cp = $('#dlCopyExt'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText('chrome://extensions'); toast('Copied. Paste it in a new browser tab.'); } catch(e){ toast('Type chrome://extensions in a new tab', true); } };
   $('#dlCancel').onclick = dlClose;
   const tick = () => { const el = $('#dlExtLeft'); if (!el) return; const s = r.expires - Math.floor(Date.now()/1000); if (s <= 0) { el.textContent = 'The code has expired. Close this and click Connect a browser again.'; return; } el.textContent = 'Valid for ' + Math.floor(s/60) + ':' + String(s%60).padStart(2,'0') + ', one use only.'; setTimeout(tick, 1000); };
   tick();

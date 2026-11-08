@@ -19,6 +19,7 @@ import (
 func setupDownloads() {
 	dm.Setup(dm.Host{
 		Root:       rootDir,
+		Repo:       updateRepo,
 		Version:    appVersion,
 		Lines:      dmLines,
 		LineRate:   dmLineRate,

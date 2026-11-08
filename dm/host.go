@@ -28,6 +28,7 @@ type Lines struct {
 
 // Host is everything the manager needs from the product. Every field is optional.
 type Host struct {
+	Repo             string                                  // "owner/name" of the project on GitHub (where the extension files are published)
 	Root             string                                  // the product's folder (the manager keeps its files in Root/data)
 	Version          string                                  // product version, for the browser extension
 	Lines            func() Lines                            // the connections that exist right now

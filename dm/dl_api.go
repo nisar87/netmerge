@@ -177,7 +177,7 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 		return nil, hPowerCancel()
 	case "extCode":
 		code, exp := ext.newCode()
-		return map[string]any{"code": code[:5] + "-" + code[5:], "expires": exp.Unix()}, nil
+		return map[string]any{"code": code[:5] + "-" + code[5:], "expires": exp.Unix(), "repo": H.Repo}, nil
 	case "extRevoke":
 		ext.revoke(in.ID)
 		return nil, nil

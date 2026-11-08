@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.3
+
+- "Connect a browser" now explains everything in place: download buttons for the Chrome/Edge/Brave and Firefox extension files (always the latest release), the steps to add the extension by hand, a button that copies `chrome://extensions`, and then the pairing code. Before, it only said to look in the README.
+
 ## 3.11.2
 
 Fixes from the first outside test on Windows (the 3.11.1 build was never published; its changes are included here):
