@@ -597,8 +597,15 @@ func (t *dlTask) finish() error {
 	if _, err := os.Stat(final); err == nil {
 		final = dlUniquePath(filepathDir(final), filepathBase(final), func(p string) bool { _, e := os.Stat(p); return e == nil })
 	}
-	if err := os.Rename(dlPartPath(t.spec.Path), final); err != nil {
-		return fmt.Errorf("could not finish the file: %v", err)
+	var rerr error
+	for try := 0; try < 12; try++ { // a virus scanner may hold the new file for a moment
+		if rerr = os.Rename(dlPartPath(t.spec.Path), final); rerr == nil {
+			break
+		}
+		time.Sleep(500 * time.Millisecond) // (t.ctx is already cancelled here: all pieces are done)
+	}
+	if rerr != nil {
+		return fmt.Errorf("could not finish the file: %v", rerr)
 	}
 	_ = os.Remove(dlStatePath(t.spec.Path))
 	t.mu.Lock()
@@ -961,7 +968,7 @@ func (t *dlTask) checkRefused() bool {
 	stop := false
 	if anyOK {
 		for _, x := range t.runs {
-			if x.okPieces == 0 && !x.rejected && !x.dead {
+			if x.okPieces == 0 && x.refusals >= 2 && !x.rejected && !x.dead { // refused more than once, while another line works
 				x.rejected = true
 				x.cancel()
 				t.note = "A line was left out: this site only accepts the file from one address"

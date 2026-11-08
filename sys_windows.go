@@ -313,10 +313,16 @@ Start-Process $Cur
 	return c.Start()
 }
 
-// openPath opens a file with its normal program, or shows it selected in Explorer.
+// openPath opens a file with its normal program, or shows it selected in Explorer. The command line is written by hand
+// because Explorer and rundll32 want the path in quotes exactly like this, spaces and all.
 func openPath(path string, reveal bool) error {
+	var c *exec.Cmd
 	if reveal {
-		return hiddenCmd("explorer.exe", "/select,"+path).Start()
+		c = hiddenCmd("explorer.exe")
+		c.SysProcAttr.CmdLine = `explorer.exe /select,"` + path + `"`
+	} else {
+		c = hiddenCmd("rundll32.exe")
+		c.SysProcAttr.CmdLine = `rundll32.exe url.dll,FileProtocolHandler "` + path + `"`
 	}
-	return hiddenCmd("rundll32.exe", "url.dll,FileProtocolHandler", path).Start()
+	return c.Start()
 }

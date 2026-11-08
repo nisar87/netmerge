@@ -307,3 +307,30 @@ func TestDLBucketPaces(t *testing.T) {
 		t.Fatalf("1.25 MiB at 1 MiB/s took %v", d)
 	}
 }
+
+// A line that simply has not finished its first piece yet (for example right after a resume) must not be taken for refused.
+func TestDLSlowStartingLineIsNotLeftOut(t *testing.T) {
+	size := int64(12 * MiB)
+	s := newSim(size)
+	s.perConn = 1 * MiB
+	defer s.Close()
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0), newSimLine("B", "127.0.0.2", 0))
+	path := filepath.Join(t.TempDir(), "n.bin")
+	tk := newDlTask(dlSpec{URL: s.URL + "/file.bin", Path: path}, env)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(900 * time.Millisecond); cancel() }()
+	_ = tk.Run(ctx)
+	tk2 := newDlTask(dlSpec{URL: s.URL + "/file.bin", Path: path}, env)
+	if err := tk2.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range tk2.Progress().Lines {
+		if l.Status == "left out" || l.Bytes == 0 {
+			t.Fatalf("line %s was wrongly left out: %+v", l.Name, tk2.Progress().Lines)
+		}
+	}
+	time.Sleep(100 * time.Millisecond)
+	if env.HostLocked(dlHostOf(s.URL)) {
+		t.Fatal("host wrongly remembered as locked")
+	}
+}

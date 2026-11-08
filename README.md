@@ -10,6 +10,7 @@ NetMerge wraps the open-source [mihomo](https://github.com/MetaCubeX/mihomo) eng
 - **Per-app control.** Send a program to one line only, or keep it off the merge.
 - **Usage tab.** Download and upload per connection per day, monthly allowance, warnings and a forecast.
 - **Share with your phone.** Scan a QR code with a free app (Hiddify, v2rayNG, Streisand, Shadowrocket) and the phone uses the merged connection too. Connected devices are listed and can be named.
+- **Download manager.** Paste a link and the file is split into pieces and downloaded over all lines at once (fast lines take more), with pause, resume after a crash or restart, queue, categories and a share-per-line view. Sites that cannot be split fall back to one line.
 - **Ad and tracker blocking** with downloadable filter lists.
 - **Link roles.** Use a line always, only when the others are busy, or only as a backup (for example a phone hotspot with limited data).
 - **Same-provider warning.** If two lines leave through the same public address, NetMerge tells you merging cannot add speed.
@@ -23,7 +24,7 @@ NetMerge wraps the open-source [mihomo](https://github.com/MetaCubeX/mihomo) eng
 
 ### An honest limit
 
-One single connection (one download stream) can only use one line. The gain comes from many connections at once, which is what browsers, download managers and most apps do. A single-stream speed test will show one line's speed.
+One single connection (one download stream) can only use one line. The built-in download manager gets around this for files by fetching different pieces over different lines, when the website allows it. The gain comes from many connections at once, which is what browsers, download managers and most apps do. A single-stream speed test will show one line's speed.
 
 ## Install
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.0
+- New: **Downloads**. Paste a link and NetMerge splits the file into pieces and downloads them over all your connections at once. Fast lines take more pieces, a line that fails is simply skipped, and the file resumes where it stopped after a pause, a crash or a restart.
+- Safe by default: websites that cannot be split (or that only accept one address per file) are downloaded over one line automatically, the mobile line is not used unless you allow it, links that lead into your own network are refused, and a file is only finished when its size is right.
+- Downloads page: add one or many links, check what a link is before adding it, progress with the share of each connection, pause, resume, retry, open, show in folder, categories and folders, search and filters, drag a link onto the window, tray notification when a file finishes. Overview shows a "Downloading now" card.
+
 ## 2.7.0
 - New DNS page: choose Windows default (still the default), Cloudflare, Google, Quad9, OpenDNS, AdGuard or your own servers, optionally encrypted (DNS-over-HTTPS). Company/VPN domains can be kept on the Windows DNS.
 - "Find the best DNS" test: sends real lookups through every connection to each provider, times them, flags servers that redirect unknown names, and recommends one. Nothing changes until you press Use this.

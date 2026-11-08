@@ -47,7 +47,7 @@ func (m *dlManager) snapshot() map[string]any {
 	for _, l := range m.lines() {
 		lines = append(lines, map[string]any{"name": l.Name, "kind": l.Kind})
 	}
-	return map[string]any{"items": m.views(), "config": m.config(), "active": act, "speed": sp, "lines": lines}
+	return map[string]any{"items": m.views(), "config": m.config(), "active": act, "speed": sp, "lines": lines, "knownSites": m.knownHosts()}
 }
 
 func (m *dlManager) handle(in dlReq) (map[string]any, error) {
@@ -104,6 +104,9 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 		return nil, nil
 	case "open", "folder":
 		return nil, m.openItem(in.ID, in.Action == "folder")
+	case "forgetHosts":
+		m.forgetHosts()
+		return nil, nil
 	case "config":
 		if in.Config == nil {
 			return nil, errors.New("missing settings")
@@ -184,4 +187,16 @@ func (m *dlManager) probe(link string, hdr map[string]string) (map[string]any, e
 	}
 	return map[string]any{"ok": true, "info": info, "dir": dir, "category": dlCategory(info.Name), "lines": len(lines),
 		"locked": m.HostLocked(dlHostOf(link))}, nil
+}
+
+func (m *dlManager) knownHosts() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for _, v := range m.hosts {
+		if v > time.Now().Unix() {
+			n++
+		}
+	}
+	return n
 }

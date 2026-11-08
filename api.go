@@ -70,7 +70,7 @@ func routes() http.Handler {
 	mux.HandleFunc("/api/state", guard(func(w http.ResponseWriter, r *http.Request) {
 		s := getSettings()
 		s.Secret = ""
-		writeJSON(w, map[string]any{"snap": getSnapshot(), "settings": s, "test": getTest(), "adapters": getAdapters(false), "block": blockSummary(), "conflict": detectConflict()})
+		writeJSON(w, map[string]any{"snap": getSnapshot(), "settings": s, "test": getTest(), "adapters": getAdapters(false), "block": blockSummary(), "conflict": detectConflict(), "downloads": dlMgr.brief()})
 	}))
 
 	mux.HandleFunc("/api/power", guard(func(w http.ResponseWriter, r *http.Request) {

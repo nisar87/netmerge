@@ -37,6 +37,7 @@ type dlItem struct {
 	Done     int64             `json:"done"`
 	State    string            `json:"state"` // queued | downloading | paused | done | error
 	Err      string            `json:"err"`
+	Detail   string            `json:"detail"` // technical text, shown on hover
 	Note     string            `json:"note"`
 	Lines    []string          `json:"lines"`
 	Added    int64             `json:"added"`
@@ -126,7 +127,7 @@ func (m *dlManager) LockHost(host string) {
 		return
 	}
 	m.mu.Lock()
-	m.hosts[host] = time.Now().Add(7 * 24 * time.Hour).Unix()
+	m.hosts[host] = time.Now().Add(3 * 24 * time.Hour).Unix()
 	m.dirty = true
 	m.mu.Unlock()
 	note("info", "Downloads: %s only accepts one address per file, so downloads from it use one line", host)
@@ -466,13 +467,17 @@ func (m *dlManager) finishRun(e *dlEntry, t *dlTask, err error) {
 		e.Done = e.Size
 		e.Note = pr.Note
 		note("good", "Download finished: %s", e.Name)
+		go trayBalloon("Download finished", e.Name)
 	case e.wantPause:
 		e.State = "paused"
 	case m.quit || errors.Is(err, context.Canceled):
 		e.State = "queued" // NetMerge is closing: carry on at the next start
 	default:
 		msg, retry := dlFriendly(err)
-		e.Err = msg
+		e.Err, e.Detail = msg, dlFmtErr(err)
+		if !retry || e.Retries >= 6 {
+			go trayBalloon("Download needs attention", e.Name)
+		}
 		if retry && e.Retries < 6 {
 			e.Retries++
 			e.State = "queued"
@@ -516,7 +521,22 @@ func dlFriendly(err error) (string, bool) {
 	case strings.Contains(s, "only http and https"), strings.Contains(s, "refused: the link leads"):
 		return s, false
 	}
-	return "The connection failed: " + dlFmtErr(err), true
+	low := strings.ToLower(s)
+	switch {
+	case strings.Contains(low, "no such host"), strings.Contains(low, "server misbehaving") && strings.Contains(low, "lookup"):
+		return "The website address could not be found. Check the link, or your DNS.", true
+	case strings.Contains(low, "connection refused"):
+		return "The website refused the connection.", true
+	case strings.Contains(low, "certificate"), strings.Contains(low, "x509"):
+		return "The website's security certificate is not trusted, so NetMerge stopped. Open the link in your browser to see why.", false
+	case strings.Contains(low, "timeout"), strings.Contains(low, "deadline exceeded"), strings.Contains(low, "stopped sending"):
+		return "The website did not answer in time.", true
+	case strings.Contains(low, "connection reset"), strings.Contains(low, "unexpected eof"), strings.Contains(low, "broken pipe"):
+		return "The connection was cut by the website or the network.", true
+	case strings.Contains(low, "network is unreachable"), strings.Contains(low, "no route"):
+		return "The connection is not reaching the internet.", true
+	}
+	return "The download could not continue.", true
 }
 
 // loop starts queued downloads when there is room, refreshes progress and saves.
@@ -744,3 +764,37 @@ func (m *dlManager) summary() (active int, speed float64) {
 }
 
 var _ = sort.Strings
+
+// brief is what the Overview shows: how many downloads run and the first few of them.
+func (m *dlManager) brief() map[string]any {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var run []map[string]any
+	active, queued := 0, 0
+	var sp float64
+	for _, e := range m.items {
+		switch {
+		case e.running:
+			active++
+			sp += e.prog.Speed
+			if len(run) < 3 {
+				size := e.Size
+				if e.prog.Total > 0 {
+					size = e.prog.Total
+				}
+				run = append(run, map[string]any{"name": e.Name, "done": e.prog.Done, "size": size, "speed": e.prog.Speed})
+			}
+		case e.State == "queued":
+			queued++
+		}
+	}
+	return map[string]any{"active": active, "queued": queued, "speed": sp, "items": run, "total": len(m.items)}
+}
+
+// forgetHosts drops what was learned about websites (for example "accepts one address only").
+func (m *dlManager) forgetHosts() {
+	m.mu.Lock()
+	m.hosts = map[string]int64{}
+	m.dirty = true
+	m.mu.Unlock()
+}

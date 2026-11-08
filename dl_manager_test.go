@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -250,5 +251,20 @@ func TestDLMobileOnlyWhenAllowed(t *testing.T) {
 	}
 	if got := dlPickLines(nil, mob, false); len(got) != 1 {
 		t.Fatal("mobile should be used when it is the only line")
+	}
+}
+
+func TestDLFriendlyMessages(t *testing.T) {
+	cases := map[string]bool{
+		`Get "http://x": dial tcp 1.2.3.4:80: connect: connection refused`:                 true,
+		`dial tcp: lookup nope.invalid: no such host`:                                      true,
+		`tls: failed to verify certificate: x509: certificate signed by unknown authority`: false,
+		`context deadline exceeded`:                                                        true,
+	}
+	for in, retry := range cases {
+		msg, r := dlFriendly(errors.New(in))
+		if strings.Contains(msg, "dial tcp") || strings.Contains(msg, "x509") || r != retry {
+			t.Errorf("%q -> %q retry=%v", in, msg, r)
+		}
 	}
 }
