@@ -89,3 +89,10 @@ is not possible from here.
 
 Tried and dropped: smaller pieces and "slow lines do not take the last pieces" made no measurable difference; the
 remaining ~0.2 s at the end of a download is a fixed cost, not a throughput loss.
+
+
+## Phase 6 result (3.9.0): torrents
+
+Implemented in `dm/bt_*.go` (bencode, .torrent/magnet, trackers, DHT, peer wire, ut_metadata, ut_pex, piece picking, storage, resume) and `dm/dl_torrent.go` (list integration). Tested against local seeders, an HTTP and a UDP tracker and a fake DHT node, including bad pieces, dropped peers, resume, partial file selection and magnet metadata. Loopback benchmark: 160 MB over two capped lines (20 + 10 MB/s) with eight 4 MB/s peers finished at 22 MB/s.
+
+Not verified: real swarms, real trackers and the real DHT (no internet in the build sandbox), Windows behaviour, NAT-heavy peers. Not implemented: incoming connections, MSE encryption, uTP, seeding, web seeds, BitTorrent v2.

@@ -242,6 +242,9 @@ func (l *simLine) line() dlLine {
 	d := &net.Dialer{LocalAddr: &net.TCPAddr{IP: net.ParseIP(l.ip)}, Timeout: 5 * time.Second}
 	return dlLine{Name: l.name, Kind: "ethernet", Rate: l.rate,
 		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if strings.HasPrefix(network, "udp") { // the sources are TCP addresses; UDP just goes out from the machine
+				return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, addr)
+			}
 			c, err := d.DialContext(ctx, network, addr)
 			if err != nil {
 				return nil, err
@@ -308,3 +311,7 @@ const MiB = 1 << 20
 func (s *simSrv) set(f func()) { s.mu.Lock(); f(); s.mu.Unlock() }
 
 func init() { enabledFlag.set(true) } // the tests use the manager as if it were switched on
+
+func ctxTimeout(d time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), d)
+}

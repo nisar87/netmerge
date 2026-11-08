@@ -77,12 +77,15 @@ type dlItem struct {
 	Mirrors  []string          `json:"mirrors,omitempty"` // other addresses of the same file
 	Conns    int               `json:"conns,omitempty"`   // connections per line for this download (0 = automatic)
 	Log      []dlLogLine       `json:"log,omitempty"`
+	Kind     string            `json:"kind,omitempty"`   // "" = a file, "torrent"
+	Files    []dlTFile         `json:"files,omitempty"`  // torrents: what is inside
+	Select   []bool            `json:"select,omitempty"` // torrents: which files to download (nil = all)
 }
 
 type dlEntry struct {
 	dlItem
 	cancel      context.CancelFunc
-	task        *dlTask
+	task        dlRunner
 	wantPause   bool
 	wantHold    bool
 	running     bool
@@ -93,11 +96,14 @@ type dlEntry struct {
 
 type dlView struct {
 	dlItem
-	Header   struct{}     `json:"-"`
-	Speed    float64      `json:"speed"`
-	LineStat []dlLineStat `json:"lineStats"`
-	Order    int          `json:"order"`
-	Map      []uint8      `json:"map,omitempty"` // progress of the parts of the file, for the segment bar
+	Header     struct{}     `json:"-"`
+	Speed      float64      `json:"speed"`
+	LineStat   []dlLineStat `json:"lineStats"`
+	Order      int          `json:"order"`
+	Map        []uint8      `json:"map,omitempty"` // progress of the parts of the file, for the segment bar
+	Peers      int          `json:"peers,omitempty"`
+	Seeds      int          `json:"seeds,omitempty"`
+	SwarmSeeds int          `json:"swarmSeeds,omitempty"`
 }
 
 type dlManager struct {
@@ -448,6 +454,7 @@ type dlAdd struct {
 	Conns   int               `json:"conns"`
 	User    string            `json:"user"` // a site that asks for a user name and password (HTTP Basic)
 	Pass    string            `json:"pass"`
+	Torrent string            `json:"torrent"` // the contents of a .torrent file (base64)
 }
 
 var errDlDuplicate = errors.New("this link is already in your list")
@@ -480,6 +487,9 @@ func dlCleanHash(h string) (string, error) {
 }
 
 func (m *dlManager) add(a dlAdd) (*dlItem, error) {
+	if it, err := m.addTorrent(a); it != nil || err != nil {
+		return it, err
+	}
 	link, err := dlCleanURL(a.URL)
 	if err != nil {
 		return nil, err
@@ -547,7 +557,7 @@ func (m *dlManager) add(a dlAdd) (*dlItem, error) {
 	if a.Name != "" {
 		e.Name = dlSafeName(a.Name)
 	}
-	e.Category = dlCategory(e.Name)
+	e.Category = e.cat(e.Name)
 	e.State = "queued"
 	if a.Start != nil && !*a.Start {
 		e.State = "paused"
@@ -599,12 +609,12 @@ func (m *dlManager) pickPath(e *dlEntry, info dlInfo) (string, error) {
 		dir = m.cfg.ruleDir(e.URL)
 	}
 	if dir == "" {
-		dir = m.cfg.CatDirs[dlCategory(name)]
+		dir = m.cfg.CatDirs[e.cat(name)]
 	}
 	if dir == "" {
 		dir = m.cfg.Dir
 		if m.cfg.UseCategories {
-			dir = filepath.Join(dir, dlCategory(name))
+			dir = filepath.Join(dir, e.cat(name))
 		}
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -644,7 +654,7 @@ func (m *dlManager) pickPath(e *dlEntry, info dlInfo) (string, error) {
 		p = dlUniquePath(dir, name, taken)
 	}
 	e.Path, e.Name = p, filepath.Base(p)
-	e.Category = dlCategory(e.Name)
+	e.Category = e.cat(e.Name)
 	m.dirty = true
 	return p, nil
 }
@@ -658,24 +668,33 @@ func (m *dlManager) startLocked(e *dlEntry) {
 	e.cancel, e.running, e.wantPause, e.wantHold = cancel, true, false, false
 	e.State, e.Err, e.Note = "downloading", "", ""
 	e.doneCh = make(chan struct{})
-	spec := dlSpec{URL: e.URL, Header: e.Header, Path: e.Path, Lines: e.Lines, MaxPerLine: m.cfg.MaxPerLine, NoPrivate: e.Web}
-	if e.Conns > 0 {
-		spec.MaxPerLine = e.Conns
-	}
-	spec.Overwrite = m.cfg.OnExists == "overwrite"
-	m.elog(e, "Started")
-	spec.Pick = func(info dlInfo) (string, error) { return m.pickPath(e, info) }
-	spec.OnInfo = func(info dlInfo, path string) {
-		m.mu.Lock()
-		e.Size = info.Size
-		if e.Path == "" {
-			e.Path = path
+	var t dlRunner
+	if e.Kind == "torrent" {
+		m.elog(e, "Started")
+		t = m.newTorrentTask(e)
+		t.SetRate(e.Limit)
+	} else {
+		spec := dlSpec{URL: e.URL, Header: e.Header, Path: e.Path, Lines: e.Lines, MaxPerLine: m.cfg.MaxPerLine, NoPrivate: e.Web}
+		if e.Conns > 0 {
+			spec.MaxPerLine = e.Conns
 		}
-		m.dirty = true
-		m.mu.Unlock()
+		spec.Overwrite = m.cfg.OnExists == "overwrite"
+		m.elog(e, "Started")
+		spec.Pick = func(info dlInfo) (string, error) { return m.pickPath(e, info) }
+		spec.OnInfo = func(info dlInfo, path string) {
+			m.mu.Lock()
+			e.Size = info.Size
+			if e.Path == "" {
+				e.Path = path
+			}
+			m.dirty = true
+			m.mu.Unlock()
+		}
+		dt := newDlTask(spec, m)
+		dt.bucket.setRate(e.Limit)
+		t = dt
+
 	}
-	t := newDlTask(spec, m)
-	t.bucket.setRate(e.Limit)
 	e.task = t
 	m.wg.Add(1)
 	go func() {
@@ -694,7 +713,7 @@ func (m *dlManager) startLocked(e *dlEntry) {
 	}()
 }
 
-func (m *dlManager) finishRun(e *dlEntry, t *dlTask, err error) {
+func (m *dlManager) finishRun(e *dlEntry, t dlRunner, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	pr := t.Progress()
@@ -1143,7 +1162,9 @@ func (m *dlManager) remove(id string, deleteFiles bool) error {
 			break
 		}
 	}
-	if e.Path != "" {
+	if e.Kind == "torrent" {
+		m.dropTorrentFiles(e, deleteFiles)
+	} else if e.Path != "" {
 		if e.State != "done" { // unfinished: the partial files are of no use any more
 			_ = os.Remove(dlPartPath(e.Path))
 			_ = os.Remove(dlStatePath(e.Path))
@@ -1221,6 +1242,7 @@ func (m *dlManager) views() []dlView {
 		if e.running && e.task != nil {
 			pr := e.prog
 			v.Done, v.Speed, v.LineStat = pr.Done, pr.Speed, pr.Lines
+			v.Peers, v.Seeds, v.SwarmSeeds = pr.Peers, pr.Seeds, pr.SwarmSeeds
 			if pr.Note != "" {
 				v.Note = pr.Note
 			}
@@ -1350,7 +1372,7 @@ func (m *dlManager) setLimit(id string, limit float64) error {
 	}
 	e.Limit = limit
 	if e.task != nil {
-		e.task.bucket.setRate(limit)
+		e.task.SetRate(limit)
 	}
 	m.dirty = true
 	return nil

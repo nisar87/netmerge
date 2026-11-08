@@ -124,6 +124,7 @@ function dlProps(id){
       ${sh.sum > 0 ? `<span class="hint2">Carried by</span><span>${Object.entries(sh.tot).filter(([,b]) => b>0).map(([k,b]) => `${esc(labelOf(k))} ${Math.round(b/sh.sum*100)}%`).join(' · ')}</span>` : ''}
       ${v.verify ? `<span class="hint2">Checksum</span><span>${v.verify === 'ok' ? '✓ matches' : v.verify === 'bad' ? '✗ does NOT match' : 'checking…'}</span>` : ''}
     </div>
+    ${v.kind === 'torrent' && (v.files||[]).length ? `<h4 style="margin:10px 0 6px">Files in this torrent</h4><div class="scrollbox" style="max-height:220px;overflow:auto;font-size:13px">${v.files.map((f,i) => `<label style="display:flex;gap:8px;align-items:center;padding:3px 0"><input type="checkbox" class="tfSel" data-i="${i}"${!v.select || v.select[i] ? ' checked' : ''}${v.state === 'done' ? ' disabled' : ''}> <span style="flex:1;word-break:break-all">${esc(f.name)}</span><span class="hint2">${bytes(f.size)}</span></label>`).join('')}</div>${v.state === 'done' ? '' : '<div class="row" style="gap:8px;margin-top:6px"><button class="btn" id="tfSave">Download only the ticked files</button></div>'}` : ''}
     ${edit ? `<div style="display:grid;gap:10px;margin:8px 0">
       <div class="row" style="gap:10px;flex-wrap:wrap"><label class="hint2" style="flex:1;min-width:160px">Queue<select class="sel" id="pQ" style="width:100%;margin-top:4px">${dlQueueOpts(v.queue)}</select></label>
         <label class="hint2" style="flex:1;min-width:160px">Connections per line<select class="sel" id="pC" style="width:100%;margin-top:4px"><option value="0">Automatic</option>${[1,2,4,6,8,12,16].map(n => `<option${v.conns===n?' selected':''}>${n}</option>`).join('')}</select></label></div>
@@ -135,6 +136,7 @@ function dlProps(id){
     <div class="scrollbox" style="max-height:200px;overflow:auto;font-size:12.5px">${(v.log||[]).length ? (v.log||[]).slice().reverse().map(l => `<div style="padding:2px 0"><span class="hint2">${new Date(l.t*1000).toLocaleTimeString()}</span> &nbsp;${esc(l.s)}</div>`).join('') : '<div class="hint2">Nothing yet.</div>'}</div>
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn pri" id="dlCancel">Close</button></div></div>`);
   $('#dlCancel').onclick = dlClose;
+  if ($('#tfSave')) $('#tfSave').onclick = async () => { const sel = $$('.tfSel').map(b => b.checked); const r = await dlAct({action:'select', id, select: sel}, 'Saved'); if (r !== null) dlClose(); };
   if (!edit) return;
   $('#pSave').onclick = async () => {
     const r1 = await dlAct({action:'setQueue', id, queue: $('#pQ').value});

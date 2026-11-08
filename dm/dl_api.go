@@ -25,9 +25,10 @@ type dlReq struct {
 	ExtMinMB int  `json:"extMinMB"`
 	ExtOff   bool `json:"extOff"`
 	// Text is an exported list to import; Types are the file types the link grabber should keep.
-	Text  string   `json:"text"`
-	Types []string `json:"types"`
-	Count int      `json:"conns"`
+	Text   string   `json:"text"`
+	Types  []string `json:"types"`
+	Count  int      `json:"conns"`
+	Select []bool   `json:"select"`
 }
 
 func registerDownloadRoutes(mux *http.ServeMux) {
@@ -81,6 +82,9 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 		if in.URL != "" {
 			urls = append([]string{in.URL}, urls...)
 		}
+		if len(urls) == 0 && in.Torrent != "" {
+			urls = []string{""}
+		}
 		if len(urls) == 0 {
 			return nil, errors.New("paste at least one link")
 		}
@@ -89,6 +93,10 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 		}
 		var expanded []string
 		for _, u := range urls {
+			if in.Torrent != "" || strings.HasPrefix(strings.ToLower(strings.TrimSpace(u)), "magnet:") {
+				expanded = append(expanded, strings.TrimSpace(u))
+				continue
+			}
 			list, err := dlExpand(strings.TrimSpace(u))
 			if err != nil {
 				return nil, err
@@ -130,6 +138,8 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 			return nil, errors.New("none of the links could be used")
 		}
 		return map[string]any{"added": added, "skipped": skipped, "items": m.views(), "config": m.config()}, nil
+	case "select":
+		return nil, m.setSelect(in.ID, in.Select)
 	case "pause":
 		return nil, m.pause(in.ID)
 	case "resume":

@@ -2,7 +2,7 @@
 // It uses the helpers of the main page ($, api, esc, bytes, toast, setHTML, go ...).
 /* ---------- downloads ---------- */
 let DL = null, dlFilter = 'all', dlCat = '', dlQ = '', dlBusy = false, dlPrev = {};
-const DL_CATS = ['Programs','Archives','Videos','Music','Documents','Images','Other'];
+const DL_CATS = ['Programs','Archives','Videos','Music','Documents','Images','Torrents','Other'];
 const DL_RISKY = /\.(exe|msi|bat|cmd|ps1|vbs|js|jar|scr|com|lnk|msix|appx|reg|hta)$/i;
 async function loadDL(force){
   if (dlBusy && !force) return;
@@ -28,6 +28,7 @@ function dlRow(v){
   let meta = [];
   if (v.state === 'downloading') {
     meta.push(`${bytes(v.done)}${v.size>0?' of '+bytes(v.size):''}`, `<b>${bytes(v.speed)}/s</b>`);
+    if (v.kind === 'torrent') meta.push(`${v.peers||0} peer${v.peers===1?'':'s'}` + (v.seeds ? `, ${v.seeds} seed${v.seeds===1?'':'s'}` : '') + (v.swarmSeeds > (v.seeds||0) ? ` (${v.swarmSeeds} in the swarm)` : ''));
     if (v.size > 0 && v.speed > 0) meta.push(dur(Math.ceil((v.size - v.done)/v.speed)) + ' left');
     const act = (v.lineStats||[]).filter(l => l.status === 'active');
     if (act.length) meta.push(act.map(l => `<span style="color:${colorOf(l.name)}">●</span> ${esc(labelOf(l.name))} ${bytes(l.speed)}/s`).join(' &nbsp; '));
@@ -74,13 +75,13 @@ function paintDL(){
   dlSortItems(vis);
   const chip = (id, t, n) => `<button data-f="${id}" class="${dlFilter===id?'sel':''}">${t}${n!==undefined?' '+n:''}</button>`;
   const num = (id, vals, cur) => `<select class="sel" id="${id}" style="min-width:0">${vals.map(x => `<option${x==cur?' selected':''}>${x}</option>`).join('')}</select>`;
-  const list = vis.length ? vis.map(dlRow).join('') : `<div class="dlempty">${items.length ? 'Nothing matches this filter.' : '<b>No downloads yet.</b><br>Paste a link above (http, https or ftp). NetMerge splits the file and downloads it over all your connections at once.'}</div>`;
+  const list = vis.length ? vis.map(dlRow).join('') : `<div class="dlempty">${items.length ? 'Nothing matches this filter.' : '<b>No downloads yet.</b><br>Paste a link above (http, https, ftp or a magnet link), or add a .torrent file. NetMerge splits the file and downloads it over all your connections at once.'}</div>`;
   const holdBanner = DL.hold ? `<div class="note warn" style="margin-bottom:12px"><b>Downloads are waiting.</b> ${esc(DL.hold.replace(/^Waiting: /,''))}.</div>` : '';
   const powerBanner = DL.powerAt && (Date.now()/1000 - DL.powerAt) < 70 ? `<div class="note bad" style="margin-bottom:12px"><span style="flex:1"><b>The PC is about to shut down</b> because your downloads finished.</span><button class="btn" data-dl="cancelPower">Cancel shutdown</button></div>` : '';
   const noLines = DL.lines.length === 0 ? '<div class="note warn" style="margin-bottom:12px"><b>No internet connection found.</b> Downloads will start when a connection is available.</div>' : '';
   const html = `${powerBanner}${holdBanner}${noLines}
-  <div class="card"><div class="dlbox"><textarea class="inp" id="dlUrl" rows="1" placeholder="Paste a link here (one per line to add several)" aria-label="Download link"></textarea>
-    <button class="btn pri" id="dlAddBtn">Add</button><button class="btn" id="dlPaste" title="Paste the link you copied">Paste</button></div>
+  <div class="card"><div class="dlbox"><textarea class="inp" id="dlUrl" rows="1" placeholder="Paste a link or magnet link here (one per line to add several)" aria-label="Download link"></textarea>
+    <button class="btn pri" id="dlAddBtn">Add</button><button class="btn" id="dlPaste" title="Paste the link you copied">Paste</button><button class="btn" id="dlTorBtn" title="Add a torrent from a .torrent file on this computer">Torrent file…</button><input type="file" id="dlTorFile" accept=".torrent,application/x-bittorrent" hidden></div>
     <div class="hint2" style="margin-top:8px">${DL.speed > 0 ? `Downloading at <b>${bytes(DL.speed)}/s</b> in total. ` : ''}You can also drag a link onto this window.</div>${dlToolsRow()}</div>
   <div class="dlbar2"><div class="chips">${chip('all','All',items.length)}${chip('active','In progress',act+que+items.filter(v=>v.state==='paused').length)}${chip('done','Finished',fin)}${chip('bad','Needs attention',bad)}</div>
     <select class="sel" id="dlCat" style="min-width:0" aria-label="Type"><option value="">All types</option>${DL_CATS.map(c => `<option${c===dlCat?' selected':''}>${c}</option>`).join('')}</select>
@@ -135,6 +136,7 @@ async function dlExtCode(){
 async function dlSubmit(){
   const ta = $('#dlUrl'); const links = ta.value.split(/\s*\n\s*/).map(s => s.trim()).filter(Boolean);
   if (!links.length) return toast('Paste a link first', true);
+  if (links.length === 1 && /^magnet:|\.torrent(\?|#|$)/i.test(links[0])) { const r = await dlAct({action:'add', url: links[0]}, 'Torrent added'); if (r) ta.value = ''; return; }
   if (links.length > 1) { const r = await dlAct({action:'add', urls: links}); if (r) { ta.value = ''; toast(`${(r.added||[]).length} downloads added` + (r.skipped ? `, ${r.skipped} already in your list` : '')); } return; }
   dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Add download"><h3 style="margin:0">Checking the link…</h3><div class="hint2" style="margin-top:6px">${esc(links[0])}</div></div>`);
   let p; try { p = await api('downloads', {action:'probe', url: links[0]}); } catch(e){ dlClose(); return toast(e.message, true); }
@@ -181,6 +183,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#dlDlg'
 document.addEventListener('click', async e => {
   const t = e.target.closest('button'); if (!t) return;
   if (t.id === 'dlAddBtn') return dlSubmit();
+  if (t.id === 'dlTorBtn') { const f = $('#dlTorFile'); if (f) f.click(); return; }
   if (t.id === 'dlPaste') { try { const s = await navigator.clipboard.readText(); if (s) $('#dlUrl').value = s.trim(); } catch(err){ toast('Press Ctrl+V in the box instead', true); } return; }
   if (t.dataset.f && page === 'downloads') { dlFilter = t.dataset.f; return paintDL(); }
   if (t.id === 'dlDirSave') return void dlAct({action:'config', config: {...DL.config, dir: $('#dlDir').value.trim()}}, 'Folder saved');
@@ -201,9 +204,17 @@ document.addEventListener('click', async e => {
   if (a === 'cancelPower') return void dlAct({action:'cancelPower'}, 'Shutdown cancelled');
   dlAct({action: a, id});
 });
+async function dlAddTorrentFile(f){
+  if (!f) return;
+  if (f.size > 16e6) return toast('That file is too big to be a torrent', true);
+  const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 32768) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 32768));
+  const r = await dlAct({action:'add', torrent: btoa(bin)}, 'Torrent added');
+  return r;
+}
 document.addEventListener('change', e => {
   if (!DL) return;
   const t = e.target;
+  if (t.id === 'dlTorFile') { const f = t.files && t.files[0]; t.value = ''; return void dlAddTorrentFile(f); }
   if (t.dataset && t.dataset.lim) return void dlAct({action:'limit', id: t.dataset.lim, limitBytes: +t.value * 1048576});
   if (t.dataset && t.dataset.cfg) {
     const k = t.dataset.cfg, c = {...DL.config};
@@ -224,8 +235,9 @@ window.addEventListener('dragover', e => { if (e.dataTransfer && [...(e.dataTran
 window.addEventListener('drop', async e => {
   const dt = e.dataTransfer; if (!dt) return; e.preventDefault();
   let text = dt.getData('text/uri-list') || dt.getData('text/plain');
+  if (dt.files && dt.files[0] && /\.torrent$/i.test(dt.files[0].name)) { go('downloads'); await loadDL(true); return void dlAddTorrentFile(dt.files[0]); }
   if (!text && dt.files && dt.files[0] && /\.(txt|csv|lst|m3u8?)$/i.test(dt.files[0].name) && dt.files[0].size < 1e6) text = await dt.files[0].text();
-  const links = (text||'').split(/\s*\n\s*/).map(s => s.trim()).filter(s => /^(https?|ftp):\/\//i.test(s));
+  const links = (text||'').split(/\s*\n\s*/).map(s => s.trim()).filter(s => /^(https?|ftp):\/\/|^magnet:/i.test(s));
   if (!links.length) return;
   go('downloads'); await loadDL(true); const ta = $('#dlUrl'); if (ta) ta.value = links.join('\n');
 });

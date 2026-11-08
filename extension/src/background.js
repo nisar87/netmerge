@@ -79,8 +79,8 @@ if (api.runtime.onStartup) api.runtime.onStartup.addListener(() => { menus(); re
 api.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== 'nm') return;
   const url = info.linkUrl || info.srcUrl;
-  if (!url || !/^https?:/i.test(url)) return;
-  if (NMCore.isLocalHost(NMCore.hostOf(url))) return flash('!', '#dc2626');
+  if (!url || !/^(https?:|magnet:)/i.test(url)) return;
+  if (/^https?:/i.test(url) && NMCore.isLocalHost(NMCore.hostOf(url))) return flash('!', '#dc2626');
   const r = await send(url, info.pageUrl || (tab && tab.url) || '', '');
   flash(r.ok ? (r.data.duplicate ? '=' : '+') : '!', r.ok ? '#16a34a' : '#dc2626');
 });

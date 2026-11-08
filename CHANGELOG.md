@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.9.0
+
+Download manager: **torrents** (own BitTorrent client, part of the separate download module, off unless the manager is on):
+- Add a **magnet link**, a link to a **.torrent file**, or choose / drop a .torrent file. The description of a magnet link is fetched from peers (BEP 9) and kept, so it resumes without peers.
+- Peers are found through HTTP and UDP trackers, the DHT and peer exchange. Every connection leaves through one of your lines; peers are spread over the lines by what each line can carry, so the lines add up like for any other download.
+- Rarest-first piece picking, every piece checked against its hash, bad pieces fetched again, peers that send bad data are dropped and banned, end-game for the last pieces, resume after a restart (also checks files that are already in the folder).
+- Choose which files of a torrent to download (Properties). Torrents get their own category folder.
+- The browser extension's right-click menu also takes magnet links.
+- Not included yet: incoming connections, encrypted connections (MSE), uTP, and seeding after the download is complete (uploads happen only while downloading, never on a mobile line).
+
 ## 3.8.0
 
 Download manager, IDM-style features:

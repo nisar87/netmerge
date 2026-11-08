@@ -1,0 +1,620 @@
+package dm
+
+import (
+	"bytes"
+	"crypto/sha1"
+	"encoding/base32"
+	"encoding/base64"
+	"encoding/binary"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+// ---- test torrents -----------------------------------------------------------------------------------------------------
+
+type tFile struct {
+	name string
+	size int64
+}
+
+type tTorrent struct {
+	file    []byte // the .torrent
+	meta    *btMeta
+	content []byte
+	files   []tFile
+}
+
+func makeTorrent(name string, files []tFile, pieceLen int, trackers ...string) *tTorrent {
+	var content []byte
+	for _, f := range files {
+		b := make([]byte, f.size)
+		simFill(b, int64(len(content))+int64(len(name))*7)
+		content = append(content, b...)
+	}
+	var hashes []byte
+	for off := 0; off < len(content); off += pieceLen {
+		end := min(off+pieceLen, len(content))
+		h := sha1.Sum(content[off:end])
+		hashes = append(hashes, h[:]...)
+	}
+	info := map[string]any{"name": name, "piece length": pieceLen, "pieces": string(hashes)}
+	if len(files) == 1 && files[0].name == "" {
+		info["length"] = len(content)
+	} else {
+		var fl []any
+		for _, f := range files {
+			fl = append(fl, map[string]any{"length": f.size, "path": splitPath(f.name)})
+		}
+		info["files"] = fl
+	}
+	top := map[string]any{"info": info}
+	if len(trackers) > 0 {
+		top["announce"] = trackers[0]
+		var l []any
+		for _, t := range trackers {
+			l = append(l, t)
+		}
+		top["announce-list"] = []any{l}
+	}
+	file := bencode(top)
+	m, err := btParseTorrent(file)
+	if err != nil {
+		panic(err)
+	}
+	return &tTorrent{file: file, meta: m, content: content, files: files}
+}
+
+// ---- a seeder ----------------------------------------------------------------------------------------------------------
+
+type seeder struct {
+	ln       net.Listener
+	tt       *tTorrent
+	noMeta   bool    // does not offer the description
+	corrupt  int32   // number of pieces to send wrongly once
+	rate     float64 // bytes/s per connection
+	conns    int32
+	served   int64
+	requests int32
+	dropAt   int64 // drop the connection after this many bytes (once)
+	dropped  int32
+	maxConns int
+}
+
+func newSeeder(t *testing.T, tt *tTorrent) *seeder {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &seeder{ln: l, tt: tt}
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go s.serve(c)
+		}
+	}()
+	t.Cleanup(func() { l.Close() })
+	return s
+}
+
+func (s *seeder) addr() string { return s.ln.Addr().String() }
+
+func (s *seeder) serve(c net.Conn) {
+	defer c.Close()
+	if s.maxConns > 0 && int(atomic.AddInt32(&s.conns, 1)) > s.maxConns {
+		return
+	}
+	hs := make([]byte, 68)
+	if _, err := io.ReadFull(c, hs); err != nil || !bytes.Equal(hs[28:48], s.tt.meta.InfoHash[:]) {
+		return
+	}
+	my := make([]byte, 68)
+	my[0] = 19
+	copy(my[1:], "BitTorrent protocol")
+	my[25] = 0x10
+	copy(my[28:], s.tt.meta.InfoHash[:])
+	copy(my[48:], "-SEEDER-123456789012")
+	c.Write(my)
+	m := s.tt.meta
+	n := m.pieces()
+	bits := make([]byte, (n+7)/8)
+	for i := 0; i < n; i++ {
+		bits[i/8] |= 0x80 >> (i % 8)
+	}
+	em := map[string]any{"m": map[string]any{"ut_metadata": 3}}
+	if !s.noMeta {
+		em["metadata_size"] = len(m.Raw)
+	}
+	c.Write(btFrame(20, []byte{0}, bencode(em)))
+	c.Write(btFrame(5, bits))
+	var sent int64
+	for {
+		hdr := make([]byte, 4)
+		if _, err := io.ReadFull(c, hdr); err != nil {
+			return
+		}
+		ln := binary.BigEndian.Uint32(hdr)
+		if ln == 0 {
+			continue
+		}
+		buf := make([]byte, ln)
+		if _, err := io.ReadFull(c, buf); err != nil {
+			return
+		}
+		switch buf[0] {
+		case 2:
+			c.Write(btFrame(1))
+		case 6:
+			atomic.AddInt32(&s.requests, 1)
+			idx, off, l := int(binary.BigEndian.Uint32(buf[1:])), int(binary.BigEndian.Uint32(buf[5:])), int(binary.BigEndian.Uint32(buf[9:]))
+			a := idx*int(m.PieceLen) + off
+			data := append([]byte(nil), s.tt.content[a:a+l]...)
+			if atomic.LoadInt32(&s.corrupt) > 0 && off == 0 && atomic.AddInt32(&s.corrupt, -1) >= 0 {
+				data[0] ^= 0xff
+			}
+			if s.rate > 0 {
+				time.Sleep(time.Duration(float64(l) / s.rate * float64(time.Second)))
+			}
+			c.Write(btFrame(7, be32(idx), be32(off), data))
+			atomic.AddInt64(&s.served, int64(l))
+			sent += int64(l)
+			if s.dropAt > 0 && sent > s.dropAt && atomic.AddInt32(&s.dropped, 1) == 1 {
+				return
+			}
+		case 20:
+			if buf[1] == 3 {
+				v, k, _ := bdecodePrefix(buf[2:])
+				d, _ := v.(map[string]any)
+				_ = k
+				if btInt(d, "msg_type") == 0 && !s.noMeta {
+					p := int(btInt(d, "piece"))
+					a, b := p*btBlock, min((p+1)*btBlock, len(m.Raw))
+					c.Write(btFrame(20, []byte{1}, bencode(map[string]any{"msg_type": 1, "piece": p, "total_size": len(m.Raw)}), m.Raw[a:b]))
+				}
+			}
+		}
+	}
+}
+
+// ---- trackers ----------------------------------------------------------------------------------------------------------
+
+func compactPeers(addrs ...string) string {
+	var b []byte
+	for _, a := range addrs {
+		h, p, _ := net.SplitHostPort(a)
+		ip := net.ParseIP(h).To4()
+		port := 0
+		for _, ch := range p {
+			port = port*10 + int(ch-'0')
+		}
+		b = append(b, ip...)
+		b = append(b, byte(port>>8), byte(port))
+	}
+	return string(b)
+}
+
+func httpTracker(t *testing.T, ih [20]byte, addrs ...string) (*httptest.Server, *int32) {
+	var hits int32
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		if r.URL.Query().Get("info_hash") != string(ih[:]) {
+			w.Write(bencode(map[string]any{"failure reason": "unknown torrent"}))
+			return
+		}
+		w.Write(bencode(map[string]any{"interval": 60, "complete": len(addrs), "peers": compactPeers(addrs...)}))
+	}))
+	t.Cleanup(s.Close)
+	return s, &hits
+}
+
+func udpTracker(t *testing.T, ih [20]byte, addrs ...string) string {
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { pc.Close() })
+	go func() {
+		buf := make([]byte, 2048)
+		for {
+			n, from, err := pc.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			if n >= 16 && binary.BigEndian.Uint64(buf) == 0x41727101980 && binary.BigEndian.Uint32(buf[8:]) == 0 {
+				r := make([]byte, 16)
+				copy(r[4:], buf[12:16])
+				copy(r[8:], []byte("CONNID12"))
+				pc.WriteTo(r, from)
+			} else if n >= 98 && binary.BigEndian.Uint32(buf[8:]) == 1 && string(buf[:8]) == "CONNID12" && bytes.Equal(buf[16:36], ih[:]) {
+				r := make([]byte, 20)
+				binary.BigEndian.PutUint32(r, 1)
+				copy(r[4:], buf[12:16])
+				binary.BigEndian.PutUint32(r[8:], 60)
+				binary.BigEndian.PutUint32(r[16:], uint32(len(addrs)))
+				r = append(r, compactPeers(addrs...)...)
+				pc.WriteTo(r, from)
+			}
+		}
+	}()
+	return "udp://" + pc.LocalAddr().String() + "/announce"
+}
+
+// ---- helpers -----------------------------------------------------------------------------------------------------------
+
+func runBt(t *testing.T, env dlEnv, spec btSpec, root string, timeout time.Duration) (*btTask, error) {
+	t.Helper()
+	spec.NoDHT = true
+	if spec.Pick == nil {
+		spec.Pick = func(string) (string, error) { return root, nil }
+	}
+	tk := newBtTask(spec, env)
+	ctx, cancel := ctxTimeout(timeout)
+	defer cancel()
+	return tk, tk.Run(ctx)
+}
+
+func checkContent(t *testing.T, tt *tTorrent, root string) {
+	t.Helper()
+	if len(tt.files) == 1 && tt.files[0].name == "" {
+		got, err := os.ReadFile(root)
+		if err != nil || !bytes.Equal(got, tt.content) {
+			t.Fatalf("single file content wrong (%v)", err)
+		}
+		return
+	}
+	off := 0
+	for _, f := range tt.files {
+		got, err := os.ReadFile(filepath.Join(root, f.name))
+		if err != nil || !bytes.Equal(got, tt.content[off:off+int(f.size)]) {
+			t.Fatalf("file %s content wrong (%v)", f.name, err)
+		}
+		off += int(f.size)
+	}
+}
+
+func fakeHost() { var _ sync.Mutex; var _ = strings.ToLower }
+
+func TestBtBencodeAndMeta(t *testing.T) {
+	v := map[string]any{"a": []any{1, "xy", map[string]any{"k": int64(-5)}}, "b": "zz"}
+	got, err := bdecode(bencode(v))
+	if err != nil || !bytes.Equal(bencode(got), bencode(v)) {
+		t.Fatalf("round trip: %v", err)
+	}
+	for _, bad := range []string{"", "i12", "5:ab", "l", "d1:ae", "di1e1:ae", "i--1e", strings.Repeat("l", 100) + strings.Repeat("e", 100)} {
+		if _, err := bdecode([]byte(bad)); err == nil {
+			t.Errorf("accepted %q", bad)
+		}
+	}
+	tt := makeTorrent("Album", []tFile{{"a.txt", 100000}, {"sub.txt", 70000}}, 32768, "http://t/announce")
+	if tt.meta.Total != 170000 || tt.meta.pieces() != 6 || !tt.meta.Multi || len(tt.meta.Trackers) != 1 {
+		t.Fatalf("%+v", tt.meta)
+	}
+	if tt.meta.pieceSize(5) != 170000-5*32768 {
+		t.Fatal("last piece")
+	}
+	// the info hash is of the bytes as they are in the file
+	raw, _ := topInfoRaw(tt.file)
+	if sha1.Sum(raw) != tt.meta.InfoHash {
+		t.Fatal("info hash")
+	}
+	// a file name that climbs out of the folder is refused
+	evil := bencode(map[string]any{"info": map[string]any{"name": "x", "piece length": 32768, "pieces": strings.Repeat("a", 20),
+		"files": []any{map[string]any{"length": 10, "path": []any{"..", "evil"}}}}})
+	if _, err := btParseTorrent(evil); err == nil {
+		t.Fatal("accepted a path that leaves the folder")
+	}
+	// the sizes have to agree
+	bad := bencode(map[string]any{"info": map[string]any{"name": "x", "piece length": 32768, "pieces": strings.Repeat("a", 40), "length": 10}})
+	if _, err := btParseTorrent(bad); err == nil {
+		t.Fatal("accepted mismatching sizes")
+	}
+	mg, err := btParseMagnet("magnet:?xt=urn:btih:" + strings.Repeat("ab", 20) + "&dn=Hello%20World&tr=udp%3A%2F%2Fx%3A1%2Fa&x.pe=1.2.3.4:5")
+	if err != nil || mg.Name != "Hello World" || len(mg.Trackers) != 1 || len(mg.Peers) != 1 || mg.Hash[0] != 0xab {
+		t.Fatalf("%+v %v", mg, err)
+	}
+	if _, err := btParseMagnet("magnet:?dn=x"); err == nil {
+		t.Fatal("magnet without a hash")
+	}
+	if _, err := btParseMagnet("magnet:?xt=urn:btih:zz"); err == nil {
+		t.Fatal("magnet with a bad hash")
+	}
+	b32, err := btParseMagnet("magnet:?xt=urn:btih:" + base32OfHash(mg.Hash))
+	if err != nil || b32.Hash != mg.Hash {
+		t.Fatalf("base32 hash: %v", err)
+	}
+}
+
+func TestBtSingleFileHTTPTracker(t *testing.T) {
+	tt := makeTorrent("one.bin", []tFile{{"", 3*MiB + 777}}, 256<<10)
+	sd := newSeeder(t, tt)
+	tr, hits := httpTracker(t, tt.meta.InfoHash, sd.addr())
+	tt = makeTorrent("one.bin", tt.files, 256<<10, tr.URL+"/announce")
+	sd.tt = tt
+	tr2, hits2 := httpTracker(t, tt.meta.InfoHash, sd.addr())
+	_ = tr2
+	_ = hits
+	tt = makeTorrent("one.bin", tt.files, 256<<10, tr2.URL+"/announce")
+	sd.tt = tt
+	meta, _ := btParseTorrent(tt.file)
+	root := filepath.Join(t.TempDir(), "one.bin")
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	tk, err := runBt(t, env, btSpec{Meta: meta}, root, 40*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkContent(t, tt, root)
+	if tk.FinalPath() != root || atomic.LoadInt32(hits2) == 0 {
+		t.Fatalf("final=%s hits=%d", tk.FinalPath(), atomic.LoadInt32(hits2))
+	}
+	if _, err := os.Stat(btStatePath(root)); err == nil {
+		t.Fatal("state file left behind")
+	}
+}
+
+func TestBtMultiFileUDPTrackerTwoLines(t *testing.T) {
+	files := []tFile{{"a/one.bin", 2*MiB + 5}, {"b.bin", 0}, {"two.bin", MiB + 123}}
+	tt := makeTorrent("Pack", files, 128<<10)
+	sd := newSeeder(t, tt)
+	sd2 := newSeeder(t, tt)
+	trk := udpTracker(t, tt.meta.InfoHash, sd.addr(), sd2.addr())
+	tt2 := makeTorrent("Pack", files, 128<<10, trk)
+	sd.tt, sd2.tt = tt2, tt2
+	sd.rate, sd2.rate = 1.5*MiB, 1.5*MiB
+	meta, _ := btParseTorrent(tt2.file)
+	root := filepath.Join(t.TempDir(), "Pack")
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0), newSimLine("B", "127.0.0.2", 0))
+	tk, err := runBt(t, env, btSpec{Meta: meta}, root, 60*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkContent(t, tt2, root)
+	pr := tk.Progress()
+	got := 0
+	for _, l := range pr.Lines {
+		if l.Bytes > 0 {
+			got++
+		}
+	}
+	if got != 2 {
+		t.Fatalf("both lines should carry data: %+v", pr.Lines)
+	}
+}
+
+func TestBtMagnetGetsDescriptionFromPeers(t *testing.T) {
+	tt := makeTorrent("Movie", []tFile{{"m.mkv", 1*MiB + 99}, {"n.srt", 5000}}, 64<<10)
+	sd := newSeeder(t, tt)
+	mg, err := btParseMagnet(btMagnetLink(tt.meta.InfoHash, "", nil) + "&x.pe=" + sd.addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(t.TempDir(), "Movie")
+	var saved atomic.Bool
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	tk, err := runBt(t, env, btSpec{Magnet: mg, SaveMeta: func(m *btMeta) { saved.Store(true) }}, root, 40*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkContent(t, tt, root)
+	if !saved.Load() || tk.meta.Name != "Movie" {
+		t.Fatal("description not kept")
+	}
+}
+
+func TestBtBadPieceIsFetchedAgain(t *testing.T) {
+	tt := makeTorrent("bad.bin", []tFile{{"", 2 * MiB}}, 128<<10)
+	sd := newSeeder(t, tt)
+	sd.corrupt = 2
+	meta, _ := btParseTorrent(tt.file)
+	root := filepath.Join(t.TempDir(), "bad.bin")
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	tk := newBtTask(btSpec{Meta: meta, NoDHT: true, Pick: func(string) (string, error) { return root, nil }}, env)
+	tk.addPeers([]string{sd.addr()})
+	ctx, cancel := ctxTimeout(40 * time.Second)
+	defer cancel()
+	if err := tk.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	checkContent(t, tt, root)
+}
+
+func TestBtResumeAfterStop(t *testing.T) {
+	tt := makeTorrent("res.bin", []tFile{{"", 6 * MiB}}, 128<<10)
+	sd := newSeeder(t, tt)
+	sd.rate = 2 * MiB
+	meta, _ := btParseTorrent(tt.file)
+	root := filepath.Join(t.TempDir(), "res.bin")
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	mk := func() *btTask {
+		tk := newBtTask(btSpec{Meta: meta, NoDHT: true, Pick: func(string) (string, error) { return root, nil }}, env)
+		tk.addPeers([]string{sd.addr()})
+		return tk
+	}
+	tk := mk()
+	ctx, cancel := ctxTimeout(30 * time.Second)
+	go func() {
+		for tk.Progress().Done < 2*MiB {
+			time.Sleep(50 * time.Millisecond)
+		}
+		cancel()
+	}()
+	if err := tk.Run(ctx); err == nil {
+		t.Fatal("should have been stopped")
+	}
+	if _, err := os.Stat(btStatePath(root)); err != nil {
+		t.Fatalf("no state saved: %v", err)
+	}
+	before := atomic.LoadInt64(&sd.served)
+	tk2 := mk()
+	ctx2, cancel2 := ctxTimeout(40 * time.Second)
+	defer cancel2()
+	if err := tk2.Run(ctx2); err != nil {
+		t.Fatal(err)
+	}
+	checkContent(t, tt, root)
+	if again := atomic.LoadInt64(&sd.served) - before; again > 5*MiB {
+		t.Fatalf("downloaded %d bytes again; resume should skip finished pieces", again)
+	}
+}
+
+func TestBtRecoversWhenPeerDrops(t *testing.T) {
+	tt := makeTorrent("drop.bin", []tFile{{"", 3 * MiB}}, 128<<10)
+	sd := newSeeder(t, tt)
+	sd.dropAt = 700 << 10
+	meta, _ := btParseTorrent(tt.file)
+	root := filepath.Join(t.TempDir(), "drop.bin")
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	tk := newBtTask(btSpec{Meta: meta, NoDHT: true, Pick: func(string) (string, error) { return root, nil }}, env)
+	tk.addPeers([]string{sd.addr()})
+	ctx, cancel := ctxTimeout(60 * time.Second)
+	defer cancel()
+	if err := tk.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	checkContent(t, tt, root)
+}
+
+func TestBtOnlySelectedFiles(t *testing.T) {
+	files := []tFile{{"keep.bin", MiB}, {"skip.bin", 2 * MiB}, {"keep2.bin", 300000}}
+	tt := makeTorrent("Sel", files, 64<<10)
+	sd := newSeeder(t, tt)
+	meta, _ := btParseTorrent(tt.file)
+	root := filepath.Join(t.TempDir(), "Sel")
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	tk := newBtTask(btSpec{Meta: meta, NoDHT: true, Selected: []bool{true, false, true}, Pick: func(string) (string, error) { return root, nil }}, env)
+	tk.addPeers([]string{sd.addr()})
+	ctx, cancel := ctxTimeout(40 * time.Second)
+	defer cancel()
+	if err := tk.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	k1, _ := os.ReadFile(filepath.Join(root, "keep.bin"))
+	if !bytes.Equal(k1, tt.content[:MiB]) {
+		t.Fatal("keep.bin")
+	}
+	k2, _ := os.ReadFile(filepath.Join(root, "keep2.bin"))
+	if !bytes.Equal(k2, tt.content[3*MiB:]) {
+		t.Fatal("keep2.bin")
+	}
+	if got := atomic.LoadInt64(&sd.served); got > int64(MiB+300000+2*64<<10+64<<10) {
+		t.Fatalf("downloaded %d bytes, the skipped file should not be fetched", got)
+	}
+}
+
+func TestBtManagerMagnetAndTorrentFile(t *testing.T) {
+	tt := makeTorrent("Mgr", []tFile{{"x.bin", 2 * MiB}, {"y.txt", 1000}}, 64<<10)
+	sd := newSeeder(t, tt)
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	m := newTestMgr(t, env)
+	link := btMagnetLink(tt.meta.InfoHash, "Mgr", nil) + "&x.pe=" + sd.addr()
+	id := addOne(t, m, link)
+	v := waitState(t, m, id, "done", 40*time.Second)
+	if v.Kind != "torrent" || v.Category != "Torrents" || filepath.Base(v.Path) != "Mgr" || len(v.Files) != 2 || v.Size != 2*MiB+1000 {
+		t.Fatalf("%+v", v)
+	}
+	checkContent(t, tt, v.Path)
+	// same hash again is a duplicate
+	if _, err := m.handle(dlReq{Action: "add", dlAdd: dlAdd{URL: link}}); err != nil {
+		t.Fatal(err)
+	}
+	// a .torrent file with the seeder as its tracker-less peer: the file itself carries no peers, so use a tracker
+	tr, _ := httpTracker(t, tt.meta.InfoHash, sd.addr())
+	tt2 := makeTorrent("Other", []tFile{{"z.bin", 500000}}, 64<<10, tr.URL+"/a")
+	sd.tt = tt2
+	tr2, _ := httpTracker(t, tt2.meta.InfoHash, sd.addr())
+	tt2 = makeTorrent("Other", []tFile{{"z.bin", 500000}}, 64<<10, tr2.URL+"/a")
+	sd.tt = tt2
+	out, err := m.handle(dlReq{Action: "add", dlAdd: dlAdd{Torrent: b64(tt2.file), Force: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id2 := out["added"].([]*dlItem)[0].ID
+	v2 := waitState(t, m, id2, "done", 40*time.Second)
+	checkContent(t, tt2, v2.Path)
+	// removing deletes the copy of the description
+	if _, err := os.Stat(btCopyPath(btHashOfLink(btMagnetLink(tt2.meta.InfoHash, "", nil)))); err != nil {
+		t.Fatalf("no kept description: %v", err)
+	}
+	if _, err := m.handle(dlReq{Action: "remove", ID: id2, DeleteFiles: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(v2.Path); err == nil {
+		t.Fatal("files not deleted")
+	}
+}
+
+func b64(b []byte) string { return base64.StdEncoding.EncodeToString(b) }
+
+func base32OfHash(h [20]byte) string { return base32.StdEncoding.EncodeToString(h[:]) }
+
+func splitPath(p string) []any {
+	var out []any
+	for _, x := range strings.Split(p, "/") {
+		out = append(out, x)
+	}
+	return out
+}
+
+// a node of the DHT that knows one peer, and another that only points to the first
+func TestBtDHTFindsPeers(t *testing.T) {
+	ih := [20]byte{1, 2, 3}
+	start := func(reply func(tx string) map[string]any) string {
+		pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { pc.Close() })
+		go func() {
+			buf := make([]byte, 2048)
+			for {
+				n, from, err := pc.ReadFrom(buf)
+				if err != nil {
+					return
+				}
+				v, _ := bdecode(buf[:n])
+				q, _ := v.(map[string]any)
+				if btStr(q, "q") != "get_peers" {
+					continue
+				}
+				tx := btStr(q, "t")
+				pc.WriteTo(bencode(map[string]any{"t": tx, "y": "r", "r": reply(tx)}), from)
+			}
+		}()
+		return pc.LocalAddr().String()
+	}
+	leaf := start(func(string) map[string]any {
+		return map[string]any{"id": strings.Repeat("x", 20), "token": "t", "values": []any{compactPeers("10.1.2.3:6881", "10.1.2.4:51413")}}
+	})
+	h, p, _ := net.SplitHostPort(leaf)
+	var node []byte
+	node = append(node, []byte(strings.Repeat("n", 20))...)
+	node = append(node, []byte(compactPeers(net.JoinHostPort(h, p)))...)
+	root := start(func(string) map[string]any {
+		return map[string]any{"id": strings.Repeat("r", 20), "token": "t", "nodes": string(node)}
+	})
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	var mu sync.Mutex
+	var found []string
+	ctx, cancel := ctxTimeout(10 * time.Second)
+	defer cancel()
+	btDHTLookupBoot(ctx, func() []dlLine { return env.Lines() }, ih, 5*time.Second, []string{root}, func(ps []string) {
+		mu.Lock()
+		found = append(found, ps...)
+		mu.Unlock()
+	})
+	mu.Lock()
+	defer mu.Unlock()
+	if len(found) < 2 || found[0] != "10.1.2.3:6881" {
+		t.Fatalf("peers: %v", found)
+	}
+}

@@ -329,12 +329,15 @@ type dlLineStat struct {
 }
 
 type dlProgress struct {
-	Done  int64        `json:"done"`
-	Total int64        `json:"total"`
-	Speed float64      `json:"speed"`
-	Lines []dlLineStat `json:"lines"`
-	Note  string       `json:"note"`
-	Map   []uint8      `json:"map,omitempty"`
+	Done       int64        `json:"done"`
+	Total      int64        `json:"total"`
+	Speed      float64      `json:"speed"`
+	Lines      []dlLineStat `json:"lines"`
+	Note       string       `json:"note"`
+	Map        []uint8      `json:"map,omitempty"`
+	Peers      int          `json:"peers,omitempty"` // torrents: connected peers
+	Seeds      int          `json:"seeds,omitempty"`
+	SwarmSeeds int          `json:"swarmSeeds,omitempty"` // seeds the tracker knows of
 }
 
 type dlTask struct {

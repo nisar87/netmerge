@@ -77,3 +77,33 @@ func TestBenchPerConnectionLimit(t *testing.T) {
 	mustOK(t, tk, err, size)
 	t.Logf("48 MB, server gives 2 MB/s per connection, 8 connections possible: %.1fs (best possible %.1fs)", d.Seconds(), float64(size)/(16<<20))
 }
+
+// Torrent over two lines with different speeds: the peers should spread so that both lines are full.
+func TestBenchTorrentTwoLines(t *testing.T) {
+	if os.Getenv("DM_BENCH") == "" {
+		t.Skip("set DM_BENCH=1")
+	}
+	tt := makeTorrent("bench.bin", []tFile{{"", 160 << 20}}, 1<<20)
+	var addrs []string
+	for i := 0; i < 8; i++ {
+		s := newSeeder(t, tt)
+		s.rate = 4 << 20 // each peer alone gives 4 MB/s
+		addrs = append(addrs, s.addr())
+	}
+	root := t.TempDir() + "/bench.bin"
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 20<<20), newSimLine("B", "127.0.0.2", 10<<20))
+	tk := newBtTask(btSpec{Meta: tt.meta, NoDHT: true, Pick: func(string) (string, error) { return root, nil }}, env)
+	tk.addPeers(addrs)
+	ctx, cancel := ctxTimeout(120 * time.Second)
+	defer cancel()
+	st := time.Now()
+	if err := tk.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	d := time.Since(st)
+	pr := tk.Progress()
+	t.Logf("torrent 160 MB, lines 20+10 MB/s, 8 peers at 4 MB/s each: %.1fs = %.1f MB/s (lines can carry 30; 8 peers can give 32)", d.Seconds(), 160/d.Seconds())
+	for _, l := range pr.Lines {
+		t.Logf("  line %s carried %d MB", l.Name, l.Bytes>>20)
+	}
+}
