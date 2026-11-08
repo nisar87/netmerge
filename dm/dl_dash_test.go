@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // a small site with a DASH description, an HLS master with a separate sound track, and the parts of both
@@ -185,5 +186,41 @@ func TestDASHTemplateExpansion(t *testing.T) {
 	}
 	if mpdSeconds("PT1H2M3.5S") != 3723.5 || mpdSeconds("P1DT1S") != 86401 {
 		t.Fatal("durations")
+	}
+}
+
+func TestDASHAudioOnlyIsM4A(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/s/a.mpd", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/dash+xml")
+		w.Write([]byte(`<MPD type="static" mediaPresentationDuration="PT4S"><Period><AdaptationSet contentType="audio" mimeType="audio/mp4"><SegmentTemplate timescale="1" duration="2" initialization="i.mp4" media="s$Number$.m4s" startNumber="1"/><Representation id="a" bandwidth="64000"/></AdaptationSet></Period></MPD>`))
+	})
+	for _, n := range []string{"i.mp4", "s1.m4s", "s2.m4s"} {
+		mux.HandleFunc("/s/"+n, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("DATA")) })
+	}
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	m := newTestMgr(t, newSimEnv(newSimLine("A", "127.0.0.1", 0)))
+	id := addOne(t, m, srv.URL+"/s/a.mpd")
+	v := waitState(t, m, id, "done", 20*time.Second)
+	if !strings.HasSuffix(v.Name, ".m4a") || v.Category != "Music" {
+		t.Fatalf("%s %s", v.Name, v.Category)
+	}
+}
+
+func TestRemovingAFinishedStreamAlsoRemovesTheSoundFile(t *testing.T) {
+	noFFmpeg(t)
+	s, _ := streamSite(t)
+	m := newTestMgr(t, newSimEnv(newSimLine("A", "127.0.0.1", 0)))
+	id := addOne(t, m, s.URL+"/v/timeline.mpd")
+	v := waitState(t, m, id, "done", 30*time.Second)
+	if _, err := os.Stat(v.Path + ".audio.m4a"); err != nil {
+		t.Fatalf("sound file missing: %v", err)
+	}
+	if _, err := m.handle(dlReq{Action: "remove", ID: id, DeleteFiles: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(v.Path + ".audio.m4a"); err == nil {
+		t.Fatal("sound file left behind")
 	}
 }

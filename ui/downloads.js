@@ -21,6 +21,18 @@ function dlLineShare(v){
   const sum = Object.values(tot).reduce((a,b) => a+b, 0);
   return {tot, sum};
 }
+const dlSel = new Set(); let dlVisIds = [];
+const dlSpeedHist = []; let dlSpeedAt = 0;
+function dlSpark(){
+  if (dlSpeedHist.length < 3) return '';
+  const mx = Math.max(...dlSpeedHist, 1), w = 120, h = 26, n = dlSpeedHist.length;
+  const pts = dlSpeedHist.map((v,i) => `${(i/(n-1)*w).toFixed(1)},${(h-1-v/mx*(h-3)).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Speed over the last minute" style="vertical-align:middle;margin-left:8px"><polyline points="${pts}" fill="none" stroke="var(--good,#2a9d5c)" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="hint2"> peak ${bytes(mx)}/s</span>`;
+}
+function dlBulkBar(){
+  if (!dlSel.size) return '';
+  return `<div class="note" style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><b>${dlSel.size} selected</b><button class="btn" data-bulk="pause">Pause</button><button class="btn" data-bulk="resume">Resume</button><button class="btn" data-bulk="remove">Remove</button><select class="sel" id="dlBulkQ" style="min-width:0" aria-label="Move to queue"><option value="\u0000">Move to queue…</option>${dlQueueOpts('')}</select><span style="flex:1"></span><button class="btn" data-bulk="all">Select all shown</button><button class="btn" data-bulk="none">Clear selection</button></div>`;
+}
 function dlRow(v){
   const pct = v.size > 0 ? Math.min(100, v.done / v.size * 100) : (v.state === 'done' ? 100 : 0);
   const sh = dlLineShare(v);
@@ -29,6 +41,7 @@ function dlRow(v){
   if (v.state === 'downloading') {
     meta.push(`${bytes(v.done)}${v.size>0?' of '+bytes(v.size):''}`, `<b>${bytes(v.speed)}/s</b>`);
     if (v.kind === 'torrent') meta.push(`${v.peers||0} peer${v.peers===1?'':'s'}` + (v.seeds ? `, ${v.seeds} seed${v.seeds===1?'':'s'}` : '') + (v.swarmSeeds > (v.seeds||0) ? ` (${v.swarmSeeds} in the swarm)` : ''));
+    if (v.kind === 'torrent' && v.up > 0) meta.push('↑ ' + bytes(v.up));
     if (v.size > 0 && v.speed > 0) meta.push(dur(Math.ceil((v.size - v.done)/v.speed)) + ' left');
     const act = (v.lineStats||[]).filter(l => l.status === 'active');
     if (act.length) meta.push(act.map(l => `<span style="color:${colorOf(l.name)}">●</span> ${esc(labelOf(l.name))} ${bytes(l.speed)}/s`).join(' &nbsp; '));
@@ -52,7 +65,7 @@ function dlRow(v){
     : v.state === 'paused' ? mv + lim + btn('resume','Resume') + btn('remove','Cancel')
     : v.state === 'error' ? btn('retry','Try again') + btn('remove','Remove')
     : btn('open','Open') + btn('folder','Show in folder') + btn('remove','Remove from list') + btn('delfile','Delete file')) + props;
-  return `<div class="dlrow"><div class="dlic" aria-hidden="true">${esc((v.category||'Other').slice(0,3).toUpperCase())}</div>
+  return `<div class="dlrow${dlSel.has(v.id)?' picked':''}"><input type="checkbox" class="dlck" data-id="${esc(v.id)}"${dlSel.has(v.id)?' checked':''} aria-label="Select ${esc(v.name || 'download')}" style="align-self:center;margin-right:8px"><div class="dlic" aria-hidden="true">${esc((v.category||'Other').slice(0,3).toUpperCase())}</div>
     <div style="min-width:0"><b class="dlname" title="${esc(v.url)}">${esc(v.name || v.url)}</b>
       <div class="dlprog ${v.state==='paused'?'paused':v.state==='error'?'err':''}"><div style="width:${pct}%"></div></div>${v.state==='downloading' && typeof dlSegBar==='function' ? dlSegBar(v) : ''}${strip}
       <div class="dlmeta">${meta.join(' · ')}</div></div>
@@ -73,6 +86,9 @@ function paintDL(){
   const vis = items.filter(v => (dlFilter === 'all' || (dlFilter === 'active' && (v.state === 'downloading' || v.state === 'queued' || v.state === 'paused')) || (dlFilter === 'done' && v.state === 'done') || (dlFilter === 'bad' && v.state === 'error'))
     && (!dlCat || v.category === dlCat) && dlQueueMatch(v) && (!q || (v.name||'').toLowerCase().includes(q) || v.url.toLowerCase().includes(q)));
   dlSortItems(vis);
+  dlVisIds = vis.map(v => v.id);
+  for (const id of [...dlSel]) if (!items.some(v => v.id === id)) dlSel.delete(id);
+  if (Date.now() - dlSpeedAt >= 1000) { dlSpeedAt = Date.now(); dlSpeedHist.push(DL.speed || 0); if (dlSpeedHist.length > 60) dlSpeedHist.shift(); }
   const chip = (id, t, n) => `<button data-f="${id}" class="${dlFilter===id?'sel':''}">${t}${n!==undefined?' '+n:''}</button>`;
   const num = (id, vals, cur) => `<select class="sel" id="${id}" style="min-width:0">${vals.map(x => `<option${x==cur?' selected':''}>${x}</option>`).join('')}</select>`;
   const list = vis.length ? vis.map(dlRow).join('') : `<div class="dlempty">${items.length ? 'Nothing matches this filter.' : '<b>No downloads yet.</b><br>Paste a link above (http, https, ftp or a magnet link), or add a .torrent file. NetMerge splits the file and downloads it over all your connections at once.'}</div>`;
@@ -82,13 +98,13 @@ function paintDL(){
   const html = `${powerBanner}${holdBanner}${noLines}
   <div class="card"><div class="dlbox"><textarea class="inp" id="dlUrl" rows="1" placeholder="Paste a link or magnet link here (one per line to add several)" aria-label="Download link"></textarea>
     <button class="btn pri" id="dlAddBtn">Add</button><button class="btn" id="dlPaste" title="Paste the link you copied">Paste</button><button class="btn" id="dlTorBtn" title="Add a torrent from a .torrent file on this computer">Torrent file…</button><input type="file" id="dlTorFile" accept=".torrent,application/x-bittorrent" hidden></div>
-    <div class="hint2" style="margin-top:8px">${DL.speed > 0 ? `Downloading at <b>${bytes(DL.speed)}/s</b> in total. ` : ''}You can also drag a link onto this window.</div>${dlToolsRow()}</div>
+    <div class="hint2" style="margin-top:8px">${DL.speed > 0 ? `Downloading at <b>${bytes(DL.speed)}/s</b> in total.${dlSpark()} ` : ''}You can also drag a link onto this window.</div>${dlToolsRow()}</div>
   <div class="dlbar2"><div class="chips">${chip('all','All',items.length)}${chip('active','In progress',act+que+items.filter(v=>v.state==='paused').length)}${chip('done','Finished',fin)}${chip('bad','Needs attention',bad)}</div>
     <select class="sel" id="dlCat" style="min-width:0" aria-label="Type"><option value="">All types</option>${DL_CATS.map(c => `<option${c===dlCat?' selected':''}>${c}</option>`).join('')}</select>
     <input class="inp" id="dlSearch" placeholder="Search" value="${esc(dlQ)}" style="min-width:140px;width:180px" aria-label="Search downloads">${dlSortSelect()}
     <div class="spacer" style="flex:1"></div>
     <button class="btn" data-dl="pauseAll">Pause all</button><button class="btn" data-dl="resumeAll">Resume all</button><button class="btn" data-dl="clear"${fin?'':' disabled'}>Clear finished</button></div>
-  <div class="card" style="padding:6px 16px">${list}</div>
+  ${dlBulkBar()}<div class="card" style="padding:6px 16px">${list}</div>
   <details class="card" style="margin-top:16px"${dlBusy?' open':''} id="dlSet"><summary style="cursor:pointer;font-weight:650">Download settings</summary>
     <div style="margin-top:14px">
     <div class="dnsrow"><div><b>Save downloads in</b><div class="d">The main folder. New downloads go into a folder for their type (Videos, Programs, ...) when that is on.</div></div><div class="row" style="gap:8px"><input class="inp" id="dlDir" value="${esc(cfg.dir)}" style="min-width:260px" aria-label="Download folder"><button class="btn" id="dlDirSave">Save</button></div></div>
@@ -160,8 +176,9 @@ function dlShowProbe(link, p){
       ${(p.lineNames||[]).length > 1 ? `<div>Use these connections<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">${p.lineNames.map(n => `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="dlLn" value="${esc(n)}" checked> ${esc(labelOf(n))}</label>`).join('')}</div></div>` : ''}
     </div></details></div>
     ${p.duplicate ? '<div class="note warn" style="margin:0 0 10px"><b>This link is already in your list.</b> Adding it again makes a second copy.</div>' : ''}
-    ${fine ? `<div class="hint2" style="margin-bottom:6px">${hls ? '<b>Video stream</b> · about ' + (p.hls.seconds < 90 ? Math.round(p.hls.seconds) + ' sec' : Math.round(p.hls.seconds/60) + ' min') + (p.hls.quality ? ' · ' + esc(p.hls.quality) : '') + ' · ' : (info.size > 0 ? '<b>' + bytes(info.size) + '</b> · ' : '')}${hls ? '' : esc(info.type || 'unknown type')}</div><div class="hint2" style="${can?'color:var(--good)':''}">${esc(why + audioNote)}</div>` : ''}
+    ${fine ? `<div class="hint2" style="margin-bottom:6px">${hls ? '<b>Video stream</b> · about ' + (p.hls.seconds < 90 ? Math.round(p.hls.seconds) + ' sec' : Math.round(p.hls.seconds/60) + ' min') + (p.hls.quality ? ' · ' + esc(p.hls.quality) : '') + ' · ' : (info.size > 0 ? '<b>' + bytes(info.size) + '</b> · ' : '')}${hls ? '' : esc(info.type || 'unknown type')}</div>${hls && (p.hls.heights||[]).length > 1 ? `<label class="hint2" style="display:block;margin:6px 0">Picture quality <select class="sel" id="dlQual" style="min-width:0;margin-left:6px"><option value="0"${!p.height?' selected':''}>Best (${p.hls.heights[0]}p)</option>${p.hls.heights.slice(1).map(h => `<option value="${h}"${p.height===h?' selected':''}>${h}p</option>`).join('')}</select></label>` : ''}<div class="hint2" style="${can?'color:var(--good)':''}">${esc(why + audioNote)}</div>` : ''}
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn" id="dlCancel">Cancel</button><button class="btn" id="dlLater">Add, start later</button><button class="btn pri" id="dlGo">Download now</button></div></div>`);
+  if ($('#dlQual')) $('#dlQual').onchange = async e => { const h = +e.target.value; try { const q = await api('downloads', {action:'probe', url: link, height: h}); q.height = h; dlShowProbe(link, q); } catch(err){ toast(err.message, true); } };
   $('#dlGo').onclick = () => dlConfirm(link, p, true);
   $('#dlLater').onclick = () => dlConfirm(link, p, false);
   $('#dlCancel').onclick = dlClose;
@@ -173,6 +190,7 @@ async function dlConfirm(link, p, start){
   if (name && name !== (p.info||{}).name) body.name = name; else if (name) body.name = name;
   if (folder && folder !== p.dir) body.dir = folder;
   if (p.duplicate) body.force = true;
+  if (p.height) body.height = p.height;
   const tm = $('#dlTime') && $('#dlTime').value;
   if (tm) { const [h, mi] = tm.split(':').map(Number); const d = new Date(); d.setHours(h, mi, 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); body.startAt = Math.floor(d.getTime()/1000); }
   const hs = $('#dlHash') && $('#dlHash').value.trim(); if (hs) body.hash = hs;
@@ -181,8 +199,41 @@ async function dlConfirm(link, p, start){
   if (r) { dlClose(); const ta = $('#dlUrl'); if (ta) ta.value = ''; }
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#dlDlg')) dlClose(); if (e.key === 'Enter' && !e.shiftKey && e.target.id === 'dlUrl') { e.preventDefault(); dlSubmit(); } });
+document.addEventListener('change', async e => {
+  const t = e.target;
+  if (t.classList && t.classList.contains('dlck')) { t.checked ? dlSel.add(t.dataset.id) : dlSel.delete(t.dataset.id); return paintDL(); }
+  if (t.id === 'dlBulkQ' && t.value !== '\u0000') { const q = t.value, ids = [...dlSel]; for (const id of ids) await dlAct({action:'setQueue', id, queue: q}); toast(`${ids.length} moved`); }
+});
+async function dlBulk(a){
+  if (a === 'all') { dlVisIds.forEach(id => dlSel.add(id)); return paintDL(); }
+  if (a === 'none') { dlSel.clear(); return paintDL(); }
+  const ids = [...dlSel]; if (!ids.length) return;
+  if (a === 'remove') {
+    const loose = ids.filter(id => { const v = DL.items.find(x => x.id === id); return v && v.state !== 'done' && v.state !== 'error' && v.done > 0; }).length;
+    if (!confirm(`Remove ${ids.length} download${ids.length===1?'':'s'} from the list?` + (loose ? `\n\n${loose} of them are not finished: what was downloaded so far will be deleted. Finished files stay on your disk.` : '\n\nFinished files stay on your disk.'))) return;
+  }
+  let bad = 0;
+  for (const id of ids) { const r = await dlAct({action: a, id}); if (r === null) bad++; }
+  dlSel.clear(); paintDL();
+  toast(bad ? `${ids.length - bad} done, ${bad} could not be changed` : `${ids.length} ${a === 'remove' ? 'removed' : a === 'pause' ? 'paused' : 'resumed'}`, !!bad);
+}
+document.addEventListener('keydown', e => {
+  if (typeof page === 'undefined' || page !== 'downloads' || $('#dlDlg')) return;
+  const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); dlVisIds.forEach(id => dlSel.add(id)); paintDL(); }
+  else if (e.key === 'Delete' && dlSel.size) { e.preventDefault(); dlBulk('remove'); }
+  else if (e.key === 'Escape' && dlSel.size) { dlSel.clear(); paintDL(); }
+});
+document.addEventListener('paste', e => {
+  if (typeof page === 'undefined' || page !== 'downloads' || $('#dlDlg')) return;
+  const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea') return;
+  const txt = ((e.clipboardData && e.clipboardData.getData('text')) || '').trim();
+  if (!/^(https?:|ftp:|magnet:)/i.test(txt) || txt.length > 20000) return;
+  e.preventDefault(); const ta = $('#dlUrl'); if (ta) { ta.value = txt; ta.focus(); toast('Link pasted: press Add'); }
+});
 document.addEventListener('click', async e => {
   const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.bulk) return dlBulk(t.dataset.bulk);
   if (t.id === 'dlAddBtn') return dlSubmit();
   if (t.id === 'dlTorBtn') { const f = $('#dlTorFile'); if (f) f.click(); return; }
   if (t.id === 'dlPaste') { try { const s = await navigator.clipboard.readText(); if (s) $('#dlUrl').value = s.trim(); } catch(err){ toast('Press Ctrl+V in the box instead', true); } return; }
@@ -209,8 +260,28 @@ async function dlAddTorrentFile(f){
   if (!f) return;
   if (f.size > 16e6) return toast('That file is too big to be a torrent', true);
   const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 32768) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 32768));
-  const r = await dlAct({action:'add', torrent: btoa(bin)}, 'Torrent added');
-  return r;
+  const torrent = btoa(bin);
+  let p; try { p = await api('downloads', {action:'torrentInfo', torrent}); } catch(e){ return toast(e.message, true); }
+  const fl = p.files || [];
+  dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Add torrent" style="max-width:640px;max-height:92vh;overflow:auto"><h3 style="margin:0;word-break:break-all">${esc(p.name)}</h3>
+    <div class="hint2" style="margin:4px 0 10px">${bytes(p.size)} · ${fl.length} file${fl.length===1?'':'s'}${p.private ? ' · private torrent (only its own tracker is used)' : ''}</div>
+    ${p.duplicate ? '<div class="note warn" style="margin:0 0 10px"><b>This torrent is already in your list.</b></div>' : ''}
+    ${fl.length > 1 ? `<div class="row" style="gap:10px;margin-bottom:6px"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="tpAll" checked> All files</label><span class="hint2" id="tpSum"></span></div>` : ''}
+    <div class="scrollbox" style="max-height:260px;overflow:auto;font-size:13px">${fl.map((x,i) => `<label style="display:flex;gap:8px;align-items:center;padding:3px 0"><input type="checkbox" class="tpSel" data-i="${i}" checked> <span style="flex:1;word-break:break-all">${esc(x.name)}</span><span class="hint2">${bytes(x.size)}</span></label>`).join('')}</div>
+    <label class="hint2" style="display:block;margin-top:10px">Save in<input class="inp" id="tpDir" value="${esc(p.dir)}" style="width:100%;margin-top:4px"></label>
+    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn" id="dlCancel">Cancel</button><button class="btn" id="tpLater">Add, start later</button><button class="btn pri" id="tpGo">Download now</button></div></div>`);
+  const sum = () => { const on = $$('.tpSel').filter(b => b.checked); const sz = on.reduce((a,b) => a + fl[+b.dataset.i].size, 0); if ($('#tpSum')) $('#tpSum').textContent = `${on.length} chosen · ${bytes(sz)}`; if ($('#tpAll')) $('#tpAll').checked = on.length === fl.length; };
+  sum();
+  $$('.tpSel').forEach(b => b.onchange = sum);
+  if ($('#tpAll')) $('#tpAll').onchange = e => { $$('.tpSel').forEach(b => b.checked = e.target.checked); sum(); };
+  const go = async start => {
+    const sel = $$('.tpSel').map(b => b.checked); if (!sel.some(Boolean)) return toast('Choose at least one file', true);
+    const body = {action:'add', torrent, start, force: !!p.duplicate};
+    if (!sel.every(Boolean)) body.select = sel;
+    const dir = $('#tpDir').value.trim(); if (dir && dir !== p.dir) body.dir = dir;
+    const r = await dlAct(body, start ? 'Torrent added' : 'Added'); if (r) dlClose();
+  };
+  $('#tpGo').onclick = () => go(true); $('#tpLater').onclick = () => go(false); $('#dlCancel').onclick = dlClose;
 }
 document.addEventListener('change', e => {
   if (!DL) return;
@@ -220,6 +291,7 @@ document.addEventListener('change', e => {
   if (t.dataset && t.dataset.cfg) {
     const k = t.dataset.cfg, c = {...DL.config};
     if (k === 'limitAll') c.limitAll = +t.value * 1048576;
+    else if (k === 'uploadLimit') c.uploadLimit = +t.value * 1048576;
     else if (k.startsWith('line:')) { c.limitLines = {...(c.limitLines||{})}; const n = k.slice(5); if (+t.value) c.limitLines[n] = +t.value * 1048576; else delete c.limitLines[n]; }
     else if (k === 'afterAll') { if (t.value === 'shutdown' && !confirm('Shut the PC down when all downloads are finished? You get one minute to cancel.')) { paintDL(); return; } c.afterAll = t.value; }
     else c[k] = t.value;

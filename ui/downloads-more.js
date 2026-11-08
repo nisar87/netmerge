@@ -1,7 +1,7 @@
 // Download manager: the extra dialogs (add with options, page link grabber, properties, queues, folders, import/export).
 // Loaded together with downloads.js, only when the manager is on.
 
-const DL_TYPES = {'All files':[], 'Videos':['mp4','mkv','avi','mov','webm','m4v','wmv','flv','ts'], 'Music':['mp3','flac','wav','aac','ogg','m4a','opus'], 'Archives':['zip','rar','7z','tar','gz','tgz','bz2','xz'], 'Programs':['exe','msi','dmg','iso','apk','deb','rpm'], 'Documents':['pdf','doc','docx','xls','xlsx','ppt','pptx','txt','epub','csv'], 'Images':['jpg','jpeg','png','gif','webp','bmp','svg','tif']};
+const DL_TYPES = {'All files':[], 'Videos':['mp4','mkv','avi','mov','webm','m4v','wmv','flv','ts'], 'Music':['mp3','flac','wav','aac','ogg','m4a','opus'], 'Archives':['zip','rar','7z','tar','gz','tgz','bz2','xz'], 'Programs':['exe','msi','dmg','iso','apk','deb','rpm'], 'Documents':['pdf','doc','docx','xls','xlsx','ppt','pptx','txt','epub','csv'], 'Images':['jpg','jpeg','png','gif','webp','bmp','svg','tif'], 'Torrents':['torrent','magnet']};
 const DL_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 let dlSort = 'default', dlQf = '';
 const dlQueueName = id => { const q = ((DL && DL.config.queues) || []).find(x => x.id === id); return q ? q.name : 'Main queue'; };
@@ -15,6 +15,10 @@ function dlMoreSettings(cfg){
     <div class="dnsrow"><div><b>Queues</b><div class="d">Groups of downloads with their own hours and days, for example “Night” (23:00 to 06:00) or “Weekend”. ${(cfg.queues||[]).length} queue${(cfg.queues||[]).length===1?'':'s'}.</div></div><button class="btn" data-dm="queues">Manage queues</button></div>
     <div class="dnsrow"><div><b>Tell me when a download finishes</b><div class="d">A notification from NetMerge.</div></div><button class="tog${cfg.noNotify?'':' on'}" data-dm="notifyTog" role="switch" aria-checked="${!cfg.noNotify}" aria-label="Notification when finished"></button></div>
     <div class="dnsrow"><div><b>Run a program after each download <em class="rec" style="font-style:normal">Optional</em></b><div class="d">For example a virus scanner. Write the program and use <code>%f</code> for the file: <code>"C:\\Tools\\scan.exe" "%f"</code>. Leave empty for nothing.</div></div><div class="row" style="gap:8px"><input class="inp" id="dlAfterCmd" value="${esc(cfg.afterCmd||'')}" style="min-width:240px" aria-label="Program to run after a download" spellcheck="false"><button class="btn" data-dm="afterSave">Save</button></div></div>
+    <div class="dnsrow"><div><b>Torrents and magnet links</b><div class="d">Turn off to refuse magnet links and .torrent files.</div></div><button class="tog${cfg.noTorrents?'':' on'}" data-dm="torTog" role="switch" aria-checked="${!cfg.noTorrents}" aria-label="Allow torrents"></button></div>
+    ${cfg.noTorrents ? '' : `<div class="dnsrow"><div><b>Share while downloading</b><div class="d">Torrents work by taking turns: while a file comes in, the pieces you already have go out to others. Never on the mobile line. Turn off to only download.</div></div><button class="tog${cfg.noUpload?'':' on'}" data-dm="upTog" role="switch" aria-checked="${!cfg.noUpload}" aria-label="Share while downloading"></button></div>
+    ${cfg.noUpload ? '' : `<div class="dnsrow"><div><b>Upload speed limit</b><div class="d">For torrents only.</div></div>${limSel('uploadLimit', cfg.uploadLimit||0)}</div>`}`}
+    <div class="dnsrow"><div><b>ffmpeg (joins picture and sound of web videos)</b><div class="d">${DL.ffmpeg ? 'Found. Videos with a separate sound track are joined into one file.' : 'Not found. Videos with a separate sound track are saved as two files. Put ffmpeg next to NetMerge (or in its tools folder) to get one file.'}</div></div><span class="hint2">${DL.ffmpeg ? '✓ ready' : 'not installed'}</span></div>
     <div class="dnsrow"><div><b>Your list</b><div class="d">Save the list of downloads to a file, or load one (from this app, or a text file with one link per line).</div></div><div class="row" style="gap:8px"><button class="btn" data-dm="export">Save list</button><button class="btn" data-dm="import">Load list</button></div></div>`;
 }
 
@@ -107,8 +111,10 @@ function dlGrab(){
 }
 
 /* ----- properties of one download ----- */
-function dlProps(id){
-  const v = DL.items.find(x => x.id === id); if (!v) return;
+async function dlProps(id){
+  const v0 = DL.items.find(x => x.id === id); if (!v0) return;
+  let v = v0;
+  if (v0.kind === 'torrent' && v0.nFiles) { const r = await dlAct({action:'files', id}); if (r && r.files) v = {...v0, files: r.files, select: r.select, trackers: r.trackers, priv: r.private, pieceLen: r.pieceLen}; }
   const cfg = DL.config, edit = v.state !== 'done';
   const when = t => t ? new Date(t*1000).toLocaleString() : '-';
   const sh = dlLineShare(v);
@@ -122,6 +128,7 @@ function dlProps(id){
       <span class="hint2">Added</span><span>${when(v.added)}</span>
       ${v.finished ? `<span class="hint2">Finished</span><span>${when(v.finished)}</span>` : ''}
       ${sh.sum > 0 ? `<span class="hint2">Carried by</span><span>${Object.entries(sh.tot).filter(([,b]) => b>0).map(([k,b]) => `${esc(labelOf(k))} ${Math.round(b/sh.sum*100)}%`).join(' · ')}</span>` : ''}
+      ${v.kind === 'torrent' ? `<span class="hint2">Uploaded</span><span>${bytes(v.up||0)}${v.done > 0 ? ' · ratio ' + ((v.up||0)/v.done).toFixed(2) : ''}</span><span class="hint2">Peers</span><span>${v.peers||0} connected, ${v.seeds||0} seeding</span>${v.pieceLen ? `<span class="hint2">Pieces</span><span>${bytes(v.pieceLen)} each${v.priv ? ' · private torrent' : ''}</span>` : ''}${(v.trackers||[]).length ? `<span class="hint2">Trackers</span><span style="word-break:break-all">${v.trackers.slice(0,6).map(esc).join('<br>')}${v.trackers.length > 6 ? '<br>and ' + (v.trackers.length - 6) + ' more' : ''}</span>` : ''}` : ''}
       ${v.verify ? `<span class="hint2">Checksum</span><span>${v.verify === 'ok' ? '✓ matches' : v.verify === 'bad' ? '✗ does NOT match' : 'checking…'}</span>` : ''}
     </div>
     ${v.kind === 'torrent' && (v.files||[]).length ? `<h4 style="margin:10px 0 6px">Files in this torrent</h4><div class="scrollbox" style="max-height:220px;overflow:auto;font-size:13px">${v.files.map((f,i) => `<label style="display:flex;gap:8px;align-items:center;padding:3px 0"><input type="checkbox" class="tfSel" data-i="${i}"${!v.select || v.select[i] ? ' checked' : ''}${v.state === 'done' ? ' disabled' : ''}> <span style="flex:1;word-break:break-all">${esc(f.name)}</span><span class="hint2">${bytes(f.size)}</span></label>`).join('')}</div>${v.state === 'done' ? '' : '<div class="row" style="gap:8px;margin-top:6px"><button class="btn" id="tfSave">Download only the ticked files</button></div>'}` : ''}
@@ -240,6 +247,8 @@ document.addEventListener('click', async e => {
   if (a === 'props') return dlProps(t.dataset.id);
   if (a === 'export') return dlExport();
   if (a === 'import') return dlImport();
+  if (a === 'torTog') return void dlAct({action:'config', config: {...DL.config, noTorrents: !DL.config.noTorrents}});
+  if (a === 'upTog') return void dlAct({action:'config', config: {...DL.config, noUpload: !DL.config.noUpload}});
   if (a === 'notifyTog') return void dlAct({action:'config', config: {...DL.config, noNotify: !DL.config.noNotify}});
   if (a === 'afterSave') {
     const v = $('#dlAfterCmd').value.trim();

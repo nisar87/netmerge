@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -293,7 +294,75 @@ func hlsParse(body, base string) (*hlsMaster, *hlsMedia, error) {
 	return nil, md, nil
 }
 
-func hlsBest(m *hlsMaster) hlsVariant {
+// dlHeightKey carries the wanted picture height (a cap; 0 = the best there is) down to the playlist readers.
+type dlHeightKey struct{}
+
+func dlWantHeight(ctx context.Context) int {
+	h, _ := ctx.Value(dlHeightKey{}).(int)
+	return h
+}
+
+// hlsHeight reads the height out of "1280x720".
+func hlsHeight(res string) int {
+	if i := strings.IndexAny(res, "xX"); i > 0 {
+		h, _ := strconv.Atoi(strings.TrimSpace(res[i+1:]))
+		return h
+	}
+	return 0
+}
+
+// dlPickHeight chooses among heights (any order): the largest not above the cap; if all are above it, the smallest.
+// It returns the index. Zero cap means the largest.
+func dlPickHeight(heights []int, bw []int64, cap int) int {
+	best := -1
+	for i, h := range heights {
+		if cap > 0 && h > cap && h != 0 {
+			continue
+		}
+		if best < 0 || h > heights[best] || (h == heights[best] && bw[i] > bw[best]) {
+			best = i
+		}
+	}
+	if best >= 0 {
+		return best
+	}
+	best = 0
+	for i, h := range heights {
+		if h < heights[best] {
+			best = i
+		}
+	}
+	return best
+}
+
+func hlsHeights(m *hlsMaster) []int {
+	seen := map[int]bool{}
+	var out []int
+	for _, v := range m.variants {
+		if h := hlsHeight(v.res); h > 0 && !seen[h] {
+			seen[h] = true
+			out = append(out, h)
+		}
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(out)))
+	return out
+}
+
+func hlsBest(m *hlsMaster, cap int) hlsVariant {
+	hs, bw := make([]int, len(m.variants)), make([]int64, len(m.variants))
+	for i, v := range m.variants {
+		hs[i], bw[i] = hlsHeight(v.res), v.bandwidth
+	}
+	if cap > 0 {
+		any := false
+		for _, h := range hs {
+			any = any || h > 0
+		}
+		if any {
+			return m.variants[dlPickHeight(hs, bw, cap)]
+		}
+		// no sizes given: use the bandwidth order instead (the cap is a height, so nothing to compare): best
+	}
 	best := m.variants[0]
 	for _, v := range m.variants[1:] {
 		if v.bandwidth > best.bandwidth {
@@ -308,8 +377,9 @@ type hlsInfo struct {
 	Segments int     `json:"segments"`
 	Seconds  float64 `json:"seconds"`
 	Quality  string  `json:"quality"`
-	Kind     string  `json:"kind"`  // "ts" | "mp4"
-	Audio    bool    `json:"audio"` // the sound is a second track that is joined afterwards
+	Kind     string  `json:"kind"`              // "ts" | "mp4"
+	Audio    bool    `json:"audio"`             // the sound is a second track that is joined afterwards
+	Heights  []int   `json:"heights,omitempty"` // picture heights on offer, largest first
 	media    *hlsMedia
 	audioMed *hlsMedia
 	mediaURL string
@@ -369,7 +439,8 @@ func dlHLSInspect(ctx context.Context, c *http.Client, link string, hdr map[stri
 	}
 	out := &hlsInfo{mediaURL: link}
 	if m != nil {
-		v := hlsBest(m)
+		v := hlsBest(m, dlWantHeight(ctx))
+		out.Heights = hlsHeights(m)
 		audioURL := ""
 		if v.audio != "" {
 			audioURL = m.audioURI[v.audio]
@@ -482,7 +553,7 @@ func (t *dlTask) runHLS() (bool, error) {
 		t.mu.Lock()
 		t.probeClients = append(t.probeClients, pc)
 		t.mu.Unlock()
-		info, err = dlHLSInspect(pctx, pc, t.info.FinalURL, t.hdr)
+		info, err = dlHLSInspect(context.WithValue(pctx, dlHeightKey{}, t.spec.MaxHeight), pc, t.info.FinalURL, t.hdr)
 		c()
 		if err == nil || t.ctx.Err() != nil {
 			break
@@ -513,7 +584,7 @@ func (t *dlTask) startStream(info *hlsInfo, playlistExt string) error {
 	if name == "" || name == "download" {
 		name = "video"
 	}
-	t.info.Name = name + "." + map[string]string{"ts": "ts", "mp4": "mp4"}[info.Kind]
+	t.info.Name = name + "." + map[string]string{"ts": "ts", "mp4": "mp4", "m4a": "m4a"}[info.Kind]
 	t.info.Size, t.info.Ranges = -1, false
 	if t.spec.Path == "" {
 		if t.spec.Pick == nil {

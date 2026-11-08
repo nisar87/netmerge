@@ -480,6 +480,21 @@ func dlGrabLinks(base string, body []byte, types []string) []dlGrabbed {
 			continue
 		}
 		raw = strings.ReplaceAll(raw, "&amp;", "&")
+		if strings.HasPrefix(strings.ToLower(raw), "magnet:?") {
+			if len(want) > 0 && !want["magnet"] {
+				continue
+			}
+			if seen[raw] || len(raw) > 4000 {
+				continue
+			}
+			seen[raw] = true
+			name := "magnet link"
+			if mu, err := url.Parse(raw); err == nil && mu.Query().Get("dn") != "" {
+				name = mu.Query().Get("dn")
+			}
+			out = append(out, dlGrabbed{URL: raw, Name: name, Ext: "magnet"})
+			continue
+		}
 		u, err := bu.Parse(raw)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 			continue
@@ -491,7 +506,7 @@ func dlGrabLinks(base string, body []byte, types []string) []dlGrabbed {
 			if !want[ext] {
 				continue
 			}
-		} else if dlNotFiles[ext] || len(ext) > 6 {
+		} else if dlNotFiles[ext] || (len(ext) > 6 && ext != "torrent") {
 			continue
 		}
 		l := u.String()

@@ -358,7 +358,7 @@ func freeSpace(dir string) (int64, error) {
 // and Office protected view treat the file the way they treat any other download. Ignored where it is not supported.
 func markFromInternet(path, link string) {
 	ref := ""
-	if len(link) < 2000 && !strings.ContainsAny(link, "\r\n") {
+	if link != "" && len(link) < 2000 && !strings.ContainsAny(link, "\r\n") {
 		if i := strings.IndexByte(link, '?'); i >= 0 {
 			link = link[:i]
 		}

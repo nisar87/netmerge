@@ -422,7 +422,7 @@ func (p *btPeer) handle(m btMsg) bool {
 	case 2:
 		p.remoteInt = true
 		t.mu.Lock()
-		ok := t.upN < 6 && p.ln.Kind != "mobile" && p.weChoke
+		ok := !t.spec.NoUpload && t.upN < 6 && p.ln.Kind != "mobile" && p.weChoke
 		if ok {
 			p.weChoke = false
 			t.upN++
@@ -700,7 +700,7 @@ func (p *btPeer) onRequest(d []byte) {
 	}
 	idx, off, ln := int(binary.BigEndian.Uint32(d)), int(binary.BigEndian.Uint32(d[4:])), int(binary.BigEndian.Uint32(d[8:]))
 	t.mu.Lock()
-	ok := t.ready && idx >= 0 && idx < len(t.have) && t.have[idx] && ln > 0 && ln <= 32<<10 && off >= 0 && int64(off+ln) <= t.meta.pieceSize(idx)
+	ok := t.ready && idx >= 0 && idx < len(t.have) && t.have[idx] && !t.partial[idx] && ln > 0 && ln <= 32<<10 && off >= 0 && int64(off+ln) <= t.meta.pieceSize(idx)
 	st, m := t.store, t.meta
 	t.mu.Unlock()
 	if !ok {
@@ -708,6 +708,9 @@ func (p *btPeer) onRequest(d []byte) {
 	}
 	buf := make([]byte, ln)
 	if st.readAt(int64(idx)*m.PieceLen+int64(off), buf) != nil {
+		return
+	}
+	if err := t.upB.wait(t.ctx, ln); err != nil {
 		return
 	}
 	if p.send(btFrame(7, be32(idx), be32(off), buf)) {

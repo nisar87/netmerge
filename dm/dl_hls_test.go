@@ -490,7 +490,7 @@ func TestHLSParsing(t *testing.T) {
 		t.Fatal("sample-aes not flagged")
 	}
 	m, _, err := hlsParse("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nlo.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=9000,RESOLUTION=1x1\nhi.m3u8\n", "https://x/m.m3u8")
-	if err != nil || hlsBest(m).uri != "https://x/hi.m3u8" {
+	if err != nil || hlsBest(m, 0).uri != "https://x/hi.m3u8" {
 		t.Fatalf("%v %v", m, err)
 	}
 	if _, err := hlsDecrypt(make([]byte, 15), make([]byte, 16), nil, 0); err == nil {
@@ -603,6 +603,58 @@ func TestHLSRealFFmpegStreams(t *testing.T) {
 		}
 		if o, e := exec.Command(ff, "-v", "error", "-i", tk.FinalPath(), "-f", "null", "-").CombinedOutput(); e != nil || len(strings.TrimSpace(string(o))) > 0 {
 			t.Fatalf("%s: the video does not decode cleanly: %s", name, o)
+		}
+	}
+}
+
+func TestStreamQualityCap(t *testing.T) {
+	m := &hlsMaster{variants: []hlsVariant{
+		{uri: "a", bandwidth: 800000, res: "640x360"}, {uri: "b", bandwidth: 2500000, res: "1280x720"}, {uri: "c", bandwidth: 6000000, res: "1920x1080"}}}
+	for cap, want := range map[int]string{0: "c", 1080: "c", 720: "b", 500: "a", 100: "a"} {
+		if got := hlsBest(m, cap).uri; got != want {
+			t.Errorf("cap %d: got %s want %s", cap, got, want)
+		}
+	}
+	if h := hlsHeights(m); len(h) != 3 || h[0] != 1080 || h[2] != 360 {
+		t.Fatalf("%v", h)
+	}
+	// no sizes in the playlist: the cap changes nothing
+	n := &hlsMaster{variants: []hlsVariant{{uri: "x", bandwidth: 1}, {uri: "y", bandwidth: 9}}}
+	if hlsBest(n, 480).uri != "y" {
+		t.Fatal("no sizes")
+	}
+}
+
+func TestStreamQualityCapReachesThePlaylists(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/m.m3u8", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=640x360\nlo.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720\nhi.m3u8\n")
+	})
+	for _, n := range []string{"lo", "hi"} {
+		n := n
+		mux.HandleFunc("/"+n+".m3u8", func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n%s0.ts\n#EXT-X-ENDLIST\n", n)
+		})
+	}
+	mux.HandleFunc("/d.mpd", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<MPD type="static" mediaPresentationDuration="PT4S"><Period><AdaptationSet contentType="video">
+<Representation id="s" bandwidth="500000" height="360" width="640"><BaseURL>s.mp4</BaseURL><SegmentBase/></Representation>
+<Representation id="b" bandwidth="4000000" height="1080" width="1920"><BaseURL>b.mp4</BaseURL><SegmentBase/></Representation>
+</AdaptationSet></Period></MPD>`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	ctx := func(h int) context.Context { return context.WithValue(context.Background(), dlHeightKey{}, h) }
+	for h, want := range map[int]string{0: "/hi0.ts", 360: "/lo0.ts"} {
+		in, err := dlHLSInspect(ctx(h), http.DefaultClient, srv.URL+"/m.m3u8", nil)
+		if err != nil || !strings.HasSuffix(in.media.segs[0].uri, want) || len(in.Heights) != 2 {
+			t.Fatalf("hls %d: %v %+v", h, err, in)
+		}
+	}
+	for h, want := range map[int]string{0: "1080", 480: "360"} {
+		in, err := dlDASHInspect(ctx(h), http.DefaultClient, srv.URL+"/d.mpd", nil)
+		if err != nil || !strings.Contains(in.mediaURL+fmt.Sprint(in.media.segs[0].uri), map[string]string{"1080": "b.mp4", "360": "s.mp4"}[want]) || len(in.Heights) != 2 {
+			t.Fatalf("dash %d: %v %+v", h, err, in)
 		}
 	}
 }

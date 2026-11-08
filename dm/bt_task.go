@@ -43,7 +43,9 @@ type btSpec struct {
 	DHT        []string // replaces the built-in entry points (tests)
 	Port       int
 	Selected   []bool // files to download (nil = all)
-	NoPrivate  bool   // added by a web page: peers and trackers inside the local network are not contacted
+	NoUpload   bool
+	UploadRate float64 // bytes/s, 0 = no limit
+	NoPrivate  bool    // added by a web page: peers and trackers inside the local network are not contacted
 }
 
 type btKey struct{ pc, off int }
@@ -80,6 +82,7 @@ type btTask struct {
 	spec   btSpec
 	env    dlEnv
 	bucket dlBucket
+	upB    dlBucket // upload limit
 	pid    [20]byte
 	ih     [20]byte
 	ctx    context.Context
@@ -91,6 +94,7 @@ type btTask struct {
 	ready    bool
 	have     []bool
 	want     []bool // pieces that belong to a selected file
+	partial  []bool // pieces that also cover a file that was not chosen (those bytes are not kept, so such a piece is never uploaded)
 	wantN    int
 	haveN    int
 	avail    []int
@@ -133,6 +137,7 @@ func newBtTask(spec btSpec, env dlEnv) *btTask {
 	t := &btTask{spec: spec, env: env, active: map[int]*btPiece{}, peers: map[*btPeer]bool{}, known: map[string]*btKnown{},
 		banned: map[string]bool{}, runs: map[string]*btLineRun{}, metaCh: make(chan struct{}), readyCh: make(chan struct{}),
 		doneCh: make(chan struct{}), failCh: make(chan struct{})}
+	t.upB.setRate(spec.UploadRate)
 	copy(t.pid[:], "-NM3900-")
 	rand.Read(t.pid[8:])
 	if t.spec.Port == 0 {
@@ -282,6 +287,19 @@ func (t *btTask) setMeta(m *btMeta) {
 			t.wantN++
 		}
 	}
+	t.partial = make([]bool, n)
+	if t.spec.Selected != nil && len(t.spec.Selected) == len(m.Files) {
+		for fi, f := range m.Files {
+			if t.spec.Selected[fi] || f.Length == 0 {
+				continue
+			}
+			a := int(f.off / m.PieceLen)
+			b := int((f.off + f.Length - 1) / m.PieceLen)
+			for p := a; p <= b && p < n; p++ {
+				t.partial[p] = true
+			}
+		}
+	}
 	t.ih = m.InfoHash
 	close(t.metaCh)
 	t.mu.Unlock()
@@ -347,6 +365,9 @@ func (t *btTask) Run(ctx context.Context) error {
 	defer func() {
 		cancel()
 		t.wg.Wait()
+		if !t.completeNow() {
+			go t.announceOnce("stopped") // tell the trackers we left (best effort)
+		}
 		t.mu.Lock()
 		st, root, m, have := t.store, t.root, t.meta, append([]bool(nil), t.have...)
 		t.mu.Unlock()
@@ -426,6 +447,7 @@ func (t *btTask) finish() error {
 	t.complete = true
 	t.finalPath = root
 	t.mu.Unlock()
+	t.markFiles(root)
 	go t.announceOnce("completed") // best effort; the download is finished either way
 	return nil
 }
@@ -453,6 +475,12 @@ func (t *btTask) initStorage(ctx context.Context) error {
 		t.spec.OnInfo(m, root)
 	}
 	st := &btStore{meta: m, root: root}
+	if t.spec.Selected != nil && len(t.spec.Selected) == len(m.Files) {
+		st.skip = make([]bool, len(m.Files))
+		for i, s := range t.spec.Selected {
+			st.skip[i] = !s
+		}
+	}
 	existed := false
 	for i := range m.Files {
 		if fi, err := os.Stat(st.pathOf(i)); err == nil && fi.Size() > 0 {
@@ -463,6 +491,10 @@ func (t *btTask) initStorage(ctx context.Context) error {
 		return err
 	}
 	have := btLoadState(root, m)
+	if have != nil && !t.sampleOK(st, have) {
+		have = nil
+		existed = true
+	}
 	if have == nil && existed {
 		t.setNote("Checking the files that are already there")
 		have = make([]bool, m.pieces())
@@ -789,6 +821,7 @@ func (t *btTask) Progress() dlProgress {
 	}
 	m := t.meta
 	pr.Total = m.Total
+	pr.Up = atomic.LoadInt64(&t.up)
 	var done int64
 	for i, h := range t.have {
 		if h {
@@ -911,4 +944,49 @@ func (t *btTask) maxPeers(lines int) int {
 		return t.spec.MaxPeers
 	}
 	return min(150, 40*max(1, lines))
+}
+
+// sampleOK checks a few of the pieces the saved list says we have. A file that was changed, replaced or deleted while
+// NetMerge was closed makes the saved list wrong; then everything is checked again.
+func (t *btTask) sampleOK(st *btStore, have []bool) bool {
+	var idx []int
+	for i, h := range have {
+		if h && !t.partial[i] {
+			idx = append(idx, i)
+		}
+	}
+	if len(idx) == 0 {
+		return true
+	}
+	pick := map[int]bool{idx[0]: true, idx[len(idx)-1]: true}
+	for len(pick) < min(8, len(idx)) {
+		pick[idx[mrand.Intn(len(idx))]] = true
+	}
+	buf := make([]byte, st.meta.PieceLen)
+	for i := range pick {
+		if !st.check(i, buf) {
+			return false
+		}
+	}
+	return true
+}
+
+// markFiles puts the "downloaded from the internet" mark on the files (Windows asks before running them).
+func (t *btTask) markFiles(root string) {
+	t.mu.Lock()
+	m := t.meta
+	st := t.store
+	t.mu.Unlock()
+	if m == nil || st == nil {
+		return
+	}
+	for i := range m.Files {
+		if i >= 2000 {
+			break
+		}
+		if st.skip != nil && st.skip[i] {
+			continue
+		}
+		hMark(st.pathOf(i), "")
+	}
 }

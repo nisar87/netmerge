@@ -90,10 +90,11 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
 const media = new Map(); // tab id -> list
 function headerOf(h, name) { const x = (h || []).find((y) => y.name.toLowerCase() === name); return x ? x.value : ''; }
 try {
-  api.webRequest.onResponseStarted.addListener((d) => {
+  api.webRequest.onResponseStarted.addListener(async (d) => {
     if (d.tabId < 0 || d.statusCode >= 300) return;
     const kind = NMCore.mediaKind(d.url, headerOf(d.responseHeaders, 'content-type'), parseInt(headerOf(d.responseHeaders, 'content-length') || '-1', 10));
     if (!kind) return;
+    try { const tab = await api.tabs.get(d.tabId); if (!tab || tab.incognito) return; } catch (e) { return; } // nothing is recorded for private windows
     const list = media.get(d.tabId) || [];
     if (list.some((m) => m.url === d.url)) return;
     list.push({ url: d.url, kind, size: parseInt(headerOf(d.responseHeaders, 'content-range').split('/')[1] || headerOf(d.responseHeaders, 'content-length') || '-1', 10), time: Date.now() });

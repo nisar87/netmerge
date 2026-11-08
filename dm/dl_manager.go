@@ -45,6 +45,9 @@ type dlConfig struct {
 	CatDirs       map[string]string  `json:"catDirs"`      // a folder for a type (Videos, Music ...), instead of Dir/Type
 	SiteRules     []dlSiteRule       `json:"siteRules"`    // a folder for a website
 	NoNotify      bool               `json:"noNotify"`     // no desktop notification when a download finishes
+	NoTorrents    bool               `json:"noTorrents"`   // refuse magnet links and .torrent files
+	NoUpload      bool               `json:"noUpload"`     // torrents: do not upload while downloading
+	UploadLimit   float64            `json:"uploadLimit"`  // torrents: upload speed limit in bytes/s (0 = none)
 	AfterCmd      string             `json:"afterCmd"`     // run after each finished download (%f = the file), e.g. a virus scanner
 }
 
@@ -76,7 +79,9 @@ type dlItem struct {
 	Queue    string            `json:"queue,omitempty"`   // "" = the main queue
 	Mirrors  []string          `json:"mirrors,omitempty"` // other addresses of the same file
 	Conns    int               `json:"conns,omitempty"`   // connections per line for this download (0 = automatic)
+	Height   int               `json:"height,omitempty"`  // streams: tallest picture wanted (0 = best)
 	Log      []dlLogLine       `json:"log,omitempty"`
+	TUp      int64             `json:"tup,omitempty"`    // torrents: bytes uploaded in earlier runs
 	Kind     string            `json:"kind,omitempty"`   // "" = a file, "torrent"
 	Files    []dlTFile         `json:"files,omitempty"`  // torrents: what is inside
 	Select   []bool            `json:"select,omitempty"` // torrents: which files to download (nil = all)
@@ -101,6 +106,8 @@ type dlView struct {
 	LineStat   []dlLineStat `json:"lineStats"`
 	Order      int          `json:"order"`
 	Map        []int        `json:"map,omitempty"` // progress of the parts of the file, for the segment bar
+	Up         int64        `json:"up,omitempty"`
+	NFiles     int          `json:"nFiles,omitempty"` // torrents: how many files (the list itself is fetched on demand)
 	Peers      int          `json:"peers,omitempty"`
 	Seeds      int          `json:"seeds,omitempty"`
 	SwarmSeeds int          `json:"swarmSeeds,omitempty"`
@@ -370,6 +377,9 @@ func dlFixConfig(c dlConfig) dlConfig {
 	}
 	c.CatDirs = cd
 	c.SiteRules = dlFixRules(c.SiteRules)
+	if c.UploadLimit < 0 || c.UploadLimit > 1e12 {
+		c.UploadLimit = 0
+	}
 	c.AfterCmd = strings.TrimSpace(c.AfterCmd)
 	if len(c.AfterCmd) > 400 {
 		c.AfterCmd = ""
@@ -452,9 +462,11 @@ type dlAdd struct {
 	Queue   string            `json:"queue"`
 	Mirrors []string          `json:"mirrors"`
 	Conns   int               `json:"conns"`
-	User    string            `json:"user"` // a site that asks for a user name and password (HTTP Basic)
+	Height  int               `json:"height"` // streams: tallest picture wanted
+	User    string            `json:"user"`   // a site that asks for a user name and password (HTTP Basic)
 	Pass    string            `json:"pass"`
 	Torrent string            `json:"torrent"` // the contents of a .torrent file (base64)
+	Select  []bool            `json:"select"`  // torrents: which files to download
 }
 
 var errDlDuplicate = errors.New("this link is already in your list")
@@ -563,6 +575,9 @@ func (m *dlManager) add(a dlAdd) (*dlItem, error) {
 		e.State = "paused"
 	}
 	e.Queue, e.Mirrors, e.Conns = a.Queue, mirrors, a.Conns
+	if a.Height > 0 && a.Height <= 8640 {
+		e.Height = a.Height
+	}
 	m.elog(e, "Added from %s", dlHostOf(link))
 	m.items = append(m.items, e)
 	m.dirty = true
@@ -635,7 +650,11 @@ func (m *dlManager) pickPath(e *dlEntry, info dlInfo) (string, error) {
 		return false
 	}
 	var p string
-	switch m.cfg.OnExists {
+	mode := m.cfg.OnExists
+	if e.Kind == "torrent" && mode == "overwrite" {
+		mode = "rename" // a torrent always gets its own folder: removing it later must never touch other files
+	}
+	switch mode {
 	case "overwrite": // only another download in the list keeps the name; a file on the disk is replaced at the end
 		p = dlUniquePath(dir, name, func(p string) bool {
 			for _, o := range m.items {
@@ -678,6 +697,7 @@ func (m *dlManager) startLocked(e *dlEntry) {
 		if e.Conns > 0 {
 			spec.MaxPerLine = e.Conns
 		}
+		spec.MaxHeight = e.Height
 		spec.Overwrite = m.cfg.OnExists == "overwrite"
 		m.elog(e, "Started")
 		spec.Pick = func(info dlInfo) (string, error) { return m.pickPath(e, info) }
@@ -728,6 +748,7 @@ func (m *dlManager) finishRun(e *dlEntry, t dlRunner, err error) {
 		e.Bytes[l.Name] += l.Bytes
 	}
 	m.dirty = true
+	e.TUp += pr.Up
 	close(e.doneCh)
 	switch {
 	case err == nil:
@@ -1178,6 +1199,9 @@ func (m *dlManager) remove(id string, deleteFiles bool) error {
 			}
 		} else if deleteFiles {
 			_ = os.Remove(e.Path)
+			for _, x := range []string{".aac", ".m4a"} {
+				_ = os.Remove(e.Path + ".audio" + x)
+			}
 		}
 	}
 	m.dirty = true
@@ -1245,10 +1269,12 @@ func (m *dlManager) views() []dlView {
 	for i, e := range m.items {
 		v := dlView{dlItem: e.dlItem, Order: i}
 		v.dlItem.Header = nil
+		v.NFiles, v.dlItem.Files = len(e.Files), nil
+		v.Up = e.TUp
 		if e.running && e.task != nil {
 			pr := e.prog
 			v.Done, v.Speed, v.LineStat = pr.Done, pr.Speed, pr.Lines
-			v.Peers, v.Seeds, v.SwarmSeeds = pr.Peers, pr.Seeds, pr.SwarmSeeds
+			v.Peers, v.Seeds, v.SwarmSeeds, v.Up = pr.Peers, pr.Seeds, pr.SwarmSeeds, e.TUp+pr.Up
 			if pr.Note != "" {
 				v.Note = pr.Note
 			}

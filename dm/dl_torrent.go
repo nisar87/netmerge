@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -128,6 +129,9 @@ func (m *dlManager) addTorrent(a dlAdd) (*dlItem, error) {
 	hash := btHashOfLink(link)
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.cfg.NoTorrents {
+		return nil, errors.New("Torrents are switched off in the download settings.")
+	}
 	if a.Queue != "" && m.cfg.queue(a.Queue) == nil {
 		return nil, errors.New("that queue does not exist")
 	}
@@ -164,6 +168,19 @@ func (m *dlManager) addTorrent(a dlAdd) (*dlItem, error) {
 		for _, f := range meta.Files {
 			e.Files = append(e.Files, dlTFile{Name: f.name(), Size: f.Length})
 		}
+		if len(a.Select) == len(e.Files) {
+			any, all := false, true
+			for _, s := range a.Select {
+				any, all = any || s, all && s
+			}
+			if !any {
+				m.seq--
+				return nil, errors.New("choose at least one file")
+			}
+			if !all {
+				e.Select = append([]bool(nil), a.Select...)
+			}
+		}
 	}
 	m.elog(e, "Torrent added")
 	m.items = append(m.items, e)
@@ -175,7 +192,7 @@ func (m *dlManager) addTorrent(a dlAdd) (*dlItem, error) {
 }
 
 func (m *dlManager) newTorrentTask(e *dlEntry) *btTask {
-	spec := btSpec{Header: e.Header, Lines: e.Lines, Selected: e.Select, NoPrivate: e.Web}
+	spec := btSpec{Header: e.Header, Lines: e.Lines, Selected: e.Select, NoPrivate: e.Web, NoUpload: m.cfg.NoUpload, UploadRate: m.cfg.UploadLimit}
 	hash := btHashOfLink(e.URL)
 	switch {
 	case hash != "" && btLoadCopy(hash) != nil:
@@ -205,12 +222,29 @@ func (m *dlManager) newTorrentTask(e *dlEntry) *btTask {
 	return newBtTask(spec, m)
 }
 
-// dropTorrentFiles is called (with the lock held) when a torrent is removed from the list.
+// dropTorrentFiles is called (with the lock held) when a torrent is removed from the list. It removes only the files
+// that belong to the torrent (never a whole folder), and then the folders that are left empty.
 func (m *dlManager) dropTorrentFiles(e *dlEntry, deleteFiles bool) {
 	if e.Path != "" {
 		_ = os.Remove(btStatePath(e.Path))
 		if e.State != "done" || deleteFiles {
-			_ = os.RemoveAll(e.Path)
+			if fi, err := os.Stat(e.Path); err == nil && fi.IsDir() {
+				var dirs []string
+				for _, f := range e.Files {
+					p := filepath.Join(e.Path, filepath.FromSlash(f.Name))
+					_ = os.Remove(p)
+					for d := filepath.Dir(p); len(d) > len(e.Path); d = filepath.Dir(d) {
+						dirs = append(dirs, d)
+					}
+				}
+				sort.Slice(dirs, func(i, j int) bool { return len(dirs[i]) > len(dirs[j]) })
+				for _, d := range dirs {
+					_ = os.Remove(d) // fails (and stays) when something else is inside
+				}
+				_ = os.Remove(e.Path)
+			} else if err == nil {
+				_ = os.Remove(e.Path)
+			}
 		}
 	}
 	hash := btHashOfLink(e.URL)
@@ -223,6 +257,23 @@ func (m *dlManager) dropTorrentFiles(e *dlEntry, deleteFiles bool) {
 		}
 	}
 	_ = os.Remove(btCopyPath(hash))
+}
+
+// torrentFiles lists what is inside a torrent and which files are chosen.
+func (m *dlManager) torrentFiles(id string) (map[string]any, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e := m.find(id)
+	if e == nil || e.Kind != "torrent" {
+		return nil, errors.New("torrent not found")
+	}
+	out := map[string]any{"files": e.Files, "select": e.Select}
+	if h := btHashOfLink(e.URL); h != "" {
+		if mt := btLoadCopy(h); mt != nil {
+			out["trackers"], out["private"], out["pieceLen"] = mt.Trackers, mt.Private, mt.PieceLen
+		}
+	}
+	return out, nil
 }
 
 // setSelect chooses which files of a torrent to download. A running torrent is restarted so it takes effect.
@@ -282,4 +333,34 @@ func (m *dlManager) setSelect(id string, sel []bool) error {
 		return m.resume(id)
 	}
 	return nil
+}
+
+// torrentPreview reads a .torrent file the page is about to add, so the person can choose files and a folder first.
+func (m *dlManager) torrentPreview(b64 string) (map[string]any, error) {
+	b, err := base64.StdEncoding.DecodeString(strings.TrimSpace(b64))
+	if err != nil || len(b) == 0 || len(b) > 16<<20 {
+		return nil, errors.New("that is not a usable .torrent file")
+	}
+	meta, err := btParseTorrent(b)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]dlTFile, 0, len(meta.Files))
+	for _, f := range meta.Files {
+		files = append(files, dlTFile{Name: f.name(), Size: f.Length})
+	}
+	cfg := m.config()
+	dir := cfg.Dir
+	if cfg.UseCategories {
+		dir = filepath.Join(dir, "Torrents")
+	}
+	m.mu.Lock()
+	dup := false
+	for _, o := range m.items {
+		if btHashOfLink(o.URL) == fmt.Sprintf("%x", meta.InfoHash) {
+			dup = true
+		}
+	}
+	m.mu.Unlock()
+	return map[string]any{"ok": true, "name": meta.Name, "size": meta.Total, "files": files, "private": meta.Private, "trackers": len(meta.Trackers), "dir": dir, "duplicate": dup}, nil
 }

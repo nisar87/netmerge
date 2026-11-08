@@ -405,3 +405,15 @@ func TestSegmentMapIsAJSONList(t *testing.T) {
 		t.Fatalf("%s", b)
 	}
 }
+
+func TestGrabFindsMagnetAndTorrentLinks(t *testing.T) {
+	page := `<a href="magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&amp;dn=Cool+Film">m</a>
+<a href="/files/a.torrent">t</a><a href="/x.zip">z</a><a href="magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&amp;dn=Cool+Film">dup</a>`
+	got := dlGrabLinks("http://site.test/", []byte(page), nil)
+	if len(got) != 3 || got[0].Ext != "magnet" || got[0].Name != "Cool Film" || got[1].Ext != "torrent" {
+		t.Fatalf("%+v", got)
+	}
+	if only := dlGrabLinks("http://site.test/", []byte(page), []string{"magnet"}); len(only) != 1 {
+		t.Fatalf("%+v", only)
+	}
+}

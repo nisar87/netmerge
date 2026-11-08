@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -165,6 +166,7 @@ func dlDASHInspect(ctx context.Context, c *http.Client, link string, hdr map[str
 		rep mpdRep
 	}
 	var video, audio *pick
+	heightSeen, heights := map[int]bool{}, []int(nil)
 	for _, set := range per.Sets {
 		kind := strings.ToLower(set.ContentType)
 		mt := strings.ToLower(set.MimeType)
@@ -179,7 +181,20 @@ func dlDASHInspect(ctx context.Context, c *http.Client, link string, hdr map[str
 			p := &pick{set, r}
 			switch k {
 			case "video":
-				if video == nil || r.Bandwidth > video.rep.Bandwidth {
+				if r.Height > 0 && !heightSeen[r.Height] {
+					heightSeen[r.Height] = true
+					heights = append(heights, r.Height)
+				}
+				want := dlWantHeight(ctx)
+				fits := func(q *pick) bool { return want == 0 || q.rep.Height == 0 || q.rep.Height <= want }
+				switch {
+				case video == nil:
+					video = p
+				case fits(p) && !fits(video):
+					video = p
+				case fits(p) == fits(video) && fits(p) && (p.rep.Height > video.rep.Height || (p.rep.Height == video.rep.Height && r.Bandwidth > video.rep.Bandwidth)):
+					video = p
+				case !fits(p) && !fits(video) && (p.rep.Height < video.rep.Height || (p.rep.Height == video.rep.Height && r.Bandwidth > video.rep.Bandwidth)):
 					video = p
 				}
 			case "audio":
@@ -297,7 +312,8 @@ func dlDASHInspect(ctx context.Context, c *http.Client, link string, hdr map[str
 		}
 		return md, nil
 	}
-	out := &hlsInfo{mediaURL: link, Kind: "mp4"}
+	sort.Sort(sort.Reverse(sort.IntSlice(heights)))
+	out := &hlsInfo{mediaURL: link, Kind: "mp4", Heights: heights}
 	first, second := video, audio
 	if video == nil {
 		first, second = audio, nil
@@ -307,6 +323,9 @@ func dlDASHInspect(ctx context.Context, c *http.Client, link string, hdr map[str
 		return nil, err
 	}
 	out.media = md
+	if video == nil {
+		out.Kind = "m4a"
+	}
 	if second != nil {
 		am, err := track(second)
 		if err != nil {
@@ -334,7 +353,7 @@ func (t *dlTask) runDASH() (bool, error) {
 		t.mu.Lock()
 		t.probeClients = append(t.probeClients, pc)
 		t.mu.Unlock()
-		info, err = dlDASHInspect(pctx, pc, t.info.FinalURL, t.hdr)
+		info, err = dlDASHInspect(context.WithValue(pctx, dlHeightKey{}, t.spec.MaxHeight), pc, t.info.FinalURL, t.hdr)
 		c()
 		if err == nil || t.ctx.Err() != nil {
 			break

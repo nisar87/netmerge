@@ -18,21 +18,25 @@ type btStore struct {
 	root  string // single file: the file itself; several files: the folder
 	mu    sync.Mutex
 	files []*os.File
+	skip  []bool // files that were not chosen: never created, their bytes are dropped
 }
 
 func btStatePath(root string) string { return root + ".nmbt" }
 
 func (s *btStore) pathOf(i int) string {
 	if !s.meta.Multi {
-		return s.root
+		return dlLongPath(s.root)
 	}
-	return filepath.Join(append([]string{s.root}, s.meta.Files[i].Path...)...)
+	return dlLongPath(filepath.Join(append([]string{s.root}, s.meta.Files[i].Path...)...))
 }
 
 // prepare creates the folders and (sparse) files, so a full disk shows up at the start and not at the end.
 func (s *btStore) prepare() error {
 	s.files = make([]*os.File, len(s.meta.Files))
 	for i, f := range s.meta.Files {
+		if s.skip != nil && s.skip[i] {
+			continue
+		}
 		p := s.pathOf(i)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			return fmt.Errorf("cannot create the folder %s: %v", filepath.Dir(p), err)
@@ -86,8 +90,10 @@ func (s *btStore) span(off int64, n int, fn func(f *os.File, fo int64, a, b int)
 		if take > n-pos {
 			take = n - pos
 		}
-		if err := fn(files[i], fo, pos, pos+take); err != nil {
-			return err
+		if files[i] != nil {
+			if err := fn(files[i], fo, pos, pos+take); err != nil {
+				return err
+			}
 		}
 		pos += take
 	}

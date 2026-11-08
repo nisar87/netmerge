@@ -25,10 +25,9 @@ type dlReq struct {
 	ExtMinMB int  `json:"extMinMB"`
 	ExtOff   bool `json:"extOff"`
 	// Text is an exported list to import; Types are the file types the link grabber should keep.
-	Text   string   `json:"text"`
-	Types  []string `json:"types"`
-	Count  int      `json:"conns"`
-	Select []bool   `json:"select"`
+	Text  string   `json:"text"`
+	Types []string `json:"types"`
+	Count int      `json:"conns"`
 }
 
 func registerDownloadRoutes(mux *http.ServeMux) {
@@ -70,13 +69,13 @@ func (m *dlManager) snapshot() map[string]any {
 	for _, l := range m.uiLines() {
 		lines = append(lines, map[string]any{"name": l.Name, "kind": l.Kind})
 	}
-	return map[string]any{"items": m.views(), "config": m.config(), "active": act, "speed": sp, "lines": lines, "knownSites": m.knownHosts(), "hold": m.holdText(), "powerAt": m.powerAtTime(), "ext": ext.view()}
+	return map[string]any{"items": m.views(), "config": m.config(), "active": act, "speed": sp, "lines": lines, "knownSites": m.knownHosts(), "ffmpeg": dlFindFFmpeg() != "", "hold": m.holdText(), "powerAt": m.powerAtTime(), "ext": ext.view()}
 }
 
 func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 	switch in.Action {
 	case "probe":
-		return m.probe(in.URL, in.Header)
+		return m.probe(in.URL, in.Header, in.Height)
 	case "add":
 		urls := in.URLs
 		if in.URL != "" {
@@ -138,6 +137,10 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 			return nil, errors.New("none of the links could be used")
 		}
 		return map[string]any{"added": added, "skipped": skipped, "items": m.views(), "config": m.config()}, nil
+	case "torrentInfo":
+		return m.torrentPreview(in.Torrent)
+	case "files":
+		return m.torrentFiles(in.ID)
 	case "select":
 		return nil, m.setSelect(in.ID, in.Select)
 	case "pause":
@@ -248,7 +251,7 @@ func (m *dlManager) openItem(id string, reveal bool) error {
 }
 
 // probe: what is behind this link? Used by the "add" dialog.
-func (m *dlManager) probe(link string, hdr map[string]string) (map[string]any, error) {
+func (m *dlManager) probe(link string, hdr map[string]string, height int) (map[string]any, error) {
 	link, err := dlCleanURL(link)
 	if err != nil {
 		return nil, err
@@ -300,7 +303,7 @@ func (m *dlManager) probe(link string, hdr map[string]string) (map[string]any, e
 		var herr error
 		for _, l := range lines {
 			pc := dlLineClient(l, private)
-			hls, herr = inspect(ctx, pc, info.FinalURL, h)
+			hls, herr = inspect(context.WithValue(ctx, dlHeightKey{}, height), pc, info.FinalURL, h)
 			pc.CloseIdleConnections()
 			if herr == nil {
 				break

@@ -48,6 +48,7 @@ type dlSpec struct {
 	MaxPerLine int
 	// Pick chooses the final path once the server has told us the file name (used when Path is empty).
 	Overwrite bool // replace a file that has the final name
+	MaxHeight int  // streams: the tallest picture wanted, in pixels (0 = the best there is)
 	NoPrivate bool // links that lead into the local network are refused even if typed (links sent by a web page)
 	Pick      func(dlInfo) (string, error)
 	// OnInfo reports what the server said (size, name, final path).
@@ -338,6 +339,7 @@ type dlProgress struct {
 	Peers      int          `json:"peers,omitempty"` // torrents: connected peers
 	Seeds      int          `json:"seeds,omitempty"`
 	SwarmSeeds int          `json:"swarmSeeds,omitempty"` // seeds the tracker knows of
+	Up         int64        `json:"up,omitempty"`         // torrents: bytes uploaded
 }
 
 type dlTask struct {

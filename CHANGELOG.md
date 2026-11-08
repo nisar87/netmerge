@@ -1,5 +1,26 @@
 # Changelog
 
+## 3.11.0
+
+A full audit of the download manager (see `docs/download-manager-audit.md`), and everything on its list is done.
+
+Fixes:
+- A torrent never reuses an existing folder when "replace" is the file-exists rule.
+- Files you did not choose in a torrent are never created (no empty files).
+- Resuming a torrent notices files that were changed or deleted in the meantime and re-checks them.
+- The torrent file list is no longer sent with every refresh, only when you open Properties.
+- Long file paths work on Windows. Torrent files get the "downloaded from the internet" mark.
+- Trackers are told when a torrent is paused or removed.
+- Audio-only streams are saved as .m4a; deleting a finished stream also deletes its separate sound file.
+- The browser extension does not list media from private windows.
+
+New:
+- Torrent settings: a switch for torrents, a switch for sharing while downloading, an upload speed limit. Uploaded amount and ratio on rows and in Properties (peers, trackers, piece size).
+- A dialog for .torrent files: choose files and folder before they start.
+- Quality choice for HLS and DASH streams in the add dialog.
+- The link grabber finds magnet and .torrent links.
+- Select several downloads: pause, resume, remove, move to a queue. Ctrl+A, Delete, Esc. Paste a link anywhere on the page to fill the add box. A speed graph. Settings show whether ffmpeg was found.
+
 ## 3.10.1
 
 Download manager fixes found while testing the pages in a browser:

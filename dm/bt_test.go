@@ -499,6 +499,9 @@ func TestBtOnlySelectedFiles(t *testing.T) {
 	if err := tk.Run(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.Stat(filepath.Join(root, "skip.bin")); err == nil {
+		t.Fatal("a file that was not chosen was created")
+	}
 	k1, _ := os.ReadFile(filepath.Join(root, "keep.bin"))
 	if !bytes.Equal(k1, tt.content[:MiB]) {
 		t.Fatal("keep.bin")
@@ -520,7 +523,7 @@ func TestBtManagerMagnetAndTorrentFile(t *testing.T) {
 	link := btMagnetLink(tt.meta.InfoHash, "Mgr", nil) + "&x.pe=" + sd.addr()
 	id := addOne(t, m, link)
 	v := waitState(t, m, id, "done", 40*time.Second)
-	if v.Kind != "torrent" || v.Category != "Torrents" || filepath.Base(v.Path) != "Mgr" || len(v.Files) != 2 || v.Size != 2*MiB+1000 {
+	if v.Kind != "torrent" || v.Category != "Torrents" || filepath.Base(v.Path) != "Mgr" || v.NFiles != 2 || v.Size != 2*MiB+1000 {
 		t.Fatalf("%+v", v)
 	}
 	checkContent(t, tt, v.Path)
@@ -751,4 +754,245 @@ func TestBtHostilePeerIsHarmless(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkContent(t, tt, root)
+}
+
+func TestBtNeverReusesAnExistingFolder(t *testing.T) {
+	tt := makeTorrent("Mine", []tFile{{"a.bin", 100000}, {"b/c.bin", 50000}}, 32<<10)
+	sd := newSeeder(t, tt)
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	m := newTestMgr(t, env)
+	m.cfg.OnExists = "overwrite"
+	m.cfg.UseCategories = false
+	// the person already has a folder with that name and a file in it
+	mine := filepath.Join(m.cfg.Dir, "Mine")
+	os.MkdirAll(mine, 0o755)
+	keep := filepath.Join(mine, "precious.txt")
+	os.WriteFile(keep, []byte("do not touch"), 0o644)
+	id := addOne(t, m, btMagnetLink(tt.meta.InfoHash, "Mine", nil)+"&x.pe="+sd.addr())
+	v := waitState(t, m, id, "done", 30*time.Second)
+	if v.Path == mine {
+		t.Fatalf("the torrent used the existing folder: %s", v.Path)
+	}
+	checkContent(t, tt, v.Path)
+	if _, err := m.handle(dlReq{Action: "remove", ID: id, DeleteFiles: true}); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(keep); err != nil || string(b) != "do not touch" {
+		t.Fatal("the person's own file was touched")
+	}
+	if _, err := os.Stat(v.Path); err == nil {
+		t.Fatal("the torrent's folder was not cleaned up")
+	}
+}
+
+func TestBtResumeNoticesChangedFiles(t *testing.T) {
+	tt := makeTorrent("chg.bin", []tFile{{"", 3 * MiB}}, 128<<10)
+	sd := newSeeder(t, tt)
+	sd.rate = 3 * MiB
+	meta, _ := btParseTorrent(tt.file)
+	root := filepath.Join(t.TempDir(), "chg.bin")
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	mk := func() *btTask {
+		tk := newBtTask(btSpec{Meta: meta, NoDHT: true, Pick: func(string) (string, error) { return root, nil }}, env)
+		tk.addPeers([]string{sd.addr()})
+		return tk
+	}
+	tk := mk()
+	ctx, cancel := ctxTimeout(30 * time.Second)
+	go func() {
+		for tk.Progress().Done < MiB {
+			time.Sleep(30 * time.Millisecond)
+		}
+		cancel()
+	}()
+	tk.Run(ctx)
+	// somebody damages the start and the end of the file while NetMerge is closed
+	f, _ := os.OpenFile(root, os.O_RDWR, 0)
+	f.WriteAt(bytes.Repeat([]byte{0xAA}, 4096), 0)
+	f.Close()
+	tk2 := mk()
+	ctx2, cancel2 := ctxTimeout(40 * time.Second)
+	defer cancel2()
+	if err := tk2.Run(ctx2); err != nil {
+		t.Fatal(err)
+	}
+	checkContent(t, tt, root)
+}
+
+func TestBtTellsTrackerWhenStopped(t *testing.T) {
+	tt := makeTorrent("stop.bin", []tFile{{"", 4 * MiB}}, 128<<10)
+	sd := newSeeder(t, tt)
+	sd.rate = 1 * MiB
+	events := make(chan string, 20)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		events <- r.URL.Query().Get("event")
+		w.Write(bencode(map[string]any{"interval": 60, "peers": compactPeers(sd.addr())}))
+	}))
+	defer srv.Close()
+	tt2 := makeTorrent("stop.bin", tt.files, 128<<10, srv.URL+"/a")
+	sd.tt = tt2
+	meta, _ := btParseTorrent(tt2.file)
+	root := filepath.Join(t.TempDir(), "stop.bin")
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	tk := newBtTask(btSpec{Meta: meta, NoDHT: true, Pick: func(string) (string, error) { return root, nil }}, env)
+	ctx, cancel := ctxTimeout(30 * time.Second)
+	go func() {
+		for tk.Progress().Done < 300000 {
+			time.Sleep(30 * time.Millisecond)
+		}
+		cancel()
+	}()
+	tk.Run(ctx)
+	deadline := time.After(8 * time.Second)
+	seen := map[string]bool{}
+	for !seen["stopped"] {
+		select {
+		case e := <-events:
+			seen[e] = true
+		case <-deadline:
+			t.Fatalf("events seen: %v", seen)
+		}
+	}
+	if !seen["started"] {
+		t.Fatal("no start event")
+	}
+}
+
+func TestBtTorrentsCanBeSwitchedOff(t *testing.T) {
+	m := newTestMgr(t, newSimEnv())
+	m.cfg.NoTorrents = true
+	for _, l := range []string{btMagnetLink([20]byte{1}, "x", nil), "http://example.com/a.torrent"} {
+		if _, err := m.handle(dlReq{Action: "add", dlAdd: dlAdd{URL: l}}); err == nil || !strings.Contains(err.Error(), "switched off") {
+			t.Fatalf("%s: %v", l, err)
+		}
+	}
+	// ordinary links still work
+	if _, err := m.handle(dlReq{Action: "add", dlAdd: dlAdd{URL: "http://example.com/a.zip", Start: new(bool)}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// a peer that wants data from us; the first half of the torrent is already on the disk
+func leecherTest(t *testing.T, noUpload bool, limit float64) (served int, uploaded int64) {
+	tt := makeTorrent("up.bin", []tFile{{"", 2 * MiB}}, 64<<10)
+	root := filepath.Join(t.TempDir(), "up.bin")
+	half := make([]byte, 2*MiB)
+	copy(half, tt.content[:MiB])
+	os.WriteFile(root, half, 0o644)
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer l.Close()
+	got := make(chan int, 1)
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			got <- -1
+			return
+		}
+		defer c.Close()
+		hs := make([]byte, 68)
+		io.ReadFull(c, hs)
+		my := make([]byte, 68)
+		my[0] = 19
+		copy(my[1:], "BitTorrent protocol")
+		copy(my[28:], tt.meta.InfoHash[:])
+		copy(my[48:], "-LEECHER12345678901-")
+		c.Write(my)
+		c.Write(btFrame(2))
+		unchoked := false
+		c.SetReadDeadline(time.Now().Add(4 * time.Second))
+		for !unchoked {
+			hdr := make([]byte, 4)
+			if _, err := io.ReadFull(c, hdr); err != nil {
+				got <- 0
+				return
+			}
+			n := binary.BigEndian.Uint32(hdr)
+			buf := make([]byte, n)
+			io.ReadFull(c, buf)
+			if n > 0 && buf[0] == 1 {
+				unchoked = true
+			}
+		}
+		c.Write(btFrame(6, be32(0), be32(0), be32(16384)))
+		hdr := make([]byte, 4)
+		c.SetReadDeadline(time.Now().Add(3 * time.Second))
+		for {
+			if _, err := io.ReadFull(c, hdr); err != nil {
+				got <- 0
+				return
+			}
+			n := binary.BigEndian.Uint32(hdr)
+			buf := make([]byte, n)
+			io.ReadFull(c, buf)
+			if n > 9 && buf[0] == 7 {
+				if bytes.Equal(buf[9:], tt.content[:16384]) {
+					got <- 1
+				} else {
+					got <- -1
+				}
+				return
+			}
+		}
+	}()
+	meta, _ := btParseTorrent(tt.file)
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	tk := newBtTask(btSpec{Meta: meta, NoDHT: true, NoUpload: noUpload, UploadRate: limit, Pick: func(string) (string, error) { return root, nil }}, env)
+	tk.addPeers([]string{l.Addr().String()})
+	ctx, cancel := ctxTimeout(9 * time.Second)
+	defer cancel()
+	go func() { tk.Run(ctx) }()
+	served = <-got
+	time.Sleep(200 * time.Millisecond)
+	return served, tk.Progress().Up
+}
+
+func TestBtUploadsWhileDownloadingWhenAllowed(t *testing.T) {
+	if s, up := leecherTest(t, false, 0); s != 1 || up < 16384 {
+		t.Fatalf("served=%d up=%d", s, up)
+	}
+	if s, _ := leecherTest(t, true, 0); s != 0 {
+		t.Fatalf("uploaded although uploads are off: %d", s)
+	}
+	if s, up := leecherTest(t, false, 1<<20); s != 1 || up < 16384 {
+		t.Fatalf("with a limit: served=%d up=%d", s, up)
+	}
+}
+
+func TestBtPreviewThenAddWithChosenFiles(t *testing.T) {
+	tt := makeTorrent("Pick", []tFile{{"keep.bin", 300000}, {"skip.bin", 300000}}, 64<<10)
+	sd := newSeeder(t, tt)
+	tr, _ := httpTracker(t, tt.meta.InfoHash, sd.addr())
+	tt = makeTorrent("Pick", []tFile{{"keep.bin", 300000}, {"skip.bin", 300000}}, 64<<10, tr.URL+"/a")
+	sd.tt = tt
+	tr, _ = httpTracker(t, tt.meta.InfoHash, sd.addr())
+	tt = makeTorrent("Pick", []tFile{{"keep.bin", 300000}, {"skip.bin", 300000}}, 64<<10, tr.URL+"/a")
+	sd.tt = tt
+	m := newTestMgr(t, newSimEnv(newSimLine("A", "127.0.0.1", 0)))
+	pv, err := m.handle(dlReq{Action: "torrentInfo", dlAdd: dlAdd{Torrent: b64(tt.file)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fs := pv["files"].([]dlTFile); len(fs) != 2 || fs[1].Name != "skip.bin" || pv["name"] != "Pick" || pv["duplicate"] != false {
+		t.Fatalf("%+v", pv)
+	}
+	if _, err := m.handle(dlReq{Action: "torrentInfo", dlAdd: dlAdd{Torrent: b64([]byte("junk"))}}); err == nil {
+		t.Fatal("junk accepted")
+	}
+	if _, err := m.handle(dlReq{Action: "add", dlAdd: dlAdd{Torrent: b64(tt.file), Select: []bool{false, false}}}); err == nil {
+		t.Fatal("no files chosen was accepted")
+	}
+	out, err := m.handle(dlReq{Action: "add", dlAdd: dlAdd{Torrent: b64(tt.file), Select: []bool{true, false}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := waitState(t, m, out["added"].([]*dlItem)[0].ID, "done", 40*time.Second)
+	if _, err := os.Stat(filepath.Join(v.Path, "keep.bin")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(v.Path, "skip.bin")); err == nil {
+		t.Fatal("the unchosen file was downloaded")
+	}
+	if pv2, _ := m.handle(dlReq{Action: "torrentInfo", dlAdd: dlAdd{Torrent: b64(tt.file)}}); pv2["duplicate"] != true {
+		t.Fatal("duplicate not noticed")
+	}
 }
