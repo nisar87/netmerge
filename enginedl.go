@@ -121,7 +121,9 @@ func downloadEngine() {
 			if err != nil || len(data) < 1<<20 {
 				return fmt.Errorf("the engine file inside the download is damaged")
 			}
-			_ = os.MkdirAll(filepath.Dir(mihomoExe()), 0o755)
+			if err := os.MkdirAll(filepath.Dir(mihomoExe()), 0o755); err != nil {
+				return fmt.Errorf("cannot create the folder %s for the engine: %v", filepath.Dir(mihomoExe()), err)
+			}
 			return atomicWrite(mihomoExe(), data)
 		}
 		return fmt.Errorf("no program found inside the engine download")

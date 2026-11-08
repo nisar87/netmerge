@@ -120,7 +120,7 @@ func isAdmin() bool {
 
 func relaunchAsAdmin() bool {
 	exe, _ := os.Executable()
-	args := strings.Join(os.Args[1:], " ")
+	args := quoteArgs(os.Args[1:])
 	verb, _ := syscall.UTF16PtrFromString("runas")
 	file, _ := syscall.UTF16PtrFromString(exe)
 	par, _ := syscall.UTF16PtrFromString(args)

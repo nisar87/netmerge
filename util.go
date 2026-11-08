@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -66,4 +67,41 @@ func safely(what string, fn func()) {
 		}
 	}()
 	fn()
+}
+
+// quoteArgs builds a Windows command line from separate arguments so that a folder with spaces (C:\Users\Jo Smith\x)
+// stays one argument after the program restarts itself as administrator.
+func quoteArgs(args []string) string {
+	out := make([]string, len(args))
+	for i, a := range args {
+		out[i] = quoteArg(a)
+	}
+	return strings.Join(out, " ")
+}
+
+// quoteArg follows the rules of the Windows command line (backslashes before a quote are doubled).
+func quoteArg(a string) string {
+	if a != "" && !strings.ContainsAny(a, " \t\"") {
+		return a
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	slashes := 0
+	for _, c := range a {
+		switch c {
+		case '\\':
+			slashes++
+			b.WriteRune(c)
+		case '"':
+			b.WriteString(strings.Repeat("\\", slashes+1))
+			b.WriteByte('"')
+			slashes = 0
+		default:
+			slashes = 0
+			b.WriteRune(c)
+		}
+	}
+	b.WriteString(strings.Repeat("\\", slashes)) // a trailing backslash must not escape the closing quote
+	b.WriteByte('"')
+	return b.String()
 }
