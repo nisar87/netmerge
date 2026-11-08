@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.0
+- Downloads: queue order (up, down, first), speed limits (all downloads, per line, per download, changeable while running), choose which lines downloads may use, start at a set time, only download at certain hours, a checksum check (SHA-256, SHA-1, MD5) with a clear result, and a warning when a link is already in the list.
+- Calls: while a meeting runs, downloads keep off the call's line (or pause, your choice). Presets now steer downloads: Gaming pauses them, Work slows them, Max speed leaves them alone.
+- "When everything is finished": sleep or shut down the PC after the last download (a shutdown gives one minute to cancel). Download settings are part of backup and restore.
+- Friendlier error messages for downloads, with the technical text on hover.
+
 ## 3.0.0
 - New: **Downloads**. Paste a link and NetMerge splits the file into pieces and downloads them over all your connections at once. Fast lines take more pieces, a line that fails is simply skipped, and the file resumes where it stopped after a pause, a crash or a restart.
 - Safe by default: websites that cannot be split (or that only accept one address per file) are downloaded over one line automatically, the mobile line is not used unless you allow it, links that lead into your own network are refused, and a file is only finished when its size is right.

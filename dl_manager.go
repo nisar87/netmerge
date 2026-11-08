@@ -4,9 +4,15 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
+	"io"
 	"net"
 	"net/url"
 	"os"
@@ -17,12 +23,24 @@ import (
 	"time"
 )
 
+type dlWindow struct {
+	Enabled bool   `json:"enabled"`
+	From    string `json:"from"` // HH:MM
+	To      string `json:"to"`
+}
+
 type dlConfig struct {
-	Dir           string `json:"dir"`
-	UseCategories bool   `json:"useCategories"`
-	MaxActive     int    `json:"maxActive"`
-	MaxPerLine    int    `json:"maxPerLine"`
-	AllowMobile   bool   `json:"allowMobile"`
+	Dir           string             `json:"dir"`
+	UseCategories bool               `json:"useCategories"`
+	MaxActive     int                `json:"maxActive"`
+	MaxPerLine    int                `json:"maxPerLine"`
+	AllowMobile   bool               `json:"allowMobile"`
+	LimitAll      float64            `json:"limitAll"`     // bytes/s for all downloads together, 0 = no limit
+	LimitLines    map[string]float64 `json:"limitLines"`   // bytes/s per line
+	ExcludeLines  []string           `json:"excludeLines"` // lines never used for downloads
+	CallMode      string             `json:"callMode"`     // "avoid" (keep off the call's line) | "pause" | "off"
+	Window        dlWindow           `json:"window"`       // only download between these hours
+	AfterAll      string             `json:"afterAll"`     // when everything is finished: "" | "sleep" | "shutdown"
 }
 
 type dlItem struct {
@@ -44,7 +62,11 @@ type dlItem struct {
 	Finished int64             `json:"finished"`
 	Retries  int               `json:"retries"`
 	RetryAt  int64             `json:"retryAt"`
-	Bytes    map[string]int64  `json:"bytes"` // how much each line carried
+	Bytes    map[string]int64  `json:"bytes"`   // how much each line carried
+	Limit    float64           `json:"limit"`   // bytes/s for this download, 0 = none
+	StartAt  int64             `json:"startAt"` // do not start before this time (unix), 0 = now
+	Hash     string            `json:"hash"`    // checksum the person gave
+	Verify   string            `json:"verify"`  // "" | "checking" | "ok" | "bad"
 }
 
 type dlEntry struct {
@@ -52,6 +74,7 @@ type dlEntry struct {
 	cancel    context.CancelFunc
 	task      *dlTask
 	wantPause bool
+	wantHold  bool
 	running   bool
 	prog      dlProgress
 	doneCh    chan struct{}
@@ -78,6 +101,15 @@ type dlManager struct {
 	quit   bool
 	wg     sync.WaitGroup
 	loopWG sync.WaitGroup
+
+	callInfo   func() (bool, string)   // is a call running, on which line
+	presetInfo func() (string, string) // the active preset's name and what it wants for downloads
+	power      func(kind string)       // sleep / shutdown (replaced in tests)
+	hold       string                  // why downloads wait right now ("" = they do not)
+	presetName string
+	powerAt    int64 // when a shutdown was started (it can be cancelled for a minute)
+	finished   int   // downloads finished since "when finished" was set
+	armedFor   string
 }
 
 var dlMgr *dlManager
@@ -85,8 +117,15 @@ var dlMgr *dlManager
 func init() { dlMgr = newDlManager(dlProdLines) }
 
 func newDlManager(lines func() []dlLine) *dlManager {
-	m := &dlManager{hosts: map[string]int64{}, perLn: map[string]*dlBucket{}, lines: lines}
-	m.cfg = dlConfig{Dir: defaultDlDir(), UseCategories: true, MaxActive: 3, MaxPerLine: 8}
+	m := &dlManager{hosts: map[string]int64{}, perLn: map[string]*dlBucket{}, lines: lines, callInfo: dlCallNow, power: dlPower,
+		presetInfo: func() (string, string) {
+			s := getSettings()
+			if p, ok := findPreset(s, s.Preset); ok && s.Preset != "" {
+				return p.Name, p.Downloads
+			}
+			return "", ""
+		}}
+	m.cfg = dlFixConfig(dlConfig{Dir: defaultDlDir(), UseCategories: true, MaxActive: 3, MaxPerLine: 8})
 	return m
 }
 
@@ -101,7 +140,40 @@ func dlFile() string { return filepath.Join(rootDir, "data", "downloads.json") }
 
 // ---- dlEnv ---------------------------------------------------------------------------------------------------------
 
-func (m *dlManager) Lines() []dlLine { return m.lines() }
+func (m *dlManager) Lines() []dlLine { return m.activeLines() }
+
+// activeLines applies the person's choices to the lines that exist: lines left out of downloads, and (while a call
+// runs) the call's line, which stays free.
+func (m *dlManager) activeLines() []dlLine {
+	cfg := m.config()
+	call, callLine := false, ""
+	if cfg.CallMode == "avoid" && m.callInfo != nil {
+		call, callLine = m.callInfo()
+	}
+	var out []dlLine
+	for _, l := range m.lines() {
+		skip := false
+		for _, n := range cfg.ExcludeLines {
+			if n == l.Name {
+				skip = true
+			}
+		}
+		if skip {
+			continue
+		}
+		if call && callLine != "" && l.Name == callLine {
+			base, name := l.Alive, l.Name
+			l.Alive = func() bool {
+				if on, ln := m.callInfo(); on && ln == name {
+					return false
+				}
+				return base == nil || base()
+			}
+		}
+		out = append(out, l)
+	}
+	return out
+}
 
 func (m *dlManager) Limit(ctx context.Context, line string, n int) error {
 	if err := m.global.wait(ctx, n); err != nil {
@@ -269,6 +341,35 @@ func dlFixConfig(c dlConfig) dlConfig {
 	if c.MaxPerLine < 1 || c.MaxPerLine > 16 {
 		c.MaxPerLine = 8
 	}
+	if c.CallMode != "avoid" && c.CallMode != "pause" && c.CallMode != "off" {
+		c.CallMode = "avoid"
+	}
+	if c.AfterAll != "sleep" && c.AfterAll != "shutdown" {
+		c.AfterAll = ""
+	}
+	if c.LimitAll < 0 || c.LimitAll > 1e12 {
+		c.LimitAll = 0
+	}
+	ll := map[string]float64{}
+	for k, v := range c.LimitLines {
+		if v > 0 && v < 1e12 && len(ll) < 32 && k != "" {
+			ll[k] = v
+		}
+	}
+	c.LimitLines = ll
+	var ex []string
+	for _, n := range c.ExcludeLines {
+		if n != "" && len(ex) < 32 {
+			ex = append(ex, n)
+		}
+	}
+	c.ExcludeLines = ex
+	if _, e1 := time.Parse("15:04", c.Window.From); e1 != nil {
+		c.Window.Enabled, c.Window.From = false, "22:00"
+	}
+	if _, e2 := time.Parse("15:04", c.Window.To); e2 != nil {
+		c.Window.Enabled, c.Window.To = false, "07:00"
+	}
 	return c
 }
 
@@ -306,12 +407,45 @@ func dlCleanURL(raw string) (string, error) {
 }
 
 type dlAdd struct {
-	URL    string            `json:"url"`
-	Header map[string]string `json:"header"`
-	Dir    string            `json:"dir"`
-	Name   string            `json:"name"`
-	Lines  []string          `json:"lines"`
-	Start  *bool             `json:"start"`
+	URL     string            `json:"url"`
+	Header  map[string]string `json:"header"`
+	Dir     string            `json:"dir"`
+	Name    string            `json:"name"`
+	Lines   []string          `json:"lines"`
+	Start   *bool             `json:"start"`
+	StartAt int64             `json:"startAt"`
+	Hash    string            `json:"hash"`
+	Force   bool              `json:"force"`
+	Limit   float64           `json:"limit"`
+}
+
+var errDlDuplicate = errors.New("this link is already in your list")
+
+// dlCleanHash accepts "sha256:abc..." or bare hex and returns "algo:hex" (md5, sha1, sha256, sha512 by length).
+func dlCleanHash(h string) (string, error) {
+	h = strings.ToLower(strings.TrimSpace(h))
+	if h == "" {
+		return "", nil
+	}
+	if i := strings.IndexByte(h, ':'); i >= 0 {
+		h = h[i+1:]
+	}
+	for _, r := range h {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
+			return "", errors.New("the checksum should be letters a-f and digits only")
+		}
+	}
+	switch len(h) {
+	case 32:
+		return "md5:" + h, nil
+	case 40:
+		return "sha1:" + h, nil
+	case 64:
+		return "sha256:" + h, nil
+	case 128:
+		return "sha512:" + h, nil
+	}
+	return "", errors.New("the checksum has the wrong length (MD5, SHA-1, SHA-256 or SHA-512)")
 }
 
 func (m *dlManager) add(a dlAdd) (*dlItem, error) {
@@ -322,10 +456,28 @@ func (m *dlManager) add(a dlAdd) (*dlItem, error) {
 	if a.Dir != "" && !filepath.IsAbs(a.Dir) {
 		return nil, errors.New("choose a full folder path, for example C:\\Downloads")
 	}
+	hash, err := dlCleanHash(a.Hash)
+	if err != nil {
+		return nil, err
+	}
+	if a.Limit < 0 || a.Limit > 1e12 {
+		a.Limit = 0
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if !a.Force {
+		for _, o := range m.items {
+			if o.URL == link {
+				return nil, errDlDuplicate
+			}
+		}
+	}
 	m.seq++
 	e := &dlEntry{}
+	e.Hash, e.Limit = hash, a.Limit
+	if a.StartAt > time.Now().Unix() {
+		e.StartAt = a.StartAt
+	}
 	e.ID = fmt.Sprintf("d%d-%d", time.Now().Unix(), m.seq)
 	e.URL, e.Header, e.Dir, e.Lines, e.Added = link, dlCleanHeader(a.Header), a.Dir, a.Lines, time.Now().Unix()
 	e.Name = dlPickName("", link)
@@ -414,8 +566,8 @@ func (e *dlEntry) nameFixed() bool { return false }
 
 func (m *dlManager) startLocked(e *dlEntry) {
 	ctx, cancel := context.WithCancel(context.Background())
-	e.cancel, e.running, e.wantPause = cancel, true, false
-	e.State, e.Err = "downloading", ""
+	e.cancel, e.running, e.wantPause, e.wantHold = cancel, true, false, false
+	e.State, e.Err, e.Note = "downloading", "", ""
 	e.doneCh = make(chan struct{})
 	spec := dlSpec{URL: e.URL, Header: e.Header, Path: e.Path, Lines: e.Lines, MaxPerLine: m.cfg.MaxPerLine}
 	spec.Pick = func(info dlInfo) (string, error) { return m.pickPath(e, info) }
@@ -429,6 +581,7 @@ func (m *dlManager) startLocked(e *dlEntry) {
 		m.mu.Unlock()
 	}
 	t := newDlTask(spec, m)
+	t.bucket.setRate(e.Limit)
 	e.task = t
 	m.wg.Add(1)
 	go func() {
@@ -468,13 +621,20 @@ func (m *dlManager) finishRun(e *dlEntry, t *dlTask, err error) {
 		e.Note = pr.Note
 		note("good", "Download finished: %s", e.Name)
 		go trayBalloon("Download finished", e.Name)
+		m.finished++
+		if e.Hash != "" {
+			e.Verify = "checking"
+			go m.verify(e.ID, e.Path, e.Hash)
+		}
 	case e.wantPause:
 		e.State = "paused"
+	case e.wantHold && !m.quit:
+		e.State, e.Note = "queued", m.holdTextForLocked(m.hold)
 	case m.quit || errors.Is(err, context.Canceled):
 		e.State = "queued" // NetMerge is closing: carry on at the next start
 	default:
 		msg, retry := dlFriendly(err)
-		e.Err, e.Detail = msg, dlFmtErr(err)
+		e.Err, e.Detail, e.Note = msg, dlFmtErr(err), ""
 		if !retry || e.Retries >= 6 {
 			go trayBalloon("Download needs attention", e.Name)
 		}
@@ -539,49 +699,241 @@ func dlFriendly(err error) (string, bool) {
 	return "The download could not continue.", true
 }
 
-// loop starts queued downloads when there is room, refreshes progress and saves.
 // startLoop runs the queue in the background until shutdown.
 func (m *dlManager) startLoop() {
 	m.loopWG.Add(1)
 	go func() { defer m.loopWG.Done(); m.loop() }()
 }
 
+// loop starts queued downloads when there is room, applies limits and "wait" rules, refreshes progress and saves.
 func (m *dlManager) loop() {
 	tick := time.NewTicker(500 * time.Millisecond)
 	defer tick.Stop()
 	n := 0
 	for range tick.C {
 		n++
+		now := time.Now()
 		m.mu.Lock()
 		if m.quit {
 			m.mu.Unlock()
 			return
 		}
+		m.mu.Unlock()
+		hold, slow := m.evalHold(now)
+		m.applyLimits(slow)
+		m.mu.Lock()
+		if m.hold != hold {
+			m.hold = hold
+			if hold != "" {
+				note("info", "Downloads: %s", strings.ToLower(m.holdTextForLocked(hold)))
+			} else {
+				note("info", "Downloads continue")
+			}
+		}
 		active := 0
 		for _, e := range m.items {
 			if e.running {
+				if hold != "" && !e.wantHold {
+					e.wantHold = true
+					e.cancel()
+				}
 				active++
 				if e.task != nil {
 					e.prog = e.task.Progress()
 				}
 			}
 		}
-		now := time.Now().Unix()
+		unix := now.Unix()
+		queued := 0
 		for _, e := range m.items {
-			if active >= m.cfg.MaxActive {
-				break
+			if e.State == "queued" && !e.running {
+				queued++
+				switch {
+				case hold != "":
+					e.Note = m.holdTextForLocked(hold)
+				case e.StartAt > unix:
+					e.Note = "Starts at " + time.Unix(e.StartAt, 0).Format("15:04")
+				case e.RetryAt > unix:
+					e.Note = "Trying again soon"
+				default:
+					e.Note = ""
+				}
 			}
-			if e.State == "queued" && !e.running && e.RetryAt <= now {
-				m.startLocked(e)
-				active++
+		}
+		if hold == "" {
+			for _, e := range m.items {
+				if active >= m.cfg.MaxActive {
+					break
+				}
+				if e.State == "queued" && !e.running && e.RetryAt <= unix && e.StartAt <= unix {
+					m.startLocked(e)
+					active++
+				}
 			}
+		}
+		power := ""
+		if m.cfg.AfterAll != "" {
+			if m.armedFor != m.cfg.AfterAll {
+				m.armedFor, m.finished = m.cfg.AfterAll, 0
+			}
+			if active == 0 && queued == 0 && m.finished > 0 {
+				power = m.cfg.AfterAll
+				m.cfg.AfterAll, m.armedFor, m.finished = "", "", 0
+				m.dirty = true
+			}
+		} else {
+			m.armedFor = ""
 		}
 		save := m.dirty && n%4 == 0
 		m.mu.Unlock()
+		if power != "" {
+			note("info", "Downloads finished: %s", map[string]string{"sleep": "the PC goes to sleep", "shutdown": "the PC shuts down in one minute"}[power])
+			trayBalloon("Downloads finished", map[string]string{"sleep": "The PC is going to sleep.", "shutdown": "The PC shuts down in one minute. Open NetMerge to cancel."}[power])
+			if power == "shutdown" {
+				m.mu.Lock()
+				m.powerAt = time.Now().Unix()
+				m.mu.Unlock()
+			}
+			if m.power != nil {
+				m.power(power)
+			}
+		}
 		if save {
 			m.save()
 		}
 	}
+}
+
+// evalHold decides whether downloads must wait right now (call, download hours, preset) and whether a preset wants them slow.
+func (m *dlManager) evalHold(now time.Time) (hold string, slow bool) {
+	cfg := m.config()
+	if m.presetInfo != nil {
+		if name, what := m.presetInfo(); what == "pause" {
+			m.mu.Lock()
+			m.presetName = name
+			m.mu.Unlock()
+			return "preset", false
+		} else if what == "slow" {
+			slow = true
+		}
+	}
+	if cfg.Window.Enabled && !inWindow(now, cfg.Window.From, cfg.Window.To) {
+		return "window", slow
+	}
+	if cfg.CallMode == "pause" && m.callInfo != nil {
+		if on, _ := m.callInfo(); on {
+			return "call", slow
+		}
+	}
+	return "", slow
+}
+
+func (m *dlManager) holdText() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.holdTextForLocked(m.hold)
+}
+
+func (m *dlManager) holdTextFor(h string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.holdTextForLocked(h)
+}
+
+func (m *dlManager) holdTextForLocked(h string) string {
+	switch h {
+	case "call":
+		return "Waiting: you are on a call"
+	case "window":
+		return "Waiting for your download hours (" + m.cfg.Window.From + " to " + m.cfg.Window.To + ")"
+	case "preset":
+		return "Preset \"" + m.presetName + "\" is on, downloads wait"
+	}
+	return ""
+}
+
+// applyLimits sets the speed limits (all downloads, each line). A "slow" preset limits to a quarter of what the lines can carry.
+func (m *dlManager) applyLimits(slow bool) {
+	cfg := m.config()
+	eff := cfg.LimitAll
+	if slow {
+		var sum float64
+		for _, l := range m.lines() {
+			sum += l.Rate
+		}
+		lim := sum / 4
+		if lim < 1.5*MiBf {
+			lim = 1.5 * MiBf
+		}
+		if eff == 0 || lim < eff {
+			eff = lim
+		}
+	}
+	if m.global.getRate() != eff {
+		m.global.setRate(eff)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for name, r := range cfg.LimitLines {
+		b := m.perLn[name]
+		if b == nil {
+			b = &dlBucket{}
+			m.perLn[name] = b
+		}
+		if b.getRate() != r {
+			b.setRate(r)
+		}
+	}
+	for name, b := range m.perLn {
+		if _, ok := cfg.LimitLines[name]; !ok && b.getRate() != 0 {
+			b.setRate(0)
+		}
+	}
+}
+
+const MiBf = float64(1 << 20)
+
+// verify checks the finished file against the checksum the person gave.
+func (m *dlManager) verify(id, path, want string) {
+	ok := dlCheckHash(path, want)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if e := m.find(id); e != nil {
+		if ok {
+			e.Verify = "ok"
+		} else {
+			e.Verify = "bad"
+			note("bad", "Checksum does NOT match: %s", e.Name)
+			go trayBalloon("Checksum does not match", e.Name+" may be damaged or not the file you expected.")
+		}
+		m.dirty = true
+	}
+}
+
+func dlCheckHash(path, want string) bool {
+	algo, hex, _ := strings.Cut(want, ":")
+	var h hash.Hash
+	switch algo {
+	case "md5":
+		h = md5.New()
+	case "sha1":
+		h = sha1.New()
+	case "sha256":
+		h = sha256.New()
+	case "sha512":
+		h = sha512.New()
+	default:
+		return false
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	if _, err := io.Copy(h, f); err != nil {
+		return false
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)) == hex
 }
 
 // ---- actions -------------------------------------------------------------------------------------------------------
@@ -797,4 +1149,68 @@ func (m *dlManager) forgetHosts() {
 	m.hosts = map[string]int64{}
 	m.dirty = true
 	m.mu.Unlock()
+}
+
+// move changes the place of a download in the queue.
+func (m *dlManager) move(id, where string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	idx := -1
+	for i, e := range m.items {
+		if e.ID == id {
+			idx = i
+		}
+	}
+	if idx < 0 {
+		return errors.New("download not found")
+	}
+	e := m.items[idx]
+	to := idx
+	switch where {
+	case "up":
+		to = idx - 1
+	case "down":
+		to = idx + 1
+	case "top":
+		to = 0
+	case "bottom":
+		to = len(m.items) - 1
+	default:
+		return errors.New("unknown move")
+	}
+	if to < 0 || to >= len(m.items) || to == idx {
+		return nil
+	}
+	m.items = append(m.items[:idx], m.items[idx+1:]...)
+	m.items = append(m.items[:to], append([]*dlEntry{e}, m.items[to:]...)...)
+	m.dirty = true
+	return nil
+}
+
+// setLimit sets the speed limit of one download (bytes/s, 0 = none), also while it runs.
+func (m *dlManager) setLimit(id string, limit float64) error {
+	if limit < 0 || limit > 1e12 {
+		limit = 0
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e := m.find(id)
+	if e == nil {
+		return errors.New("download not found")
+	}
+	e.Limit = limit
+	if e.task != nil {
+		e.task.bucket.setRate(limit)
+	}
+	m.dirty = true
+	return nil
+}
+
+func (m *dlManager) powerAtTime() int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.powerAt > 0 && time.Now().Unix()-m.powerAt < 75 {
+		return m.powerAt
+	}
+	return 0
 }

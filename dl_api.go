@@ -17,6 +17,9 @@ type dlReq struct {
 	DeleteFiles bool     `json:"deleteFiles"`
 	dlAdd
 	Config *dlConfig `json:"config"`
+	Move   string    `json:"move"`
+	// LimitBytes is the speed limit for one download (action "limit").
+	LimitBytes float64 `json:"limitBytes"`
 }
 
 func registerDownloadRoutes(mux *http.ServeMux) {
@@ -47,7 +50,7 @@ func (m *dlManager) snapshot() map[string]any {
 	for _, l := range m.lines() {
 		lines = append(lines, map[string]any{"name": l.Name, "kind": l.Kind})
 	}
-	return map[string]any{"items": m.views(), "config": m.config(), "active": act, "speed": sp, "lines": lines, "knownSites": m.knownHosts()}
+	return map[string]any{"items": m.views(), "config": m.config(), "active": act, "speed": sp, "lines": lines, "knownSites": m.knownHosts(), "hold": m.holdText(), "powerAt": m.powerAtTime()}
 }
 
 func (m *dlManager) handle(in dlReq) (map[string]any, error) {
@@ -66,6 +69,7 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 			return nil, errors.New("too many links at once (500 at most)")
 		}
 		var added []*dlItem
+		skipped := 0
 		for _, u := range urls {
 			a := in.dlAdd
 			a.URL = u
@@ -74,6 +78,13 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 			}
 			it, err := m.add(a)
 			if err != nil {
+				if errors.Is(err, errDlDuplicate) {
+					skipped++
+					if len(urls) == 1 {
+						return map[string]any{"duplicate": true, "items": m.views(), "config": m.config()}, nil
+					}
+					continue
+				}
 				if len(urls) == 1 {
 					return nil, err
 				}
@@ -81,10 +92,13 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 			}
 			added = append(added, it)
 		}
+		if len(added) == 0 && skipped > 0 {
+			return map[string]any{"duplicate": true, "skipped": skipped, "items": m.views(), "config": m.config()}, nil
+		}
 		if len(added) == 0 {
 			return nil, errors.New("none of the links could be used")
 		}
-		return map[string]any{"added": added, "items": m.views(), "config": m.config()}, nil
+		return map[string]any{"added": added, "skipped": skipped, "items": m.views(), "config": m.config()}, nil
 	case "pause":
 		return nil, m.pause(in.ID)
 	case "resume":
@@ -104,6 +118,15 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 		return nil, nil
 	case "open", "folder":
 		return nil, m.openItem(in.ID, in.Action == "folder")
+	case "move":
+		return nil, m.move(in.ID, in.Move)
+	case "limit":
+		return nil, m.setLimit(in.ID, in.LimitBytes)
+	case "cancelPower":
+		m.mu.Lock()
+		m.powerAt = 0
+		m.mu.Unlock()
+		return nil, dlPowerCancel()
 	case "forgetHosts":
 		m.forgetHosts()
 		return nil, nil
@@ -186,7 +209,7 @@ func (m *dlManager) probe(link string, hdr map[string]string) (map[string]any, e
 		dir = filepath.Join(dir, dlCategory(info.Name))
 	}
 	return map[string]any{"ok": true, "info": info, "dir": dir, "category": dlCategory(info.Name), "lines": len(lines),
-		"locked": m.HostLocked(dlHostOf(link))}, nil
+		"locked": m.HostLocked(dlHostOf(link)), "duplicate": m.hasURL(link), "lineNames": dlNames(lines)}, nil
 }
 
 func (m *dlManager) knownHosts() int {
@@ -199,4 +222,23 @@ func (m *dlManager) knownHosts() int {
 		}
 	}
 	return n
+}
+
+func (m *dlManager) hasURL(link string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, e := range m.items {
+		if e.URL == link {
+			return true
+		}
+	}
+	return false
+}
+
+func dlNames(ls []dlLine) []string {
+	var out []string
+	for _, l := range ls {
+		out = append(out, l.Name)
+	}
+	return out
 }

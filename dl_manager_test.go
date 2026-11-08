@@ -43,7 +43,7 @@ func waitState(t *testing.T, m *dlManager, id, want string, d time.Duration) dlV
 
 func addOne(t *testing.T, m *dlManager, link string) string {
 	t.Helper()
-	out, err := m.handle(dlReq{Action: "add", dlAdd: dlAdd{URL: link}})
+	out, err := m.handle(dlReq{Action: "add", dlAdd: dlAdd{URL: link, Force: true}})
 	if err != nil {
 		t.Fatal(err)
 	}

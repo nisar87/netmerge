@@ -14,7 +14,16 @@ func registerBackupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/backup", guard(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", `attachment; filename="netmerge-settings-`+time.Now().Format("2006-01-02")+`.json"`)
-		_, _ = w.Write(sanitizedSettings())
+		out := sanitizedSettings()
+		var m map[string]any
+		if json.Unmarshal(out, &m) == nil {
+			c := dlMgr.config()
+			m["downloadConfig"] = c
+			if o, err := json.MarshalIndent(m, "", "  "); err == nil {
+				out = o
+			}
+		}
+		_, _ = w.Write(out)
 	}))
 	mux.HandleFunc("/api/restore", guard(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -32,6 +41,12 @@ func registerBackupRoutes(mux *http.ServeMux) {
 			return
 		}
 		updateSettings(func(s *Settings) { restoreInto(s, in) })
+		var extra struct {
+			DownloadConfig *dlConfig `json:"downloadConfig"`
+		}
+		if json.Unmarshal(b, &extra) == nil && extra.DownloadConfig != nil {
+			restoreDownloadConfig(*extra.DownloadConfig)
+		}
 		if err := engine.Apply(); err != nil {
 			writeErr(w, 500, err.Error())
 			return
@@ -73,5 +88,14 @@ func restoreInto(s *Settings, in Settings) {
 	}
 	for i := range s.AppRules {
 		s.AppRules[i].Process = strings.TrimSpace(s.AppRules[i].Process)
+	}
+}
+
+// restoreDownloadConfig brings back the download settings. A folder that does not exist on this PC keeps the current one.
+func restoreDownloadConfig(c dlConfig) {
+	cur := dlMgr.config()
+	if err := dlMgr.setConfig(c); err != nil {
+		c.Dir = cur.Dir
+		_ = dlMgr.setConfig(c)
 	}
 }

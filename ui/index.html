@@ -1523,13 +1523,20 @@ function dlRow(v){
     if (act.length) meta.push(act.map(l => `<span style="color:${colorOf(l.name)}">●</span> ${esc(labelOf(l.name))} ${bytes(l.speed)}/s`).join(' &nbsp; '));
   } else if (v.state === 'done') {
     meta.push(`<span class="good">Finished</span> · ${bytes(v.size)}`);
+    if (v.verify === 'ok') meta.push('<span class="good">✓ Checksum matches</span>');
+    else if (v.verify === 'bad') meta.push('<span class="bad"><b>✗ Checksum does NOT match.</b> Do not open this file: it is damaged or not what you expected.</span>');
+    else if (v.verify === 'checking') meta.push('Checking the checksum…');
     if (sh.sum > 0 && Object.keys(sh.tot).length > 1) meta.push(Object.entries(sh.tot).filter(([,b]) => b>0).map(([k,b]) => `${esc(labelOf(k))} ${Math.round(b/sh.sum*100)}%`).join(' · '));
   } else if (v.state === 'error') meta.push(`<span class="bad" title="${esc(v.detail||'')}">${esc(v.err || 'Something went wrong')}</span>`);
-  else { meta.push(dlStateText(v)); if (v.size > 0) meta.push(`${bytes(v.done)} of ${bytes(v.size)}`); if (v.err) meta.push(`<span title="${esc(v.detail||'')}">${esc(v.err)}</span>`); }
+  else { meta.push(v.note && v.state === 'queued' ? esc(v.note) : dlStateText(v)); if (v.size > 0) meta.push(`${bytes(v.done)} of ${bytes(v.size)}`); if (v.err) meta.push(`<span title="${esc(v.detail||'')}">${esc(v.err)}</span>`); }
   if (v.note && v.state === 'downloading') meta.push(esc(v.note));
-  const btn = (a, t) => `<button class="btn" data-dl="${a}" data-id="${esc(v.id)}">${t}</button>`;
-  const acts = v.state === 'downloading' || (v.state === 'queued') ? btn('pause','Pause') + btn('remove','Cancel')
-    : v.state === 'paused' ? btn('resume','Resume') + btn('remove','Cancel')
+  const btn = (a, t, extra) => `<button class="btn" data-dl="${a}" data-id="${esc(v.id)}"${extra||''}>${t}</button>`;
+  const mv = v.state === 'queued' || v.state === 'paused' ? btn('move','▲',' data-mv="up" title="Move up" aria-label="Move up"') + btn('move','▼',' data-mv="down" title="Move down" aria-label="Move down"') + btn('move','First',' data-mv="top" title="Download this first"') : '';
+  const LIMS = [[0,'No limit'],[0.5,'0.5 MB/s'],[1,'1 MB/s'],[2,'2 MB/s'],[5,'5 MB/s'],[10,'10 MB/s'],[20,'20 MB/s']];
+  const cur = LIMS.reduce((b, l) => Math.abs(l[0]*1048576 - (v.limit||0)) < Math.abs(b[0]*1048576 - (v.limit||0)) ? l : b, LIMS[0]);
+  const lim = v.state === 'done' ? '' : `<select class="sel" data-lim="${esc(v.id)}" aria-label="Speed limit for this download" style="min-width:0;padding:5px 8px;font-size:12.5px">${LIMS.map(l => `<option value="${l[0]}"${l[0]===cur[0]?' selected':''}>${l[1]}</option>`).join('')}</select>`;
+  const acts = v.state === 'downloading' || (v.state === 'queued') ? mv + lim + btn('pause','Pause') + btn('remove','Cancel')
+    : v.state === 'paused' ? mv + lim + btn('resume','Resume') + btn('remove','Cancel')
     : v.state === 'error' ? btn('retry','Try again') + btn('remove','Remove')
     : btn('open','Open') + btn('folder','Show in folder') + btn('remove','Remove from list') + btn('delfile','Delete file');
   return `<div class="dlrow"><div class="dlic" aria-hidden="true">${esc((v.category||'Other').slice(0,3).toUpperCase())}</div>
@@ -1537,6 +1544,11 @@ function dlRow(v){
       <div class="dlprog ${v.state==='paused'?'paused':v.state==='error'?'err':''}"><div style="width:${pct}%"></div></div>${strip}
       <div class="dlmeta">${meta.join(' · ')}</div></div>
     <div class="dlact">${acts}</div></div>`;
+}
+const LIM_OPTS = [0,0.5,1,2,5,10,20,50];
+function limSel(key, cur){
+  const near = LIM_OPTS.reduce((b, x) => Math.abs(x*1048576 - cur) < Math.abs(b*1048576 - cur) ? x : b, 0);
+  return `<select class="sel" data-cfg="${esc(key)}" data-lim2="1" style="min-width:0" aria-label="Speed limit">${LIM_OPTS.map(x => `<option value="${x}"${x===near?' selected':''}>${x ? x + ' MB/s' : 'No limit'}</option>`).join('')}</select>`;
 }
 function paintDL(){
   const box = $('#dlBody'); if (!box || !DL) return;
@@ -1552,8 +1564,10 @@ function paintDL(){
   const chip = (id, t, n) => `<button data-f="${id}" class="${dlFilter===id?'sel':''}">${t}${n!==undefined?' '+n:''}</button>`;
   const num = (id, vals, cur) => `<select class="sel" id="${id}" style="min-width:0">${vals.map(x => `<option${x==cur?' selected':''}>${x}</option>`).join('')}</select>`;
   const list = vis.length ? vis.map(dlRow).join('') : `<div class="dlempty">${items.length ? 'Nothing matches this filter.' : '<b>No downloads yet.</b><br>Paste a link above. NetMerge splits the file and downloads it over all your connections at once.'}</div>`;
+  const holdBanner = DL.hold ? `<div class="note warn" style="margin-bottom:12px"><b>Downloads are waiting.</b> ${esc(DL.hold.replace(/^Waiting: /,''))}.</div>` : '';
+  const powerBanner = DL.powerAt && (Date.now()/1000 - DL.powerAt) < 70 ? `<div class="note bad" style="margin-bottom:12px"><span style="flex:1"><b>The PC is about to shut down</b> because your downloads finished.</span><button class="btn" data-dl="cancelPower">Cancel shutdown</button></div>` : '';
   const noLines = DL.lines.length === 0 ? '<div class="note warn" style="margin-bottom:12px"><b>No internet connection found.</b> Downloads will start when a connection is available.</div>' : '';
-  const html = `${noLines}
+  const html = `${powerBanner}${holdBanner}${noLines}
   <div class="card"><div class="dlbox"><textarea class="inp" id="dlUrl" rows="1" placeholder="Paste a link here (one per line to add several)" aria-label="Download link"></textarea>
     <button class="btn pri" id="dlAddBtn">Add</button><button class="btn" id="dlPaste" title="Paste the link you copied">Paste</button></div>
     <div class="hint2" style="margin-top:8px">${DL.speed > 0 ? `Downloading at <b>${bytes(DL.speed)}/s</b> in total. ` : ''}You can also drag a link onto this window.</div></div>
@@ -1569,6 +1583,11 @@ function paintDL(){
     <div class="dnsrow"><div><b>Sort into folders by type</b><div class="d">Videos, Programs, Documents and so on. Turn off to keep everything in one folder.</div></div><button class="tog${cfg.useCategories?' on':''}" id="dlCatTog" role="switch" aria-checked="${cfg.useCategories}" aria-label="Sort into folders"></button></div>
     <div class="dnsrow"><div><b>Downloads at the same time</b><div class="d">More than 3 can slow each one down. Recommended: 3.</div></div>${num('dlMax',[1,2,3,4,5,6,8,10],cfg.maxActive)}</div>
     <div class="dnsrow"><div><b>Connections per line</b><div class="d">How many parallel connections one file uses on each line. Some websites refuse many; NetMerge lowers it by itself. Recommended: 8.</div></div>${num('dlPer',[2,4,6,8,12,16],cfg.maxPerLine)}</div>
+    <div class="dnsrow"><div><b>Speed limit for all downloads</b><div class="d">Keeps some speed free for everything else. "No limit" uses everything the lines can give.</div></div>${limSel('limitAll', cfg.limitAll)}</div>
+    ${DL.lines.map(l => `<div class="dnsrow"><div><b>${esc(labelOf(l.name))}: use for downloads</b><div class="d">Turn off to keep this line free of downloads. You can also limit its speed:</div></div><div class="row" style="gap:8px">${limSel('line:' + l.name, (cfg.limitLines||{})[l.name]||0)}<button class="tog${(cfg.excludeLines||[]).includes(l.name)?'':' on'}" data-ex="${esc(l.name)}" role="switch" aria-checked="${!(cfg.excludeLines||[]).includes(l.name)}" aria-label="Use ${esc(labelOf(l.name))} for downloads"></button></div></div>`).join('')}
+    <div class="dnsrow"><div><b>During a call</b><div class="d">"Keep the call's line free" lets downloads use your other lines while a meeting runs. Needs merging to be on. Recommended.</div></div><select class="sel" data-cfg="callMode" style="min-width:210px" aria-label="During a call">${[['avoid','Keep the call\'s line free'],['pause','Pause all downloads'],['off','Do nothing']].map(o => `<option value="${o[0]}"${cfg.callMode===o[0]?' selected':''}>${o[1]}</option>`).join('')}</select></div>
+    <div class="dnsrow"><div><b>Only download at certain hours</b><div class="d">For example at night, when nobody needs the internet. Downloads outside these hours wait.</div></div><div class="row" style="gap:8px"><input type="time" class="inp" id="dlWinFrom" value="${esc(cfg.window.from)}" style="min-width:0" aria-label="From"><input type="time" class="inp" id="dlWinTo" value="${esc(cfg.window.to)}" style="min-width:0" aria-label="To"><button class="tog${cfg.window.enabled?' on':''}" id="dlWinTog" role="switch" aria-checked="${cfg.window.enabled}" aria-label="Download hours"></button></div></div>
+    <div class="dnsrow"><div><b>When everything is finished</b><div class="d">Do this once, after the last download, then switch back to "Nothing". A shutdown gives you one minute to cancel.</div></div><select class="sel" data-cfg="afterAll" style="min-width:210px" aria-label="When everything is finished">${[['','Nothing'],['sleep','Put the PC to sleep'],['shutdown','Shut the PC down']].map(o => `<option value="${o[0]}"${(cfg.afterAll||'')===o[0]?' selected':''}>${o[1]}</option>`).join('')}</select></div>
     <div class="dnsrow"><div><b>What NetMerge learned about websites</b><div class="d">Some websites only accept a file from one address. NetMerge remembers that for a few days so it does not waste time. ${DL.knownSites ? DL.knownSites + ' site' + (DL.knownSites===1?'':'s') + ' remembered.' : 'Nothing remembered.'}</div></div><button class="btn" id="dlForget"${DL.knownSites?'':' disabled'}>Forget</button></div>
     <div class="dnsrow"><div><b>Use the mobile line for downloads</b><div class="d">Off by default so big files do not use up your mobile data. If it is the only connection, it is used anyway.</div></div><button class="tog${cfg.allowMobile?' on':''}" id="dlMobTog" role="switch" aria-checked="${cfg.allowMobile}" aria-label="Use mobile line"></button></div>
     </div></details>`;
@@ -1589,7 +1608,7 @@ function dlDialog(html){ let d = $('#dlDlg'); if (!d) { d = document.createEleme
 async function dlSubmit(){
   const ta = $('#dlUrl'); const links = ta.value.split(/\s*\n\s*/).map(s => s.trim()).filter(Boolean);
   if (!links.length) return toast('Paste a link first', true);
-  if (links.length > 1) { const r = await dlAct({action:'add', urls: links}); if (r) { ta.value = ''; toast(`${(r.added||[]).length} downloads added`); } return; }
+  if (links.length > 1) { const r = await dlAct({action:'add', urls: links}); if (r) { ta.value = ''; toast(`${(r.added||[]).length} downloads added` + (r.skipped ? `, ${r.skipped} already in your list` : '')); } return; }
   dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Add download"><h3 style="margin:0">Checking the link…</h3><div class="hint2" style="margin-top:6px">${esc(links[0])}</div></div>`);
   let p; try { p = await api('downloads', {action:'probe', url: links[0]}); } catch(e){ dlClose(); return toast(e.message, true); }
   dlShowProbe(links[0], p);
@@ -1603,7 +1622,13 @@ function dlShowProbe(link, p){
     ${fine ? '' : `<div class="note bad" style="margin:12px 0">${esc(p.error || 'The link could not be checked.')} You can still add it.</div>`}
     ${info.warning === 'html' ? '<div class="note warn" style="margin:12px 0"><b>This looks like a web page, not a file.</b> The site may want you to sign in first. Download the link from your browser instead if it fails.</div>' : ''}
     <div style="margin:12px 0;display:grid;gap:10px"><label class="hint2">Name<input class="inp" id="dlName" value="${esc(info.name || '')}" style="width:100%;margin-top:4px"></label>
-    <label class="hint2">Save in<input class="inp" id="dlFolder" value="${esc(p.dir || '')}" style="width:100%;margin-top:4px"></label></div>
+    <label class="hint2">Save in<input class="inp" id="dlFolder" value="${esc(p.dir || '')}" style="width:100%;margin-top:4px"></label>
+    <details class="hint2"><summary style="cursor:pointer">More options</summary><div style="display:grid;gap:10px;margin-top:10px">
+      <label>Start at (leave empty to start now)<input type="time" class="inp" id="dlTime" style="width:100%;margin-top:4px"></label>
+      <label>Checksum, to check the file is not damaged (SHA-256, SHA-1 or MD5 from the website)<input class="inp" id="dlHash" placeholder="Optional" style="width:100%;margin-top:4px"></label>
+      ${(p.lineNames||[]).length > 1 ? `<div>Use these connections<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">${p.lineNames.map(n => `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="dlLn" value="${esc(n)}" checked> ${esc(labelOf(n))}</label>`).join('')}</div></div>` : ''}
+    </div></details></div>
+    ${p.duplicate ? '<div class="note warn" style="margin:0 0 10px"><b>This link is already in your list.</b> Adding it again makes a second copy.</div>' : ''}
     ${fine ? `<div class="hint2" style="margin-bottom:6px">${info.size > 0 ? '<b>' + bytes(info.size) + '</b> · ' : ''}${esc(info.type || 'unknown type')}</div><div class="hint2" style="${can?'color:var(--good)':''}">${esc(why)}</div>` : ''}
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn" id="dlCancel">Cancel</button><button class="btn" id="dlLater">Add, start later</button><button class="btn pri" id="dlGo">Download now</button></div></div>`);
   $('#dlGo').onclick = () => dlConfirm(link, p, true);
@@ -1616,6 +1641,11 @@ async function dlConfirm(link, p, start){
   const body = {action:'add', url: link, start};
   if (name && name !== (p.info||{}).name) body.name = name; else if (name) body.name = name;
   if (folder && folder !== p.dir) body.dir = folder;
+  if (p.duplicate) body.force = true;
+  const tm = $('#dlTime') && $('#dlTime').value;
+  if (tm) { const [h, mi] = tm.split(':').map(Number); const d = new Date(); d.setHours(h, mi, 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); body.startAt = Math.floor(d.getTime()/1000); }
+  const hs = $('#dlHash') && $('#dlHash').value.trim(); if (hs) body.hash = hs;
+  const boxes = $$('.dlLn'); if (boxes.length) { const on = boxes.filter(b => b.checked).map(b => b.value); if (!on.length) return toast('Choose at least one connection', true); if (on.length < boxes.length) body.lines = on; }
   const r = await dlAct(body, start ? 'Download started' : 'Added');
   if (r) { dlClose(); const ta = $('#dlUrl'); if (ta) ta.value = ''; }
 }
@@ -1627,6 +1657,8 @@ document.addEventListener('click', async e => {
   if (t.dataset.f && page === 'downloads') { dlFilter = t.dataset.f; return paintDL(); }
   if (t.id === 'dlDirSave') return void dlAct({action:'config', config: {...DL.config, dir: $('#dlDir').value.trim()}}, 'Folder saved');
   if (t.id === 'dlCatTog') return void dlAct({action:'config', config: {...DL.config, useCategories: !DL.config.useCategories}});
+  if (t.id === 'dlWinTog') return void dlAct({action:'config', config: {...DL.config, window: {...DL.config.window, enabled: !DL.config.window.enabled}}});
+  if (t.dataset.ex !== undefined) { const ex = new Set(DL.config.excludeLines||[]); ex.has(t.dataset.ex) ? ex.delete(t.dataset.ex) : ex.add(t.dataset.ex); return void dlAct({action:'config', config: {...DL.config, excludeLines: [...ex]}}); }
   if (t.id === 'dlForget') return void dlAct({action:'forgetHosts'}, 'Forgotten');
   if (t.id === 'dlMobTog') return void dlAct({action:'config', config: {...DL.config, allowMobile: !DL.config.allowMobile}});
   const a = t.dataset.dl; if (!a) return;
@@ -1634,10 +1666,23 @@ document.addEventListener('click', async e => {
   if (a === 'delfile') { if (!confirm('Delete "' + (v ? v.name : 'this file') + '" from your computer too? This cannot be undone.')) return; return void dlAct({action:'remove', id, deleteFiles:true}, 'File deleted'); }
   if (a === 'open' && v && DL_RISKY.test(v.name) && !confirm('"' + v.name + '" is a program. Only open it if you trust where it came from. Open it?')) return;
   if (a === 'remove' && v && v.state !== 'done' && v.state !== 'error' && v.done > 0 && !confirm('Cancel this download? What was downloaded so far will be deleted.')) return;
+  if (a === 'move') return void dlAct({action:'move', id, move: t.dataset.mv});
+  if (a === 'cancelPower') return void dlAct({action:'cancelPower'}, 'Shutdown cancelled');
   dlAct({action: a, id});
 });
 document.addEventListener('change', e => {
   if (!DL) return;
+  const t = e.target;
+  if (t.dataset && t.dataset.lim) return void dlAct({action:'limit', id: t.dataset.lim, limitBytes: +t.value * 1048576});
+  if (t.dataset && t.dataset.cfg) {
+    const k = t.dataset.cfg, c = {...DL.config};
+    if (k === 'limitAll') c.limitAll = +t.value * 1048576;
+    else if (k.startsWith('line:')) { c.limitLines = {...(c.limitLines||{})}; const n = k.slice(5); if (+t.value) c.limitLines[n] = +t.value * 1048576; else delete c.limitLines[n]; }
+    else if (k === 'afterAll') { if (t.value === 'shutdown' && !confirm('Shut the PC down when all downloads are finished? You get one minute to cancel.')) { paintDL(); return; } c.afterAll = t.value; }
+    else c[k] = t.value;
+    return void dlAct({action:'config', config: c});
+  }
+  if (t.id === 'dlWinFrom' || t.id === 'dlWinTo') return void dlAct({action:'config', config: {...DL.config, window: {...DL.config.window, from: $('#dlWinFrom').value || '22:00', to: $('#dlWinTo').value || '07:00'}}});
   if (e.target.id === 'dlCat') { dlCat = e.target.value; paintDL(); }
   if (e.target.id === 'dlMax') dlAct({action:'config', config: {...DL.config, maxActive: +e.target.value}});
   if (e.target.id === 'dlPer') dlAct({action:'config', config: {...DL.config, maxPerLine: +e.target.value}});

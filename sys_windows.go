@@ -326,3 +326,15 @@ func openPath(path string, reveal bool) error {
 	}
 	return c.Start()
 }
+
+// dlPower sleeps or shuts the PC down after the downloads (a shutdown has a one minute warning that can be cancelled).
+func dlPower(kind string) {
+	switch kind {
+	case "shutdown":
+		_ = hiddenCmd("shutdown.exe", "/s", "/t", "60", "/c", "NetMerge: downloads finished").Start()
+	case "sleep":
+		_ = hiddenCmd("rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0").Start()
+	}
+}
+
+func dlPowerCancel() error { return hiddenCmd("shutdown.exe", "/a").Run() }

@@ -66,3 +66,6 @@ func startUpdater(newExe, curExe, prevExe string) error {
 }
 
 func openPath(path string, reveal bool) error { logf("open %s (reveal=%v)", path, reveal); return nil }
+
+func dlPower(kind string)  { logf("power action %s (not on this system)", kind) }
+func dlPowerCancel() error { return nil }
