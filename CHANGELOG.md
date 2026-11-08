@@ -1,8 +1,8 @@
 # Changelog
 
-## 3.11.1
+## 3.11.2
 
-Fixes from the first outside test on Windows:
+Fixes from the first outside test on Windows (the 3.11.1 build was never published; its changes are included here):
 - "Add with options": the connection count you chose was ignored (it was saved as Automatic). Fixed, with a test.
 - Dialogs: the Tab key could leave a dialog and press buttons on the page behind it. The page behind is now locked while a dialog is open, Tab stays inside, Esc closes, and focus returns to where you were.
 - Dialogs on a phone-width screen no longer clip the password box or the connection list.
