@@ -571,8 +571,10 @@ func TestHLSRealFFmpegStreams(t *testing.T) {
 		os.MkdirAll(out, 0o755)
 		args := append([]string{"-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=25:duration=14", "-f", "lavfi", "-i", "sine=frequency=440:duration=14",
 			"-c:v", "libx264", "-preset", "ultrafast", "-g", "25", "-c:a", "aac", "-shortest", "-f", "hls", "-hls_time", "2", "-hls_playlist_type", "vod"}, extra...)
-		args = append(args, filepath.Join(out, "index.m3u8"))
-		if o, e := exec.Command(ff, args...).CombinedOutput(); e != nil {
+		args = append(args, "index.m3u8")
+		cmd := exec.Command(ff, args...)
+		cmd.Dir = out // ffmpeg writes the fMP4 init file next to where it runs, not next to the playlist, on some builds (Windows)
+		if o, e := cmd.CombinedOutput(); e != nil {
 			t.Skipf("ffmpeg cannot make %s here: %v %s", name, e, o)
 		}
 	}

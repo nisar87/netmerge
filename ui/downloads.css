@@ -22,3 +22,5 @@
 .dlseg{display:flex;height:8px;gap:1px;margin-top:6px;border-radius:4px;overflow:hidden}
 .dlseg i{flex:1;background:var(--accent)}
 .dlrow.picked{background:color-mix(in srgb,var(--accent,#3b82f6) 8%,transparent)}.dlck{margin:0!important;width:18px;height:18px}
+#dlDlg .card{box-sizing:border-box;max-width:calc(100vw - 24px);overflow-x:hidden}#dlDlg input,#dlDlg select,#dlDlg textarea{max-width:100%;box-sizing:border-box}#dlDlg .row{flex-wrap:wrap}
+#dlDlg .inp,#dlDlg .sel{min-width:0!important}#dlDlg label{min-width:0;max-width:100%}

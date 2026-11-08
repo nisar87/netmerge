@@ -25,7 +25,7 @@ Known limits (not bugs, do not report): torrents have no incoming connections, n
 cd netmerge
 go build -o nm .            # Windows: go build -o nm.exe .
 go vet ./... && GOOS=windows go vet ./...
-go test -race -count=1 ./...   # about 5 minutes; must be all "ok"
+go test -race -count=1 ./...   # about 5 minutes; must be all "ok". -race needs a C compiler (CGo); on Windows install MinGW-w64/MSYS2 gcc, or run it on Linux. A few tests are skipped on Windows by design (they fake adapter numbers or use a /bin/sh stand-in for ffmpeg).
 node --test extension/core.test.js   # must report pass 8, fail 0
 ```
 Start with an empty root so nothing old interferes:
@@ -114,7 +114,7 @@ For every case verify: final file size and **SHA-256 equals the source**; state 
 | D25 | Speed limit per download and global limit (`limit`, "limitAll") | Measured speed stays within about 10% of the limit; removing the limit restores speed |
 | D26 | Scheduler / queue: create queue "Night" with a start window, add item | Item waits until the window; "start queue now" runs it; outside the window nothing starts |
 | D27 | Max simultaneous downloads = 2, add 5 | Never more than 2 active; others "Waiting"; each starts as one finishes |
-| D28 | File-exists rule: ask / rename / overwrite / skip (settings `onExists`) with an existing file | rename gives `name (1).ext`; overwrite replaces; skip does nothing and says why; no data loss in "ask" |
+| D28 | File-exists rule: rename / overwrite / skip (settings `onExists`; there is no "ask") with an existing file | rename gives `name (1).ext`; overwrite replaces; skip does nothing and says why; an unknown value falls back to rename |
 | D29 | Folder rules by file type (categories) | Images go to Pictures folder etc. per config |
 | D30 | After-download command (`afterCmd`) | Runs once per finished file with the path; a failing command does not mark the download failed |
 | D31 | Virus-scan hook if configured | Runs; result shown |
@@ -124,7 +124,7 @@ For every case verify: final file size and **SHA-256 equals the source**; state 
 | D35 | "Delete file" on a finished item | File removed from disk and item removed |
 | D36 | Clear finished | Only finished items disappear |
 | D37 | Export then import the list | Same items return, no duplicates |
-| D38 | Move item to another folder (`move`) | File moved, item path updated; moving onto an existing name does not overwrite silently |
+| D38 | Reorder with `move` (`up`/`down`/`top`/`bottom` in the queue) | Order changes in the list and persists after restart. (`move` does not move files to another folder; the manager has no such feature.) |
 | D39 | Properties dialog | Shows URL, size, folder, dates, headers; edits (queue, conns, mirrors, link) save and apply |
 | D40 | Change the link of a broken download (`relink`) | Continues with new link if size matches |
 

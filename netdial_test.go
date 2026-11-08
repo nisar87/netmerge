@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -61,6 +62,7 @@ func withLookup(t *testing.T, f func(host string) ([]net.IP, error)) {
 }
 
 func TestFakeDNSAnswersAreNotUsedForDownloads(t *testing.T) {
+	skipSyntheticAdapters(t)
 	port, q := fakeDNS(t, "203.0.113.9")
 	withLookup(t, func(string) ([]net.IP, error) { return []net.IP{net.ParseIP("198.18.0.77")}, nil })
 	dnsPort = port
@@ -96,6 +98,7 @@ func TestRealDNSAnswersAreUsedAsTheyAre(t *testing.T) {
 }
 
 func TestFailingSystemDNSFallsBackToTheLine(t *testing.T) {
+	skipSyntheticAdapters(t)
 	port, _ := fakeDNS(t, "203.0.113.10")
 	withLookup(t, func(string) ([]net.IP, error) { return nil, context.DeadlineExceeded })
 	dnsPort = port
@@ -107,6 +110,7 @@ func TestFailingSystemDNSFallsBackToTheLine(t *testing.T) {
 }
 
 func TestDialOnUsesTheResolvedAddress(t *testing.T) {
+	skipSyntheticAdapters(t)
 	ln, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -140,6 +144,7 @@ func TestDialOnUsesTheResolvedAddress(t *testing.T) {
 }
 
 func TestUDPDialLeavesFromTheAdapterAddress(t *testing.T) {
+	skipSyntheticAdapters(t)
 	pc, err := net.ListenPacket("udp4", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -172,5 +177,13 @@ func TestUDPDialLeavesFromTheAdapterAddress(t *testing.T) {
 	buf := make([]byte, 16)
 	if n, err := c.Read(buf); err != nil || string(buf[:n]) != "pong" {
 		t.Fatalf("%v %q", err, buf[:n])
+	}
+}
+
+// the adapter tests pretend to be adapters by giving made-up interface numbers; Windows binds sockets to real interface numbers, so they cannot run there
+func skipSyntheticAdapters(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("uses made-up adapter numbers; on Windows the real adapters are exercised by installed-app testing")
 	}
 }

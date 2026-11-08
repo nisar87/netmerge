@@ -136,8 +136,34 @@ function paintDL(){
     if (hadFocus && $('#' + hadFocus)) { $('#' + hadFocus).focus(); if (search && hadFocus === 'dlSearch') $('#dlSearch').setSelectionRange(search[0], search[1]); }
   }
 }
-function dlClose(){ const d = $('#dlDlg'); if (d) d.remove(); }
-function dlDialog(html){ let d = $('#dlDlg'); if (!d) { d = document.createElement('div'); d.id = 'dlDlg'; d.className = 'wiz'; document.body.appendChild(d); } setHTML(d, html); }
+let dlOpener = null;
+function dlClose(){
+  const d = $('#dlDlg'); if (d) d.remove();
+  document.querySelectorAll('[data-dlinert]').forEach(el => { el.inert = false; el.removeAttribute('data-dlinert'); });
+  if (dlOpener && document.contains(dlOpener)) { try { dlOpener.focus(); } catch(e){} }
+  dlOpener = null;
+}
+function dlDialog(html){
+  let d = $('#dlDlg');
+  if (!d) {
+    dlOpener = document.activeElement;
+    d = document.createElement('div'); d.id = 'dlDlg'; d.className = 'wiz'; document.body.appendChild(d);
+    // the page behind a dialog must not take focus or clicks from the keyboard
+    [...document.body.children].forEach(el => { if (el !== d && el.tagName !== 'SCRIPT' && !el.inert && !/toast/i.test(el.id + el.className)) { el.inert = true; el.setAttribute('data-dlinert', ''); } });
+  }
+  setHTML(d, html);
+  const card = d.querySelector('.card'); if (card) { card.setAttribute('tabindex', '-1'); const f = card.querySelector('input:not([type=hidden]),select,textarea,button'); (f || card).focus(); }
+}
+document.addEventListener('keydown', e => {
+  const d = $('#dlDlg'); if (!d) return;
+  if (e.key === 'Escape') { e.preventDefault(); dlClose(); return; }
+  if (e.key !== 'Tab') return;
+  const f = [...d.querySelectorAll('input:not([type=hidden]):not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])')].filter(x => x.offsetParent !== null);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && (document.activeElement === first || !d.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && (document.activeElement === last || !d.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
+}, true);
 async function dlExtCode(){
   let r; try { r = await api('downloads', {action:'extCode'}); } catch(e){ return toast(e.message, true); }
   dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Connect a browser" style="max-width:520px"><h3 style="margin:0">Connect a browser</h3>

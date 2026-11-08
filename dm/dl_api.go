@@ -77,6 +77,10 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 	case "probe":
 		return m.probe(in.URL, in.Header, in.Height)
 	case "add":
+		// dlReq.Count and dlAdd.Conns share the JSON name "conns"; Go keeps only the shallower one
+		if in.Conns == 0 {
+			in.Conns = in.Count
+		}
 		urls := in.URLs
 		if in.URL != "" {
 			urls = append([]string{in.URL}, urls...)

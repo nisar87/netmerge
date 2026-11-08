@@ -417,3 +417,19 @@ func TestGrabFindsMagnetAndTorrentLinks(t *testing.T) {
 		t.Fatalf("%+v", only)
 	}
 }
+
+// BUG found by an outside tester: "conns" in an add request was lost because dlReq.Count has the same JSON name.
+func TestAddKeepsTheConnectionCountFromJSON(t *testing.T) {
+	m := newTestMgr(t, newSimEnv())
+	var in dlReq
+	if err := json.Unmarshal([]byte(`{"action":"add","url":"http://example.com/a.zip","start":false,"conns":1}`), &in); err != nil {
+		t.Fatal(err)
+	}
+	out, err := m.handle(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := out["added"].([]*dlItem)[0].Conns; got != 1 {
+		t.Fatalf("conns = %d, want 1", got)
+	}
+}

@@ -273,6 +273,7 @@ func TestEverythingKeyedByNameNotKind(t *testing.T) {
 }
 
 func TestDownloadsFollowAnAdapterWhoseAddressChanges(t *testing.T) {
+	skipSyntheticAdapters(t)
 	freshSettings(t)
 	a := ad("Wi-Fi", "Intel(R) Wi-Fi 6 AX201 160MHz", "127.0.0.1", 7)
 	b := ad("Wi-Fi 2", "TP-Link Wireless USB Adapter", "127.0.0.3", 9)

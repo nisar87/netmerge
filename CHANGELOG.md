@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.11.1
+
+Fixes from the first outside test on Windows:
+- "Add with options": the connection count you chose was ignored (it was saved as Automatic). Fixed, with a test.
+- Dialogs: the Tab key could leave a dialog and press buttons on the page behind it. The page behind is now locked while a dialog is open, Tab stays inside, Esc closes, and focus returns to where you were.
+- Dialogs on a phone-width screen no longer clip the password box or the connection list.
+- Test fixes (no change for users): tests that fake network adapters or use a Unix shell stand-in for ffmpeg are skipped on Windows; the fake-ffmpeg HLS test now runs ffmpeg in the output folder; the speed test for 5000 items uses the best of ten runs.
+
 ## 3.11.0
 
 A full audit of the download manager (see `docs/download-manager-audit.md`), and everything on its list is done.

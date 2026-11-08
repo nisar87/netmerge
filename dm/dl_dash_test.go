@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -82,6 +83,9 @@ func cat(files map[string][]byte, names ...string) []byte {
 
 // a stand-in for ffmpeg: it writes video + sound into the last argument
 func fakeFFmpeg(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in ffmpeg is a /bin/sh script; the real-ffmpeg tests cover Windows")
+	}
 	dir := t.TempDir()
 	script := "#!/bin/sh\nv=''; a=''; out=''\nwhile [ $# -gt 0 ]; do case \"$1\" in -i) if [ -z \"$v\" ]; then v=\"$2\"; else a=\"$2\"; fi; shift;; esac; out=\"$1\"; shift; done\ncat \"$v\" \"$a\" > \"$out\"\n"
 	if err := os.WriteFile(filepath.Join(dir, "ffmpeg"), []byte(script), 0o755); err != nil {
