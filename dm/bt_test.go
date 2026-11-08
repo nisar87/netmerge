@@ -939,11 +939,14 @@ func leecherTest(t *testing.T, noUpload bool, limit float64) (served int, upload
 	tk := newBtTask(btSpec{Meta: meta, NoDHT: true, NoUpload: noUpload, UploadRate: limit, Pick: func(string) (string, error) { return root, nil }}, env)
 	tk.addPeers([]string{l.Addr().String()})
 	ctx, cancel := ctxTimeout(9 * time.Second)
-	defer cancel()
-	go func() { tk.Run(ctx) }()
+	done := make(chan struct{})
+	go func() { tk.Run(ctx); close(done) }()
 	served = <-got
 	time.Sleep(200 * time.Millisecond)
-	return served, tk.Progress().Up
+	up := tk.Progress().Up
+	cancel()
+	<-done // the task must be finished before the temp folder is removed
+	return served, up
 }
 
 func TestBtUploadsWhileDownloadingWhenAllowed(t *testing.T) {
