@@ -40,6 +40,12 @@ type dlConfig struct {
 	CallMode      string             `json:"callMode"`     // "avoid" (keep off the call's line) | "pause" | "off"
 	Window        dlWindow           `json:"window"`       // only download between these hours
 	AfterAll      string             `json:"afterAll"`     // when everything is finished: "" | "sleep" | "shutdown"
+	Queues        []dlQueue          `json:"queues"`       // extra named queues with their own hours
+	OnExists      string             `json:"onExists"`     // a file with that name is already there: "rename" | "overwrite" | "skip"
+	CatDirs       map[string]string  `json:"catDirs"`      // a folder for a type (Videos, Music ...), instead of Dir/Type
+	SiteRules     []dlSiteRule       `json:"siteRules"`    // a folder for a website
+	NoNotify      bool               `json:"noNotify"`     // no desktop notification when a download finishes
+	AfterCmd      string             `json:"afterCmd"`     // run after each finished download (%f = the file), e.g. a virus scanner
 }
 
 type dlItem struct {
@@ -67,17 +73,22 @@ type dlItem struct {
 	Hash     string            `json:"hash"`    // checksum the person gave
 	Verify   string            `json:"verify"`  // "" | "checking" | "ok" | "bad"
 	Web      bool              `json:"web"`
+	Queue    string            `json:"queue,omitempty"`   // "" = the main queue
+	Mirrors  []string          `json:"mirrors,omitempty"` // other addresses of the same file
+	Conns    int               `json:"conns,omitempty"`   // connections per line for this download (0 = automatic)
+	Log      []dlLogLine       `json:"log,omitempty"`
 }
 
 type dlEntry struct {
 	dlItem
-	cancel    context.CancelFunc
-	task      *dlTask
-	wantPause bool
-	wantHold  bool
-	running   bool
-	prog      dlProgress
-	doneCh    chan struct{}
+	cancel      context.CancelFunc
+	task        *dlTask
+	wantPause   bool
+	wantHold    bool
+	running     bool
+	mirrorTries int
+	prog        dlProgress
+	doneCh      chan struct{}
 }
 
 type dlView struct {
@@ -86,6 +97,7 @@ type dlView struct {
 	Speed    float64      `json:"speed"`
 	LineStat []dlLineStat `json:"lineStats"`
 	Order    int          `json:"order"`
+	Map      []uint8      `json:"map,omitempty"` // progress of the parts of the file, for the segment bar
 }
 
 type dlManager struct {
@@ -340,6 +352,22 @@ func dlFixConfig(c dlConfig) dlConfig {
 	if _, e2 := time.Parse("15:04", c.Window.To); e2 != nil {
 		c.Window.Enabled, c.Window.To = false, "07:00"
 	}
+	c.Queues = dlFixQueues(c.Queues)
+	if c.OnExists != "overwrite" && c.OnExists != "skip" {
+		c.OnExists = "rename"
+	}
+	cd := map[string]string{}
+	for _, cat := range dlCategories {
+		if d := strings.TrimSpace(c.CatDirs[cat]); d != "" {
+			cd[cat] = d
+		}
+	}
+	c.CatDirs = cd
+	c.SiteRules = dlFixRules(c.SiteRules)
+	c.AfterCmd = strings.TrimSpace(c.AfterCmd)
+	if len(c.AfterCmd) > 400 {
+		c.AfterCmd = ""
+	}
 	return c
 }
 
@@ -379,10 +407,28 @@ func dlCleanURL(raw string) (string, error) {
 		return "", errors.New("that is not a valid link")
 	}
 	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
-		return "", errors.New("only http and https links can be downloaded")
+	if err == nil && strings.EqualFold(u.Scheme, "ftps") {
+		return "", errFTPS
+	}
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "ftp") || u.Hostname() == "" {
+		return "", errors.New("only http, https and ftp links can be downloaded")
 	}
 	return u.String(), nil
+}
+
+// dlSplitAuth takes a login out of a link (http://user:pass@host/...) so the password is not kept in the link.
+func dlSplitAuth(link string) (clean, auth string) {
+	u, err := url.Parse(link)
+	if err != nil || u.User == nil {
+		return link, ""
+	}
+	pw, _ := u.User.Password()
+	user := u.User.Username()
+	if un, e := url.PathUnescape(user); e == nil {
+		user = un
+	}
+	u.User = nil
+	return u.String(), dlBasicAuth(user, pw)
 }
 
 type dlAdd struct {
@@ -397,6 +443,11 @@ type dlAdd struct {
 	Force   bool              `json:"force"`
 	Limit   float64           `json:"limit"`
 	FromWeb bool              `json:"fromWeb"` // sent by the browser extension: local-network targets are refused
+	Queue   string            `json:"queue"`
+	Mirrors []string          `json:"mirrors"`
+	Conns   int               `json:"conns"`
+	User    string            `json:"user"` // a site that asks for a user name and password (HTTP Basic)
+	Pass    string            `json:"pass"`
 }
 
 var errDlDuplicate = errors.New("this link is already in your list")
@@ -433,6 +484,15 @@ func (m *dlManager) add(a dlAdd) (*dlItem, error) {
 	if err != nil {
 		return nil, err
 	}
+	link, auth := dlSplitAuth(link)
+	if auth != "" {
+		h := map[string]string{}
+		for k, v := range a.Header {
+			h[k] = v
+		}
+		h["Authorization"] = auth
+		a.Header = h
+	}
 	if a.Dir != "" {
 		d, err := dlCleanDir(a.Dir)
 		if err != nil {
@@ -447,8 +507,24 @@ func (m *dlManager) add(a dlAdd) (*dlItem, error) {
 	if a.Limit < 0 || a.Limit > 1e12 {
 		a.Limit = 0
 	}
+	mirrors, err := dlCleanMirrors(a.Mirrors, link)
+	if err != nil {
+		return nil, err
+	}
+	if a.User != "" {
+		if a.Header == nil {
+			a.Header = map[string]string{}
+		}
+		a.Header["Authorization"] = dlBasicAuth(a.User, a.Pass)
+	}
+	if a.Conns < 0 || a.Conns > 16 {
+		a.Conns = 0
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if a.Queue != "" && m.cfg.queue(a.Queue) == nil {
+		return nil, errors.New("that queue does not exist")
+	}
 	if len(m.items) >= 5000 {
 		return nil, errors.New("the list is full (5000 downloads): clear the finished ones first")
 	}
@@ -476,6 +552,8 @@ func (m *dlManager) add(a dlAdd) (*dlItem, error) {
 	if a.Start != nil && !*a.Start {
 		e.State = "paused"
 	}
+	e.Queue, e.Mirrors, e.Conns = a.Queue, mirrors, a.Conns
+	m.elog(e, "Added from %s", dlHostOf(link))
 	m.items = append(m.items, e)
 	m.dirty = true
 	it := e.dlItem
@@ -518,6 +596,12 @@ func (m *dlManager) pickPath(e *dlEntry, info dlInfo) (string, error) {
 	}
 	dir := e.Dir
 	if dir == "" {
+		dir = m.cfg.ruleDir(e.URL)
+	}
+	if dir == "" {
+		dir = m.cfg.CatDirs[dlCategory(name)]
+	}
+	if dir == "" {
 		dir = m.cfg.Dir
 		if m.cfg.UseCategories {
 			dir = filepath.Join(dir, dlCategory(name))
@@ -540,7 +624,25 @@ func (m *dlManager) pickPath(e *dlEntry, info dlInfo) (string, error) {
 		}
 		return false
 	}
-	p := dlUniquePath(dir, name, taken)
+	var p string
+	switch m.cfg.OnExists {
+	case "overwrite": // only another download in the list keeps the name; a file on the disk is replaced at the end
+		p = dlUniquePath(dir, name, func(p string) bool {
+			for _, o := range m.items {
+				if o != e && o.Path == p {
+					return true
+				}
+			}
+			return false
+		})
+	case "skip":
+		p = filepath.Join(dir, name)
+		if _, err := os.Stat(p); err == nil {
+			return "", dlStreamErr("A file with this name is already in the folder, so this download was skipped.")
+		}
+	default:
+		p = dlUniquePath(dir, name, taken)
+	}
 	e.Path, e.Name = p, filepath.Base(p)
 	e.Category = dlCategory(e.Name)
 	m.dirty = true
@@ -557,6 +659,11 @@ func (m *dlManager) startLocked(e *dlEntry) {
 	e.State, e.Err, e.Note = "downloading", "", ""
 	e.doneCh = make(chan struct{})
 	spec := dlSpec{URL: e.URL, Header: e.Header, Path: e.Path, Lines: e.Lines, MaxPerLine: m.cfg.MaxPerLine, NoPrivate: e.Web}
+	if e.Conns > 0 {
+		spec.MaxPerLine = e.Conns
+	}
+	spec.Overwrite = m.cfg.OnExists == "overwrite"
+	m.elog(e, "Started")
 	spec.Pick = func(info dlInfo) (string, error) { return m.pickPath(e, info) }
 	spec.OnInfo = func(info dlInfo, path string) {
 		m.mu.Lock()
@@ -617,7 +724,11 @@ func (m *dlManager) finishRun(e *dlEntry, t *dlTask, err error) {
 		e.Done = e.Size
 		e.Note = pr.Note
 		hNote("good", "Download finished: %s", e.Name)
-		goSafe("notify", func() { hNotify("Download finished", e.Name) })
+		m.elog(e, "Finished (%d MB)", e.Size>>20)
+		if !m.cfg.NoNotify {
+			goSafe("notify", func() { hNotify("Download finished", e.Name) })
+		}
+		m.runAfter(e, m.cfg.AfterCmd)
 		m.finished++
 		if e.Hash != "" {
 			e.Verify = "checking"
@@ -625,6 +736,7 @@ func (m *dlManager) finishRun(e *dlEntry, t *dlTask, err error) {
 		}
 	case e.wantPause:
 		e.State = "paused"
+		m.elog(e, "Paused at %d%%", pctOf(e.Done, e.Size))
 	case e.wantHold && !m.quit:
 		e.State, e.Note = "queued", m.holdTextForLocked(m.hold)
 	case m.quit || errors.Is(err, context.Canceled):
@@ -632,6 +744,12 @@ func (m *dlManager) finishRun(e *dlEntry, t *dlTask, err error) {
 	default:
 		msg, retry := dlFriendly(err)
 		e.Err, e.Detail, e.Note = msg, dlFmtErr(err), ""
+		m.elog(e, "Problem: %s", msg)
+		var he dlHTTPErr
+		sourceErr := errors.As(err, &he) || retry
+		if sourceErr && (!retry || e.Retries >= 1) && m.rotateMirror(e, msg) {
+			return
+		}
 		if !retry || e.Retries >= 6 {
 			goSafe("notify", func() { hNotify("Download needs attention", e.Name) })
 		}
@@ -733,7 +851,7 @@ func (m *dlManager) loop() {
 		active := 0
 		for _, e := range m.items {
 			if e.running {
-				if hold != "" && !e.wantHold {
+				if (hold != "" || m.queueBlock(e, now) != "") && !e.wantHold {
 					e.wantHold = true
 					e.cancel()
 				}
@@ -745,12 +863,20 @@ func (m *dlManager) loop() {
 		}
 		unix := now.Unix()
 		queued := 0
+		perQ := map[string]int{}
+		for _, e := range m.items {
+			if e.running {
+				perQ[e.Queue]++
+			}
+		}
 		for _, e := range m.items {
 			if e.State == "queued" && !e.running {
 				queued++
 				switch {
 				case hold != "":
 					e.Note = m.holdTextForLocked(hold)
+				case m.queueBlock(e, now) != "":
+					e.Note = m.queueBlock(e, now)
 				case e.StartAt > unix:
 					e.Note = "Starts at " + time.Unix(e.StartAt, 0).Format("15:04")
 				case e.RetryAt > unix:
@@ -765,8 +891,13 @@ func (m *dlManager) loop() {
 				if active >= m.cfg.MaxActive {
 					break
 				}
-				if e.State == "queued" && !e.running && e.RetryAt <= unix && e.StartAt <= unix {
+				if e.State == "queued" && !e.running && e.RetryAt <= unix && e.StartAt <= unix && m.queueBlock(e, now) == "" {
+					if q := m.cfg.queue(e.Queue); q != nil && q.MaxActive > 0 && perQ[e.Queue] >= q.MaxActive {
+						e.Note = "Waiting for a free place in queue \"" + q.Name + "\""
+						continue
+					}
 					m.startLocked(e)
+					perQ[e.Queue]++
 					active++
 				}
 			}
@@ -1059,6 +1190,20 @@ func (m *dlManager) setConfig(c dlConfig) error {
 	}
 	f.Close()
 	_ = os.Remove(f.Name())
+	for cat, dir := range c.CatDirs {
+		d, err := dlCleanDir(dir)
+		if err != nil {
+			return fmt.Errorf("folder for %s: %v", cat, err)
+		}
+		c.CatDirs[cat] = d
+	}
+	for i := range c.SiteRules {
+		d, err := dlCleanDir(c.SiteRules[i].Dir)
+		if err != nil {
+			return fmt.Errorf("folder for %s: %v", c.SiteRules[i].Site, err)
+		}
+		c.SiteRules[i].Dir = d
+	}
 	m.mu.Lock()
 	m.cfg = c
 	m.dirty = true
@@ -1082,6 +1227,7 @@ func (m *dlManager) views() []dlView {
 			if pr.Total > 0 {
 				v.Size = pr.Total
 			}
+			v.Map = pr.Map
 		}
 		out = append(out, v)
 	}
@@ -1217,4 +1363,11 @@ func (m *dlManager) powerAtTime() int64 {
 		return m.powerAt
 	}
 	return 0
+}
+
+func pctOf(done, size int64) int {
+	if size <= 0 {
+		return 0
+	}
+	return int(done * 100 / size)
 }

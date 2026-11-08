@@ -1483,9 +1483,9 @@ function dmLoad(){
   if (DM_LOAD) return DM_LOAD;
   DM_LOAD = new Promise((res, rej) => {
     const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'downloads.css'; document.head.appendChild(l);
-    const sc = document.createElement('script'); sc.src = 'downloads.js'; sc.onload = res;
-    sc.onerror = () => { DM_LOAD = null; rej(new Error('Could not load the download manager page')); };
-    document.head.appendChild(sc);
+    const fail = () => { DM_LOAD = null; rej(new Error('Could not load the download manager page')); };
+    const load = (src, next) => { const sc = document.createElement('script'); sc.src = src; sc.onload = next; sc.onerror = fail; document.head.appendChild(sc); };
+    load('downloads-more.js', () => load('downloads.js', res));
   });
   return DM_LOAD;
 }

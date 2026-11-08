@@ -24,6 +24,10 @@ type dlReq struct {
 	// Browser extension settings (actions "extCode", "extRevoke", "extConfig").
 	ExtMinMB int  `json:"extMinMB"`
 	ExtOff   bool `json:"extOff"`
+	// Text is an exported list to import; Types are the file types the link grabber should keep.
+	Text  string   `json:"text"`
+	Types []string `json:"types"`
+	Count int      `json:"conns"`
 }
 
 func registerDownloadRoutes(mux *http.ServeMux) {
@@ -80,6 +84,18 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 		if len(urls) == 0 {
 			return nil, errors.New("paste at least one link")
 		}
+		if len(urls) > 500 {
+			return nil, errors.New("too many links at once (500 at most)")
+		}
+		var expanded []string
+		for _, u := range urls {
+			list, err := dlExpand(strings.TrimSpace(u))
+			if err != nil {
+				return nil, err
+			}
+			expanded = append(expanded, list...)
+		}
+		urls = expanded
 		if len(urls) > 500 {
 			return nil, errors.New("too many links at once (500 at most)")
 		}
@@ -150,6 +166,27 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 		return nil, nil
 	case "extConfig":
 		return nil, ext.setConfig(in.ExtMinMB, in.ExtOff)
+	case "relink":
+		return nil, m.relink(in.ID, in.URL, in.Header)
+	case "setMirrors":
+		return nil, m.setMirrors(in.ID, in.URLs)
+	case "setQueue":
+		return nil, m.setQueue(in.ID, in.Queue)
+	case "setConns":
+		return nil, m.setConns(in.ID, in.Count)
+	case "export":
+		return map[string]any{"file": m.exportList()}, nil
+	case "import":
+		items, queues, err := dlParseImport(in.Text)
+		if err != nil {
+			return nil, err
+		}
+		return m.importItems(items, queues)
+	case "grab":
+		return m.grab(in.URL, in.Types)
+	case "startQueue":
+		m.startQueue(in.Queue)
+		return nil, nil
 	case "forgetHosts":
 		m.forgetHosts()
 		return nil, nil
@@ -214,8 +251,23 @@ func (m *dlManager) probe(link string, hdr map[string]string) (map[string]any, e
 	private := dlLocalHost(dlHostOf(link))
 	var info dlInfo
 	var perr error
+	link, auth := dlSplitAuth(link)
+	if auth != "" {
+		if h == nil {
+			h = map[string]string{}
+		}
+		h["Authorization"] = auth
+	}
 	for _, l := range lines {
 		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+		if dlIsFTP(link) {
+			info, perr = dlProbeFTP(ctx, l, link, h, private)
+			cancel()
+			if perr == nil {
+				break
+			}
+			continue
+		}
 		pc := dlLineClient(l, private)
 		info, perr = dlProbe(ctx, pc, link, h)
 		cancel()

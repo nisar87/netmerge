@@ -43,6 +43,7 @@ type Host struct {
 	OpenPath         func(path string, reveal bool) error    // open a file or show it in the file manager
 	FreeSpace        func(dir string) (int64, error)         // free bytes in a folder
 	MarkFromInternet func(path, link string)                 // mark a file as downloaded from the internet
+	Run              func(args []string) error               // run a program (no window) and wait for it
 }
 
 var H = Host{

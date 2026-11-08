@@ -163,7 +163,7 @@ func TestExtAddRefusesLocalNetworkAndBadLinks(t *testing.T) {
 	s := newSim(MiB)
 	defer s.Close()
 	tok := e.pairNow()
-	for _, bad := range []string{"file:///etc/passwd", "ftp://x/y", "javascript:alert(1)", "", "not a link"} {
+	for _, bad := range []string{"file:///etc/passwd", "gopher://x/y", "javascript:alert(1)", "", "not a link"} {
 		if st, _ := e.call("POST", "/ext/add", extO, tok, map[string]string{"url": bad}); st != 400 {
 			t.Errorf("accepted %q", bad)
 		}

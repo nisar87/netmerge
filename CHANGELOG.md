@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.8.0
+
+Download manager, IDM-style features:
+- **Queues**: several named queues, each with its own hours, days of the week, number of downloads at once, and a pause switch. A running download stops when its queue closes and continues when it opens.
+- **Folders**: a folder for each file type, and a folder for each website. What to do when a file with that name exists: keep both, replace, or skip.
+- **Add with options**: user name and password for protected links (also `ftp://user:pass@host/…` and `http://user:pass@host/…`; the password is never kept in the link or shown), mirrors (other addresses of the same file, tried when the first fails), connections per line, queue, checksum.
+- **Change link**: a link that expired can be replaced and the progress is kept.
+- **Properties** of each download: details, log of what happened, parts-of-the-file bar, queue, mirrors.
+- **Link patterns**: `photo[001-120].jpg`, `[a-f]`, `[1-100:5]` add many links at once.
+- **Find links on a web page** and choose which files to download.
+- **Save / load the list** (and load a plain text file of links).
+- Search, sort and filter by queue; optional program to run after each download (for example a virus scanner, off by default); notifications can be switched off.
+- **FTP** (`ftp://`): own client, passive mode, resume, several connections over all lines. Encrypted FTP (`ftps://`) is not supported yet.
+
 ## 3.7.0
 
 Download manager speed (measured on a loopback test server before → after):

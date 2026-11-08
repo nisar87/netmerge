@@ -40,18 +40,20 @@ function dlRow(v){
   } else if (v.state === 'error') meta.push(`<span class="bad" title="${esc(v.detail||'')}">${esc(v.err || 'Something went wrong')}</span>`);
   else { meta.push(v.note && v.state === 'queued' ? esc(v.note) : dlStateText(v)); if (v.size > 0) meta.push(`${bytes(v.done)} of ${bytes(v.size)}`); if (v.err) meta.push(`<span title="${esc(v.detail||'')}">${esc(v.err)}</span>`); }
   if (v.note && v.state === 'downloading') meta.push(esc(v.note));
+  if (v.queue && typeof dlQueueName === 'function') meta.push(`<span title="Queue">▤ ${esc(dlQueueName(v.queue))}</span>`);
   const btn = (a, t, extra) => `<button class="btn" data-dl="${a}" data-id="${esc(v.id)}"${extra||''}>${t}</button>`;
   const mv = v.state === 'queued' || v.state === 'paused' ? btn('move','▲',' data-mv="up" title="Move up" aria-label="Move up"') + btn('move','▼',' data-mv="down" title="Move down" aria-label="Move down"') + btn('move','First',' data-mv="top" title="Download this first"') : '';
   const LIMS = [[0,'No limit'],[0.5,'0.5 MB/s'],[1,'1 MB/s'],[2,'2 MB/s'],[5,'5 MB/s'],[10,'10 MB/s'],[20,'20 MB/s']];
   const cur = LIMS.reduce((b, l) => Math.abs(l[0]*1048576 - (v.limit||0)) < Math.abs(b[0]*1048576 - (v.limit||0)) ? l : b, LIMS[0]);
   const lim = v.state === 'done' ? '' : `<select class="sel" data-lim="${esc(v.id)}" aria-label="Speed limit for this download" style="min-width:0;padding:5px 8px;font-size:12.5px">${LIMS.map(l => `<option value="${l[0]}"${l[0]===cur[0]?' selected':''}>${l[1]}</option>`).join('')}</select>`;
-  const acts = v.state === 'downloading' || (v.state === 'queued') ? mv + lim + btn('pause','Pause') + btn('remove','Cancel')
+  const props = `<button class="btn" data-dm="props" data-id="${esc(v.id)}" title="Details, log, mirrors, queue, change link">Properties</button>`;
+  const acts = (v.state === 'downloading' || (v.state === 'queued') ? mv + lim + btn('pause','Pause') + btn('remove','Cancel')
     : v.state === 'paused' ? mv + lim + btn('resume','Resume') + btn('remove','Cancel')
     : v.state === 'error' ? btn('retry','Try again') + btn('remove','Remove')
-    : btn('open','Open') + btn('folder','Show in folder') + btn('remove','Remove from list') + btn('delfile','Delete file');
+    : btn('open','Open') + btn('folder','Show in folder') + btn('remove','Remove from list') + btn('delfile','Delete file')) + props;
   return `<div class="dlrow"><div class="dlic" aria-hidden="true">${esc((v.category||'Other').slice(0,3).toUpperCase())}</div>
     <div style="min-width:0"><b class="dlname" title="${esc(v.url)}">${esc(v.name || v.url)}</b>
-      <div class="dlprog ${v.state==='paused'?'paused':v.state==='error'?'err':''}"><div style="width:${pct}%"></div></div>${strip}
+      <div class="dlprog ${v.state==='paused'?'paused':v.state==='error'?'err':''}"><div style="width:${pct}%"></div></div>${v.state==='downloading' && typeof dlSegBar==='function' ? dlSegBar(v) : ''}${strip}
       <div class="dlmeta">${meta.join(' · ')}</div></div>
     <div class="dlact">${acts}</div></div>`;
 }
@@ -68,22 +70,21 @@ function paintDL(){
   const fin = items.filter(v => v.state === 'done').length, bad = items.filter(v => v.state === 'error').length;
   const q = dlQ.toLowerCase();
   const vis = items.filter(v => (dlFilter === 'all' || (dlFilter === 'active' && (v.state === 'downloading' || v.state === 'queued' || v.state === 'paused')) || (dlFilter === 'done' && v.state === 'done') || (dlFilter === 'bad' && v.state === 'error'))
-    && (!dlCat || v.category === dlCat) && (!q || (v.name||'').toLowerCase().includes(q) || v.url.toLowerCase().includes(q)));
-  const order = {downloading:0, queued:1, paused:2, error:3, done:4};
-  vis.sort((a,b) => (order[a.state] - order[b.state]) || ((b.finished||0) - (a.finished||0)) || a.order - b.order);
+    && (!dlCat || v.category === dlCat) && dlQueueMatch(v) && (!q || (v.name||'').toLowerCase().includes(q) || v.url.toLowerCase().includes(q)));
+  dlSortItems(vis);
   const chip = (id, t, n) => `<button data-f="${id}" class="${dlFilter===id?'sel':''}">${t}${n!==undefined?' '+n:''}</button>`;
   const num = (id, vals, cur) => `<select class="sel" id="${id}" style="min-width:0">${vals.map(x => `<option${x==cur?' selected':''}>${x}</option>`).join('')}</select>`;
-  const list = vis.length ? vis.map(dlRow).join('') : `<div class="dlempty">${items.length ? 'Nothing matches this filter.' : '<b>No downloads yet.</b><br>Paste a link above. NetMerge splits the file and downloads it over all your connections at once.'}</div>`;
+  const list = vis.length ? vis.map(dlRow).join('') : `<div class="dlempty">${items.length ? 'Nothing matches this filter.' : '<b>No downloads yet.</b><br>Paste a link above (http, https or ftp). NetMerge splits the file and downloads it over all your connections at once.'}</div>`;
   const holdBanner = DL.hold ? `<div class="note warn" style="margin-bottom:12px"><b>Downloads are waiting.</b> ${esc(DL.hold.replace(/^Waiting: /,''))}.</div>` : '';
   const powerBanner = DL.powerAt && (Date.now()/1000 - DL.powerAt) < 70 ? `<div class="note bad" style="margin-bottom:12px"><span style="flex:1"><b>The PC is about to shut down</b> because your downloads finished.</span><button class="btn" data-dl="cancelPower">Cancel shutdown</button></div>` : '';
   const noLines = DL.lines.length === 0 ? '<div class="note warn" style="margin-bottom:12px"><b>No internet connection found.</b> Downloads will start when a connection is available.</div>' : '';
   const html = `${powerBanner}${holdBanner}${noLines}
   <div class="card"><div class="dlbox"><textarea class="inp" id="dlUrl" rows="1" placeholder="Paste a link here (one per line to add several)" aria-label="Download link"></textarea>
     <button class="btn pri" id="dlAddBtn">Add</button><button class="btn" id="dlPaste" title="Paste the link you copied">Paste</button></div>
-    <div class="hint2" style="margin-top:8px">${DL.speed > 0 ? `Downloading at <b>${bytes(DL.speed)}/s</b> in total. ` : ''}You can also drag a link onto this window.</div></div>
+    <div class="hint2" style="margin-top:8px">${DL.speed > 0 ? `Downloading at <b>${bytes(DL.speed)}/s</b> in total. ` : ''}You can also drag a link onto this window.</div>${dlToolsRow()}</div>
   <div class="dlbar2"><div class="chips">${chip('all','All',items.length)}${chip('active','In progress',act+que+items.filter(v=>v.state==='paused').length)}${chip('done','Finished',fin)}${chip('bad','Needs attention',bad)}</div>
     <select class="sel" id="dlCat" style="min-width:0" aria-label="Type"><option value="">All types</option>${DL_CATS.map(c => `<option${c===dlCat?' selected':''}>${c}</option>`).join('')}</select>
-    <input class="inp" id="dlSearch" placeholder="Search" value="${esc(dlQ)}" style="min-width:140px;width:180px" aria-label="Search downloads">
+    <input class="inp" id="dlSearch" placeholder="Search" value="${esc(dlQ)}" style="min-width:140px;width:180px" aria-label="Search downloads">${dlSortSelect()}
     <div class="spacer" style="flex:1"></div>
     <button class="btn" data-dl="pauseAll">Pause all</button><button class="btn" data-dl="resumeAll">Resume all</button><button class="btn" data-dl="clear"${fin?'':' disabled'}>Clear finished</button></div>
   <div class="card" style="padding:6px 16px">${list}</div>
@@ -98,6 +99,7 @@ function paintDL(){
     <div class="dnsrow"><div><b>During a call</b><div class="d">"Keep the call's line free" lets downloads use your other lines while a meeting runs. Needs merging to be on. Recommended.</div></div><select class="sel" data-cfg="callMode" style="min-width:210px" aria-label="During a call">${[['avoid','Keep the call\'s line free'],['pause','Pause all downloads'],['off','Do nothing']].map(o => `<option value="${o[0]}"${cfg.callMode===o[0]?' selected':''}>${o[1]}</option>`).join('')}</select></div>
     <div class="dnsrow"><div><b>Only download at certain hours</b><div class="d">For example at night, when nobody needs the internet. Downloads outside these hours wait.</div></div><div class="row" style="gap:8px"><input type="time" class="inp" id="dlWinFrom" value="${esc(cfg.window.from)}" style="min-width:0" aria-label="From"><input type="time" class="inp" id="dlWinTo" value="${esc(cfg.window.to)}" style="min-width:0" aria-label="To"><button class="tog${cfg.window.enabled?' on':''}" id="dlWinTog" role="switch" aria-checked="${cfg.window.enabled}" aria-label="Download hours"></button></div></div>
     <div class="dnsrow"><div><b>When everything is finished</b><div class="d">Do this once, after the last download, then switch back to "Nothing". A shutdown gives you one minute to cancel.</div></div><select class="sel" data-cfg="afterAll" style="min-width:210px" aria-label="When everything is finished">${[['','Nothing'],['sleep','Put the PC to sleep'],['shutdown','Shut the PC down']].map(o => `<option value="${o[0]}"${(cfg.afterAll||'')===o[0]?' selected':''}>${o[1]}</option>`).join('')}</select></div>
+    ${dlMoreSettings(cfg)}
     <div class="dnsrow"><div><b>What NetMerge learned about websites</b><div class="d">Some websites only accept a file from one address. NetMerge remembers that for a few days so it does not waste time. ${DL.knownSites ? DL.knownSites + ' site' + (DL.knownSites===1?'':'s') + ' remembered.' : 'Nothing remembered.'}</div></div><button class="btn" id="dlForget"${DL.knownSites?'':' disabled'}>Forget</button></div>
     <div class="dnsrow"><div><b>Use the mobile line for downloads</b><div class="d">Off by default so big files do not use up your mobile data. If it is the only connection, it is used anyway.</div></div><button class="tog${cfg.allowMobile?' on':''}" id="dlMobTog" role="switch" aria-checked="${cfg.allowMobile}" aria-label="Use mobile line"></button></div>
     <div class="dnsrow"><div><b>Browser extension</b><div class="d">Lets Chrome, Edge, Brave and Firefox hand big downloads to NetMerge. ${(DL.ext&&(DL.ext.browsers||[]).length) ? (DL.ext.browsers||[]).length + ' browser' + ((DL.ext.browsers||[]).length===1?'':'s') + ' connected.' : 'No browser connected yet.'}</div></div><button class="btn" id="dlExtCode">Connect a browser</button></div>
@@ -223,7 +225,7 @@ window.addEventListener('drop', async e => {
   const dt = e.dataTransfer; if (!dt) return; e.preventDefault();
   let text = dt.getData('text/uri-list') || dt.getData('text/plain');
   if (!text && dt.files && dt.files[0] && /\.(txt|csv|lst|m3u8?)$/i.test(dt.files[0].name) && dt.files[0].size < 1e6) text = await dt.files[0].text();
-  const links = (text||'').split(/\s*\n\s*/).map(s => s.trim()).filter(s => /^https?:\/\//i.test(s));
+  const links = (text||'').split(/\s*\n\s*/).map(s => s.trim()).filter(s => /^(https?|ftp):\/\//i.test(s));
   if (!links.length) return;
   go('downloads'); await loadDL(true); const ta = $('#dlUrl'); if (ta) ta.value = links.join('\n');
 });

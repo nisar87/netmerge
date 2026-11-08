@@ -19,3 +19,5 @@
 .dlact button{padding:5px 11px;font-size:12.5px}
 .dlempty{padding:34px 10px;text-align:center;color:var(--mute)}
 @media(max-width:700px){.dlrow{grid-template-columns:40px minmax(0,1fr)}.dlact{grid-column:1/-1;justify-content:flex-start}}
+.dlseg{display:flex;height:8px;gap:1px;margin-top:6px;border-radius:4px;overflow:hidden}
+.dlseg i{flex:1;background:var(--accent)}

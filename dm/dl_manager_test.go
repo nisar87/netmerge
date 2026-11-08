@@ -222,7 +222,7 @@ func TestDLManagerKeepsCookiesOutOfTheView(t *testing.T) {
 
 func TestDLManagerAddValidation(t *testing.T) {
 	m := newTestMgr(t, newSimEnv())
-	for _, bad := range []string{"", "ftp://x/y", "javascript:alert(1)", "file:///etc/passwd", "notaurl", "http://"} {
+	for _, bad := range []string{"", "gopher://x/y", "javascript:alert(1)", "file:///etc/passwd", "notaurl", "http://"} {
 		if _, err := m.handle(dlReq{Action: "add", dlAdd: dlAdd{URL: bad}}); err == nil {
 			t.Errorf("accepted %q", bad)
 		}

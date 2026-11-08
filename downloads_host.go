@@ -39,6 +39,12 @@ func setupDownloads() {
 		OpenPath:         openPath,
 		FreeSpace:        freeSpace,
 		MarkFromInternet: markFromInternet,
+		Run: func(args []string) error {
+			if len(args) == 0 {
+				return errors.New("no command")
+			}
+			return hiddenCmd(args[0], args[1:]...).Run()
+		},
 	})
 }
 

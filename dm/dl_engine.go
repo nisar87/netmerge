@@ -47,6 +47,7 @@ type dlSpec struct {
 	Lines      []string // allowed lines, empty = all
 	MaxPerLine int
 	// Pick chooses the final path once the server has told us the file name (used when Path is empty).
+	Overwrite bool // replace a file that has the final name
 	NoPrivate bool // links that lead into the local network are refused even if typed (links sent by a web page)
 	Pick      func(dlInfo) (string, error)
 	// OnInfo reports what the server said (size, name, final path).
@@ -333,6 +334,7 @@ type dlProgress struct {
 	Speed float64      `json:"speed"`
 	Lines []dlLineStat `json:"lines"`
 	Note  string       `json:"note"`
+	Map   []uint8      `json:"map,omitempty"`
 }
 
 type dlTask struct {
@@ -447,7 +449,13 @@ func (t *dlTask) Run(ctx context.Context) error {
 		t.mu.Lock()
 		t.probeClients = append(t.probeClients, pc)
 		t.mu.Unlock()
-		info, err := dlProbe(pctx, pc, t.spec.URL, t.hdr)
+		var info dlInfo
+		var err error
+		if dlIsFTP(t.spec.URL) {
+			info, err = dlProbeFTP(pctx, l, t.spec.URL, t.hdr, t.private)
+		} else {
+			info, err = dlProbe(pctx, pc, t.spec.URL, t.hdr)
+		}
 		c()
 		if err == nil {
 			t.info, perr = info, nil
@@ -646,6 +654,9 @@ func (t *dlTask) finish() error {
 		t.file = nil
 	}
 	final := t.spec.Path
+	if _, err := os.Stat(final); err == nil && t.spec.Overwrite {
+		_ = os.Remove(final)
+	}
 	if _, err := os.Stat(final); err == nil {
 		final = dlUniquePath(filepathDir(final), filepathBase(final), func(p string) bool { _, e := os.Stat(p); return e == nil })
 	}
@@ -755,10 +766,16 @@ func (t *dlTask) syncLines() {
 		r := t.runs[l.Name]
 		if r == nil {
 			r = &dlRun{line: l, client: dlLineClient(l, t.private), max: t.spec.MaxPerLine}
+			if dlIsFTP(t.spec.URL) && r.max > 4 { // FTP servers allow few logins at once
+				r.max = 4
+			}
 			r.ctx, r.cancel = context.WithCancel(t.ctx)
 			r.target = dlStartConn
 			if t.info.Size >= 32<<20 && t.info.Ranges { // a big file: open as many connections at once as a download manager would
 				r.target = dlStartBig
+				if r.target > r.max {
+					r.target = r.max
+				}
 				if per := 24 / len(all); per < r.target { // never more than about 24 connections at the start
 					r.target = maxInt(per, dlStartConn)
 				}
@@ -1118,45 +1135,11 @@ func (t *dlTask) fetch(ctx context.Context, r *dlRun, p *dlPiece, at *dlAtt) err
 	wd := time.AfterFunc(dlStall, func() { atomic.StoreInt32(&stalled, 1); cancel() })
 	defer wd.Stop()
 
-	req, err := dlRequest(rctx, final, t.hdr)
+	body, err := t.openBody(rctx, r, final, from, end, &stalled)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", from, end))
-	if strings.HasPrefix(t.info.ETag, `"`) {
-		req.Header.Set("If-Range", t.info.ETag)
-	} else if t.info.LastMod != "" && t.info.ETag == "" {
-		req.Header.Set("If-Range", t.info.LastMod)
-	}
-	resp, err := r.client.Do(req)
-	if err != nil {
-		if atomic.LoadInt32(&stalled) == 1 {
-			return errors.New("the connection stopped sending data")
-		}
-		return err
-	}
-	defer resp.Body.Close()
-	switch resp.StatusCode {
-	case 206:
-		s, _, total, ok := dlParseRange(resp.Header.Get("Content-Range"))
-		if !ok || s != from {
-			return errors.New("the server answered with the wrong part of the file")
-		}
-		if total > 0 && total != t.info.Size {
-			return errDlChanged
-		}
-		if et := resp.Header.Get("ETag"); et != "" && t.info.ETag != "" && et != t.info.ETag {
-			return errDlChanged
-		}
-	case 200:
-		// asked for a range, got everything: the file changed (If-Range) or this address is treated differently
-		if et := resp.Header.Get("ETag"); et != "" && t.info.ETag != "" && et != t.info.ETag {
-			return errDlChanged
-		}
-		return dlHTTPErr{Code: 403}
-	default:
-		return dlHTTPErr{Code: resp.StatusCode, Retry: dlRetryAfter(resp)}
-	}
+	defer body.Close()
 
 	// Bytes are read straight into a pooled buffer; a second goroutine writes full buffers to the disk while the
 	// network read carries on into the next one, so a slow disk (or a virus scanner) never stalls the connection.
@@ -1171,7 +1154,7 @@ func (t *dlTask) fetch(ctx context.Context, r *dlRun, p *dlPiece, at *dlAtt) err
 		if int64(len(free)) > want-got {
 			free = free[:want-got]
 		}
-		n, e := resp.Body.Read(free)
+		n, e := body.Read(free)
 		if n > 0 {
 			wd.Reset(dlStall)
 			if err := t.limit(rctx, r, n); err != nil {
@@ -1216,6 +1199,58 @@ func (t *dlTask) fetch(ctx context.Context, r *dlRun, p *dlPiece, at *dlAtt) err
 	t.mu.Unlock()
 	t.markDone(p)
 	return nil
+}
+
+// openBody asks the server for bytes from..end of the file and returns the stream of them.
+func (t *dlTask) openBody(rctx context.Context, r *dlRun, final string, from, end int64, stalled *int32) (io.ReadCloser, error) {
+	if dlIsFTP(final) {
+		b, err := t.ftpOpenRange(rctx, r, from, end-from+1)
+		if err != nil && atomic.LoadInt32(stalled) == 1 {
+			return nil, errors.New("the connection stopped sending data")
+		}
+		return b, err
+	}
+	req, err := dlRequest(rctx, final, t.hdr)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", from, end))
+	if strings.HasPrefix(t.info.ETag, `"`) {
+		req.Header.Set("If-Range", t.info.ETag)
+	} else if t.info.LastMod != "" && t.info.ETag == "" {
+		req.Header.Set("If-Range", t.info.LastMod)
+	}
+	resp, err := r.client.Do(req)
+	if err != nil {
+		if atomic.LoadInt32(stalled) == 1 {
+			return nil, errors.New("the connection stopped sending data")
+		}
+		return nil, err
+	}
+	fail := func(err error) (io.ReadCloser, error) { _ = resp.Body.Close(); return nil, err }
+	switch resp.StatusCode {
+	case 206:
+		s, _, total, ok := dlParseRange(resp.Header.Get("Content-Range"))
+		if !ok || s != from {
+			return fail(errors.New("the server answered with the wrong part of the file"))
+		}
+		if total > 0 && total != t.info.Size {
+			return fail(errDlChanged)
+		}
+		if et := resp.Header.Get("ETag"); et != "" && t.info.ETag != "" && et != t.info.ETag {
+			return fail(errDlChanged)
+		}
+	case 200:
+		// asked for a range, got everything: the file changed (If-Range) or this address is treated differently
+		if et := resp.Header.Get("ETag"); et != "" && t.info.ETag != "" && et != t.info.ETag {
+			return fail(errDlChanged)
+		}
+		return fail(dlHTTPErr{Code: 403})
+	default:
+		return fail(dlHTTPErr{Code: resp.StatusCode, Retry: dlRetryAfter(resp)})
+	}
+
+	return resp.Body, nil
 }
 
 func (t *dlTask) limit(ctx context.Context, r *dlRun, n int) error {
@@ -1319,22 +1354,33 @@ func (t *dlTask) streamOnce(r *dlRun) error {
 	var stalled int32
 	wd := time.AfterFunc(dlStall, func() { atomic.StoreInt32(&stalled, 1); cancel() })
 	defer wd.Stop()
-	req, err := dlRequest(rctx, t.info.FinalURL, t.hdr)
-	if err != nil {
-		return err
+	var body io.ReadCloser
+	if dlIsFTP(t.info.FinalURL) {
+		b, err := t.ftpOpenRange(rctx, r, 0, -1)
+		if err != nil {
+			return err
+		}
+		body = b
+	} else {
+		req, err := dlRequest(rctx, t.info.FinalURL, t.hdr)
+		if err != nil {
+			return err
+		}
+		resp, err := r.client.Do(req)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode != 200 {
+			_ = resp.Body.Close()
+			return dlHTTPErr{Code: resp.StatusCode, Retry: dlRetryAfter(resp)}
+		}
+		body = resp.Body
 	}
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return dlHTTPErr{Code: resp.StatusCode, Retry: dlRetryAfter(resp)}
-	}
+	defer body.Close()
 	buf := make([]byte, 64<<10)
 	var off int64
 	for {
-		n, rerr := resp.Body.Read(buf)
+		n, rerr := body.Read(buf)
 		if n > 0 {
 			wd.Reset(dlStall)
 			if err := t.limit(rctx, r, n); err != nil {
@@ -1379,6 +1425,7 @@ func (t *dlTask) Progress() dlProgress {
 		for _, p := range t.pieces {
 			pr.Done += p.have
 		}
+		pr.Map = dlPieceMap(t.pieces, 80)
 	}
 	for _, n := range t.order {
 		r := t.runs[n]

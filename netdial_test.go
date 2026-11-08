@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // a tiny DNS server: answers every A question with one fixed address
@@ -135,5 +136,41 @@ func TestDialOnUsesTheResolvedAddress(t *testing.T) {
 		t.Fatal("expected an error")
 	} else if err.Error() == "" {
 		t.Fatal("empty error")
+	}
+}
+
+func TestUDPDialLeavesFromTheAdapterAddress(t *testing.T) {
+	pc, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	got := make(chan string, 1)
+	go func() {
+		buf := make([]byte, 64)
+		n, from, err := pc.ReadFrom(buf)
+		if err == nil {
+			got <- from.(*net.UDPAddr).IP.String() + ":" + string(buf[:n])
+			_, _ = pc.WriteTo([]byte("pong"), from)
+		}
+	}()
+	c, err := dialOn(context.Background(), Adapter{Name: "Wi-Fi", IP: "127.0.0.1", Index: 7}, "udp", pc.LocalAddr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	_, _ = c.Write([]byte("ping"))
+	select {
+	case s := <-got:
+		if s != "127.0.0.1:ping" {
+			t.Fatal(s)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("no datagram")
+	}
+	_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+	buf := make([]byte, 16)
+	if n, err := c.Read(buf); err != nil || string(buf[:n]) != "pong" {
+		t.Fatalf("%v %q", err, buf[:n])
 	}
 }

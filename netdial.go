@@ -128,11 +128,18 @@ func dialOn(ctx context.Context, a Adapter, network, addr string) (net.Conn, err
 		return nil, err
 	}
 	d := &net.Dialer{Timeout: 12 * time.Second, KeepAlive: 30 * time.Second, Control: bindControl(a.Index)}
+	udp := network == "udp" || network == "udp4"
 	if ip := net.ParseIP(a.IP); ip != nil && ip.To4() != nil {
-		d.LocalAddr = &net.TCPAddr{IP: ip}
+		if udp {
+			d.LocalAddr = &net.UDPAddr{IP: ip}
+		} else {
+			d.LocalAddr = &net.TCPAddr{IP: ip}
+		}
 	}
 	if network == "tcp" {
 		network = "tcp4"
+	} else if network == "udp" {
+		network = "udp4"
 	}
 	if net.ParseIP(host) != nil {
 		return d.DialContext(ctx, network, addr)
