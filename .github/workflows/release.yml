@@ -30,6 +30,7 @@ jobs:
         run: |
           grep -q "appVersion = \"${{ steps.v.outputs.ver }}\"" update.go || { echo "update.go appVersion must equal VERSION"; exit 1; }
           go vet ./... && go test ./...
+          node --test extension/core.test.js
       - name: Build
         if: steps.v.outputs.exists == 'false'
         run: |
@@ -37,6 +38,12 @@ jobs:
             -ldflags "-s -w -H=windowsgui -X main.appVersion=${{ steps.v.outputs.ver }} -X main.updateRepo=${GITHUB_REPOSITORY}" -o NetMerge.exe .
           sha256sum NetMerge.exe > NetMerge.exe.sha256
           cat NetMerge.exe.sha256
+      - name: Build the browser extension
+        if: steps.v.outputs.exists == 'false'
+        run: |
+          python3 extension/build.py
+          cp extension/dist/netmerge-chrome.zip NetMerge-extension-chrome-edge.zip
+          cp extension/dist/netmerge-firefox.zip NetMerge-extension-firefox.zip
       - name: Release notes
         if: steps.v.outputs.exists == 'false'
         run: |
@@ -47,5 +54,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${{ steps.v.outputs.ver }}" NetMerge.exe NetMerge.exe.sha256 \
+          gh release create "v${{ steps.v.outputs.ver }}" NetMerge.exe NetMerge.exe.sha256 NetMerge-extension-chrome-edge.zip NetMerge-extension-firefox.zip \
             --title "NetMerge ${{ steps.v.outputs.ver }}" --notes-file notes.md --target "${GITHUB_SHA}"

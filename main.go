@@ -115,6 +115,7 @@ func main() {
 	go dnsGuardLoop()
 	go presetScheduleLoop()
 	dlMgr.load()
+	ext.load()
 	dlMgr.startLoop()
 	if engineMissing() {
 		go safely("engine download", downloadEngine)

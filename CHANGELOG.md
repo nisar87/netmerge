@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.3.0
+- New: **browser extension** for Chrome, Edge, Brave and Firefox. Big downloads are handed to NetMerge automatically (5 MB and more, changeable), right-click any link for "Download with NetMerge", and your browser keeps everything NetMerge should not take (small files, private windows, local addresses, sites you choose). If NetMerge is not running the browser just downloads as before.
+- Connect a browser in **Downloads → Download settings** with a one-time code. Tokens are stored hashed, only extensions (not web pages) can use the connection, wrong codes are limited, and each browser can be disconnected. The extension files come with every release.
+
 ## 3.2.0
 - Downloads hardening: a crash or power cut at any moment no longer risks a damaged file (the next start finishes it correctly), damaged resume files are ignored and the download starts over, and a full disk is reported before the download starts.
 - Downloads give up with a clear message when every line is down for a while instead of waiting forever, huge files use larger pieces, link secrets (tokens in the address) are hidden from error messages, and saved cookies are removed once a download finishes.

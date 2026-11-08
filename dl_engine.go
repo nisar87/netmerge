@@ -262,9 +262,11 @@ type dlState struct {
 func dlPartPath(final string) string  { return final + ".nmpart" }
 func dlStatePath(final string) string { return final + ".nmdl" }
 
-func dlWriteFileAtomic(path string, b []byte) error {
+func dlWriteFileAtomic(path string, b []byte) error { return dlWriteFileAtomicMode(path, b, 0o644) }
+
+func dlWriteFileAtomicMode(path string, b []byte, mode os.FileMode) error {
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	if err := os.WriteFile(tmp, b, mode); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)

@@ -1590,6 +1590,10 @@ function paintDL(){
     <div class="dnsrow"><div><b>When everything is finished</b><div class="d">Do this once, after the last download, then switch back to "Nothing". A shutdown gives you one minute to cancel.</div></div><select class="sel" data-cfg="afterAll" style="min-width:210px" aria-label="When everything is finished">${[['','Nothing'],['sleep','Put the PC to sleep'],['shutdown','Shut the PC down']].map(o => `<option value="${o[0]}"${(cfg.afterAll||'')===o[0]?' selected':''}>${o[1]}</option>`).join('')}</select></div>
     <div class="dnsrow"><div><b>What NetMerge learned about websites</b><div class="d">Some websites only accept a file from one address. NetMerge remembers that for a few days so it does not waste time. ${DL.knownSites ? DL.knownSites + ' site' + (DL.knownSites===1?'':'s') + ' remembered.' : 'Nothing remembered.'}</div></div><button class="btn" id="dlForget"${DL.knownSites?'':' disabled'}>Forget</button></div>
     <div class="dnsrow"><div><b>Use the mobile line for downloads</b><div class="d">Off by default so big files do not use up your mobile data. If it is the only connection, it is used anyway.</div></div><button class="tog${cfg.allowMobile?' on':''}" id="dlMobTog" role="switch" aria-checked="${cfg.allowMobile}" aria-label="Use mobile line"></button></div>
+    <div class="dnsrow"><div><b>Browser extension</b><div class="d">Lets Chrome, Edge, Brave and Firefox hand big downloads to NetMerge. ${(DL.ext&&DL.ext.browsers.length) ? DL.ext.browsers.length + ' browser' + (DL.ext.browsers.length===1?'':'s') + ' connected.' : 'No browser connected yet.'}</div></div><button class="btn" id="dlExtCode">Connect a browser</button></div>
+    ${DL.ext ? `<div class="dnsrow"><div><b>Send downloads from the browser</b><div class="d">Turn off to let browsers download by themselves again.</div></div><button class="tog${DL.ext.enabled?' on':''}" id="dlExtOn" role="switch" aria-checked="${DL.ext.enabled}"><span></span></button></div>
+    <div class="dnsrow"><div><b>Only files bigger than</b><div class="d">Smaller files are quicker to leave with the browser.</div></div><select class="sel" id="dlExtMin" style="min-width:140px">${[0,1,5,10,25,50,100].map(n => `<option value="${n}"${DL.ext.minMB===n?' selected':''}>${n ? n + ' MB' : 'Everything'}</option>`).join('')}</select></div>
+    ${DL.ext.browsers.map(b => `<div class="dnsrow"><div><b>${esc(b.name)}</b><div class="d">Connected ${new Date(b.created*1000).toLocaleDateString()}${b.lastSeen ? ', last used ' + new Date(b.lastSeen*1000).toLocaleString() : ''}</div></div><button class="btn" data-extrm="${esc(b.id)}">Disconnect</button></div>`).join('')}` : ''}
     </div></details>`;
   const ta = $('#dlUrl'), keep = ta ? ta.value : '', hadFocus = document.activeElement && document.activeElement.id;
   const search = document.activeElement && document.activeElement.id === 'dlSearch' ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
@@ -1605,6 +1609,17 @@ function paintDL(){
 }
 function dlClose(){ const d = $('#dlDlg'); if (d) d.remove(); }
 function dlDialog(html){ let d = $('#dlDlg'); if (!d) { d = document.createElement('div'); d.id = 'dlDlg'; d.className = 'wiz'; document.body.appendChild(d); } setHTML(d, html); }
+async function dlExtCode(){
+  let r; try { r = await api('downloads', {action:'extCode'}); } catch(e){ return toast(e.message, true); }
+  dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Connect a browser" style="max-width:520px"><h3 style="margin:0">Connect a browser</h3>
+    <ol class="hint2" style="margin:12px 0;padding-left:20px;display:grid;gap:6px"><li>Install the <b>NetMerge Downloads</b> extension in your browser (the files are in the NetMerge release, see the README).</li><li>Click its icon in the toolbar and type this code:</li></ol>
+    <div style="font:700 30px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.12em;text-align:center;padding:14px;border-radius:10px;background:var(--bg2,rgba(127,127,127,.12))" id="dlExtCodeBox">${esc(r.code)}</div>
+    <div class="hint2" style="margin-top:8px;text-align:center" id="dlExtLeft"></div>
+    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn pri" id="dlCancel">Done</button></div></div>`);
+  $('#dlCancel').onclick = dlClose;
+  const tick = () => { const el = $('#dlExtLeft'); if (!el) return; const s = r.expires - Math.floor(Date.now()/1000); if (s <= 0) { el.textContent = 'The code has expired. Close this and click Connect a browser again.'; return; } el.textContent = 'Valid for ' + Math.floor(s/60) + ':' + String(s%60).padStart(2,'0') + ', one use only.'; setTimeout(tick, 1000); };
+  tick();
+}
 async function dlSubmit(){
   const ta = $('#dlUrl'); const links = ta.value.split(/\s*\n\s*/).map(s => s.trim()).filter(Boolean);
   if (!links.length) return toast('Paste a link first', true);
@@ -1660,6 +1675,9 @@ document.addEventListener('click', async e => {
   if (t.id === 'dlWinTog') return void dlAct({action:'config', config: {...DL.config, window: {...DL.config.window, enabled: !DL.config.window.enabled}}});
   if (t.dataset.ex !== undefined) { const ex = new Set(DL.config.excludeLines||[]); ex.has(t.dataset.ex) ? ex.delete(t.dataset.ex) : ex.add(t.dataset.ex); return void dlAct({action:'config', config: {...DL.config, excludeLines: [...ex]}}); }
   if (t.id === 'dlForget') return void dlAct({action:'forgetHosts'}, 'Forgotten');
+  if (t.id === 'dlExtCode') return dlExtCode();
+  if (t.id === 'dlExtOn') return void dlAct({action:'extConfig', extMinMB: DL.ext.minMB, extOff: DL.ext.enabled});
+  if (t.dataset.extrm) { if (!confirm('Disconnect this browser? Its extension stops sending downloads until you connect it again.')) return; return void dlAct({action:'extRevoke', id: t.dataset.extrm}, 'Disconnected'); }
   if (t.id === 'dlMobTog') return void dlAct({action:'config', config: {...DL.config, allowMobile: !DL.config.allowMobile}});
   const a = t.dataset.dl; if (!a) return;
   const id = t.dataset.id, v = DL && DL.items.find(x => x.id === id);
@@ -1683,6 +1701,7 @@ document.addEventListener('change', e => {
     return void dlAct({action:'config', config: c});
   }
   if (t.id === 'dlWinFrom' || t.id === 'dlWinTo') return void dlAct({action:'config', config: {...DL.config, window: {...DL.config.window, from: $('#dlWinFrom').value || '22:00', to: $('#dlWinTo').value || '07:00'}}});
+  if (t.id === 'dlExtMin') return void dlAct({action:'extConfig', extMinMB: +t.value, extOff: !DL.ext.enabled});
   if (e.target.id === 'dlCat') { dlCat = e.target.value; paintDL(); }
   if (e.target.id === 'dlMax') dlAct({action:'config', config: {...DL.config, maxActive: +e.target.value}});
   if (e.target.id === 'dlPer') dlAct({action:'config', config: {...DL.config, maxPerLine: +e.target.value}});

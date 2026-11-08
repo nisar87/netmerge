@@ -1,0 +1,25 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>NetMerge</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+<h1><span class="logo"></span> NetMerge Downloads</h1>
+<div id="v-down" class="v" hidden>
+  <p><b>NetMerge is not running.</b></p><p class="m">Open NetMerge, then try again. Until then your browser downloads files as usual.</p>
+  <button id="retry">Try again</button>
+</div>
+<div id="v-pair" class="v" hidden>
+  <p><b>Connect to NetMerge</b></p>
+  <p class="m">In NetMerge open <b>Downloads → Browser extension → Show code</b>, then type the code here.</p>
+  <input id="code" placeholder="xxxxx-xxxxx" autocomplete="off" spellcheck="false" maxlength="12">
+  <button id="pair">Connect</button><p id="perr" class="err"></p>
+</div>
+<div id="v-on" class="v" hidden>
+  <p id="stat"></p>
+  <label class="row"><input type="checkbox" id="on"> Send big downloads to NetMerge</label>
+  <p class="m" id="min"></p>
+  <label class="m">Keep these sites in the browser (one per line)</label>
+  <textarea id="ign" rows="3" spellcheck="false" placeholder="example.com"></textarea>
+  <div id="perm" hidden><p class="m">To download files from sites where you are signed in, NetMerge needs to pass your sign-in cookie for that link along.</p><button id="grant">Allow for all sites</button></div>
+  <button id="unpair" class="link">Disconnect</button>
+</div>
+<script src="popup.js"></script>
+</body></html>

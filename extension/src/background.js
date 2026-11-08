@@ -1,0 +1,104 @@
+// NetMerge browser extension: hands big downloads to NetMerge, which splits them over all your connections.
+if (typeof importScripts === 'function') importScripts('core.js');
+const api = globalThis.browser || globalThis.chrome;
+const BASE = 'http://127.0.0.1:9196';
+
+async function store() { return api.storage.local.get(['token', 'enabled', 'minMB', 'localOn', 'ignore', 'seen']); }
+
+async function nm(path, opt) {
+  const s = await store();
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), (opt && opt.timeout) || 4000);
+  try {
+    const r = await fetch(BASE + path, {
+      method: (opt && opt.body) ? 'POST' : 'GET', signal: ctl.signal,
+      headers: Object.assign({ 'Content-Type': 'application/json' }, s.token ? { Authorization: 'Bearer ' + s.token } : {}),
+      body: (opt && opt.body) ? JSON.stringify(opt.body) : undefined, cache: 'no-store'
+    });
+    let j = {};
+    try { j = await r.json(); } catch (e) { }
+    if (r.status === 401 && s.token && path !== '/ext/pair') await api.storage.local.remove('token'); // unpaired in NetMerge
+    return { ok: r.ok, status: r.status, data: j };
+  } catch (e) {
+    return { ok: false, status: 0, data: { error: 'NetMerge is not running' } };
+  } finally { clearTimeout(t); }
+}
+
+async function refresh() {
+  const r = await nm('/ext/status', { timeout: 1500 });
+  if (r.ok) await api.storage.local.set({ enabled: r.data.enabled !== false, minMB: r.data.minMB, seen: Date.now() });
+  return r;
+}
+
+async function cookiesFor(url) {
+  try { return NMCore.cookieHeader(await api.cookies.getAll({ url })); } catch (e) { return ''; }
+}
+
+async function send(url, referrer, filename) {
+  return nm('/ext/add', { body: { url, referrer: referrer || '', cookie: await cookiesFor(url), userAgent: navigator.userAgent, filename: filename || '' } });
+}
+
+function flash(text, color) {
+  try {
+    const a = api.action || api.browserAction;
+    a.setBadgeBackgroundColor({ color: color || '#16a34a' });
+    a.setBadgeText({ text });
+    setTimeout(() => a.setBadgeText({ text: '' }), 3500);
+  } catch (e) { }
+}
+
+api.downloads.onCreated.addListener(async (item) => {
+  try {
+    const s = await store();
+    const cfg = { paired: !!s.token, enabled: s.enabled !== false, localOn: s.localOn !== false, minMB: s.minMB == null ? 5 : s.minMB, ignore: s.ignore || [] };
+    const d = NMCore.shouldCatch(item, cfg);
+    if (!d.catch) return;
+    try { await api.downloads.pause(item.id); } catch (e) { }
+    const r = await send(item.url, item.referrer, NMCore.cleanName(item.filename));
+    if (r.ok) {
+      try { await api.downloads.cancel(item.id); } catch (e) { }
+      try { await api.downloads.erase({ id: item.id }); } catch (e) { }
+      flash(r.data.duplicate ? '=' : '+');
+    } else {
+      try { await api.downloads.resume(item.id); } catch (e) { } // NetMerge could not take it: the browser keeps it
+      if (r.status !== 0) flash('!', '#dc2626');
+    }
+  } catch (e) { }
+});
+
+function menus() {
+  try {
+    api.contextMenus.removeAll(() => {
+      api.contextMenus.create({ id: 'nm', title: 'Download with NetMerge', contexts: ['link', 'video', 'audio', 'image'] });
+    });
+  } catch (e) { }
+}
+api.runtime.onInstalled.addListener(menus);
+if (api.runtime.onStartup) api.runtime.onStartup.addListener(() => { menus(); refresh(); });
+
+api.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== 'nm') return;
+  const url = info.linkUrl || info.srcUrl;
+  if (!url || !/^https?:/i.test(url)) return;
+  if (NMCore.isLocalHost(NMCore.hostOf(url))) return flash('!', '#dc2626');
+  const r = await send(url, info.pageUrl || (tab && tab.url) || '', '');
+  flash(r.ok ? (r.data.duplicate ? '=' : '+') : '!', r.ok ? '#16a34a' : '#dc2626');
+});
+
+api.alarms.create('nm-refresh', { periodInMinutes: 1 });
+api.alarms.onAlarm.addListener((a) => { if (a.name === 'nm-refresh') refresh(); });
+
+api.runtime.onMessage.addListener((msg, _s, reply) => {
+  (async () => {
+    if (msg.type === 'ping') return reply(await nm('/ext/ping', { timeout: 1500 }));
+    if (msg.type === 'refresh') return reply(await refresh());
+    if (msg.type === 'pair') {
+      const r = await nm('/ext/pair', { body: { code: msg.code, name: msg.name } });
+      if (r.ok && r.data.token) await api.storage.local.set({ token: r.data.token });
+      return reply({ ok: r.ok, error: r.data && r.data.error });
+    }
+    if (msg.type === 'unpair') { await nm('/ext/unpair', { body: {} }); await api.storage.local.remove('token'); return reply({ ok: true }); }
+    reply({});
+  })();
+  return true;
+});

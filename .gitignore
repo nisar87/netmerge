@@ -6,3 +6,4 @@
 *.log
 *.old
 .DS_Store
+/extension/dist/

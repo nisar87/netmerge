@@ -20,9 +20,13 @@ type dlReq struct {
 	Move   string    `json:"move"`
 	// LimitBytes is the speed limit for one download (action "limit").
 	LimitBytes float64 `json:"limitBytes"`
+	// Browser extension settings (actions "extCode", "extRevoke", "extConfig").
+	ExtMinMB int  `json:"extMinMB"`
+	ExtOff   bool `json:"extOff"`
 }
 
 func registerDownloadRoutes(mux *http.ServeMux) {
+	registerExtRoutes(mux)
 	mux.HandleFunc("/api/downloads", guard(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			var in dlReq
@@ -50,7 +54,7 @@ func (m *dlManager) snapshot() map[string]any {
 	for _, l := range m.lines() {
 		lines = append(lines, map[string]any{"name": l.Name, "kind": l.Kind})
 	}
-	return map[string]any{"items": m.views(), "config": m.config(), "active": act, "speed": sp, "lines": lines, "knownSites": m.knownHosts(), "hold": m.holdText(), "powerAt": m.powerAtTime()}
+	return map[string]any{"items": m.views(), "config": m.config(), "active": act, "speed": sp, "lines": lines, "knownSites": m.knownHosts(), "hold": m.holdText(), "powerAt": m.powerAtTime(), "ext": ext.view()}
 }
 
 func (m *dlManager) handle(in dlReq) (map[string]any, error) {
@@ -127,6 +131,14 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 		m.powerAt = 0
 		m.mu.Unlock()
 		return nil, dlPowerCancel()
+	case "extCode":
+		code, exp := ext.newCode()
+		return map[string]any{"code": code[:5] + "-" + code[5:], "expires": exp.Unix()}, nil
+	case "extRevoke":
+		ext.revoke(in.ID)
+		return nil, nil
+	case "extConfig":
+		return nil, ext.setConfig(in.ExtMinMB, in.ExtOff)
 	case "forgetHosts":
 		m.forgetHosts()
 		return nil, nil
