@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.7.0
+
+Download manager speed (measured on a loopback test server before → after):
+- Reading from the network and writing to the disk now overlap, with reusable buffers and no extra copy: 549 → about 630 MB/s on four unthrottled lines.
+- Big files open 8 connections per line at once instead of climbing one by one (a server that gives each connection 2 MB/s: 6.1 s → 3.2 s for 48 MB).
+- A connection that is far slower than what the line normally gets (servers often throttle single connections) is replaced and continues where it stopped (96 MB with every 8th connection throttled: 41 s → 7 s).
+
 ## 3.6.0
 
 - The download manager is now a separate module (`dm/`) and is **off by default**. Turn it on in Settings → Download manager. While it is off it starts nothing, reads and writes no files, shows no Downloads page and does not answer the browser extension (which then says the manager is off), so it cannot clash with another download manager.

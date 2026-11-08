@@ -13,8 +13,8 @@ import (
 // line without the tunnel, so such an address leads nowhere: the name is asked again out of that very line.
 
 var (
-	lookupIPs  = func(ctx context.Context, host string) ([]net.IP, error) { return systemLookup(ctx, host) }
-	dnsPort = "53"
+	lookupIPs = func(ctx context.Context, host string) ([]net.IP, error) { return systemLookup(ctx, host) }
+	dnsPort   = "53"
 
 	resMu    sync.Mutex
 	resCache = map[string]resEntry{}

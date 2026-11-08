@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -86,6 +87,7 @@ const (
 	dlStall     = 25 * time.Second
 	dlMaxFails  = 8
 	dlStartConn = 4
+	dlStartBig  = 8
 )
 
 // ---- http plumbing -------------------------------------------------------------------------------------------------
@@ -279,6 +281,7 @@ type dlPiece struct {
 	have       int64
 	done       bool
 	fails      int
+	cuts       int // how often a slow connection was replaced on this piece
 	atts       []*dlAtt
 }
 
@@ -287,6 +290,11 @@ func (p *dlPiece) size() int64 { return p.end - p.start + 1 }
 type dlAtt struct {
 	line   string
 	cancel context.CancelFunc
+	bytes  int64 // atomic: bytes this attempt has received
+	since  time.Time
+	prev   int64
+	speed  float64 // bytes/s (smoothed)
+	slow   bool    // it was cancelled for being far slower than the other connections of its line
 }
 
 type dlRun struct {
@@ -308,6 +316,7 @@ type dlRun struct {
 	errs     int
 	refusals int
 	dead     bool
+	refSp    float64 // decaying peak of what finished pieces got on this line (bytes/s per connection)
 }
 
 type dlLineStat struct {
@@ -712,9 +721,8 @@ func (t *dlTask) supervise() {
 			} else {
 				t.idleSince = time.Time{}
 			}
-			if n%2 == 0 {
-				t.grow()
-			}
+			t.replaceSlow()
+			t.grow()
 			if atomic.LoadInt32(&t.dirty) != 0 && n%2 == 0 {
 				t.saveState()
 			}
@@ -749,6 +757,12 @@ func (t *dlTask) syncLines() {
 			r = &dlRun{line: l, client: dlLineClient(l, t.private), max: t.spec.MaxPerLine}
 			r.ctx, r.cancel = context.WithCancel(t.ctx)
 			r.target = dlStartConn
+			if t.info.Size >= 32<<20 && t.info.Ranges { // a big file: open as many connections at once as a download manager would
+				r.target = dlStartBig
+				if per := 24 / len(all); per < r.target { // never more than about 24 connections at the start
+					r.target = maxInt(per, dlStartConn)
+				}
+			}
 			if r.target > r.max {
 				r.target = r.max
 			}
@@ -850,6 +864,10 @@ func (t *dlTask) grow() {
 		case r.target < r.max && total < 24 && sp > 0 && (r.lastTgt == 0 || r.target <= r.lastTgt) && sp > r.lastSp*1.10:
 			r.target++
 			total++
+			if r.target < r.max && total < 24 && sp > r.lastSp*1.5 { // clearly still climbing: two at a time
+				r.target++
+				total++
+			}
 		case r.target > 2 && r.lastTgt > 0 && r.target > r.lastTgt && sp < r.lastSp*0.85:
 			r.target--
 			total--
@@ -887,7 +905,7 @@ func (t *dlTask) next(r *dlRun) (*dlPiece, *dlAtt, context.Context) {
 		return nil, nil, nil
 	}
 	ctx, cancel := context.WithCancel(r.ctx)
-	at := &dlAtt{line: r.line.Name, cancel: cancel}
+	at := &dlAtt{line: r.line.Name, cancel: cancel, since: time.Now()}
 	pick.atts = append(pick.atts, at)
 	return pick, at, ctx
 }
@@ -1016,6 +1034,13 @@ func (t *dlTask) worker(r *dlRun) {
 	}
 }
 
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func minInt(a, b int) int {
 	if a < b {
 		return a
@@ -1133,73 +1158,61 @@ func (t *dlTask) fetch(ctx context.Context, r *dlRun, p *dlPiece, at *dlAtt) err
 		return dlHTTPErr{Code: resp.StatusCode, Retry: dlRetryAfter(resp)}
 	}
 
-	buf := make([]byte, 64<<10)
-	acc := make([]byte, 0, 256<<10)
-	off := from
-	flush := func() error {
-		if len(acc) == 0 {
-			return nil
-		}
-		if _, err := t.file.WriteAt(acc, off); err != nil {
-			return fmt.Errorf("could not write to disk: %v", err)
-		}
-		off += int64(len(acc))
-		t.mu.Lock()
-		if h := off - p.start; h > p.have {
-			p.have = h
-		}
-		t.mu.Unlock()
-		atomic.StoreInt32(&t.dirty, 1)
-		acc = acc[:0]
-		return nil
-	}
+	// Bytes are read straight into a pooled buffer; a second goroutine writes full buffers to the disk while the
+	// network read carries on into the next one, so a slow disk (or a virus scanner) never stalls the connection.
+	w := newDlWriter(t, p, from)
+	began := time.Now()
 	want := end - from + 1
 	var got int64
+	var rerr error
 	for got < want {
-		n, rerr := resp.Body.Read(buf)
+		b := w.cur()
+		free := b[len(b):cap(b)]
+		if int64(len(free)) > want-got {
+			free = free[:want-got]
+		}
+		n, e := resp.Body.Read(free)
 		if n > 0 {
-			if got+int64(n) > want {
-				n = int(want - got)
-			}
 			wd.Reset(dlStall)
 			if err := t.limit(rctx, r, n); err != nil {
-				_ = flush()
+				w.add(n)
+				_ = w.close()
 				return err
 			}
 			atomic.AddInt64(&r.bytes, int64(n))
-			acc = append(acc, buf[:n]...)
+			atomic.AddInt64(&at.bytes, int64(n))
 			got += int64(n)
-			if len(acc) >= 256<<10 {
-				if err := flush(); err != nil {
-					t.fail(err)
-					return err
-				}
-			}
-		}
-		if rerr != nil {
-			if err := flush(); err != nil {
+			if err := w.add(n); err != nil {
+				_ = w.close()
 				t.fail(err)
 				return err
 			}
-			if got >= want {
-				break
-			}
-			if atomic.LoadInt32(&stalled) == 1 {
-				return errors.New("the connection stopped sending data")
-			}
-			if rerr == io.EOF {
-				return io.ErrUnexpectedEOF
-			}
-			return rerr
+		}
+		if e != nil {
+			rerr = e
+			break
 		}
 	}
-	if err := flush(); err != nil {
+	if err := w.close(); err != nil {
 		t.fail(err)
 		return err
+	}
+	if got < want {
+		if atomic.LoadInt32(&stalled) == 1 {
+			return errors.New("the connection stopped sending data")
+		}
+		if rerr == io.EOF || rerr == nil {
+			return io.ErrUnexpectedEOF
+		}
+		return rerr
 	}
 	t.mu.Lock()
 	r.okPieces++
 	r.errs = 0
+	if d := time.Since(began); d > 100*time.Millisecond {
+		sp := float64(got) / d.Seconds()
+		r.refSp = math.Max(sp, r.refSp*0.97)
+	}
 	t.mu.Unlock()
 	t.markDone(p)
 	return nil
@@ -1390,4 +1403,139 @@ func (t *dlTask) FinalPath() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.finalPath
+}
+
+// ---- writing to the disk without making the network wait ------------------------------------------------------------
+
+const dlWriteBuf = 512 << 10
+
+var dlBufs = sync.Pool{New: func() any { b := make([]byte, 0, dlWriteBuf); return &b }}
+
+type dlWriter struct {
+	t    *dlTask
+	p    *dlPiece
+	off  int64 // where the next buffer goes in the file
+	b    []byte
+	bp   *[]byte
+	ch   chan *[]byte
+	done chan struct{}
+	err  atomic.Value // error
+}
+
+func newDlWriter(t *dlTask, p *dlPiece, from int64) *dlWriter {
+	w := &dlWriter{t: t, p: p, off: from, ch: make(chan *[]byte, 2), done: make(chan struct{})}
+	w.take()
+	go w.run()
+	return w
+}
+
+func (w *dlWriter) take() {
+	w.bp = dlBufs.Get().(*[]byte)
+	w.b = (*w.bp)[:0]
+}
+
+// cur is the buffer being filled; the caller reads into its free space and then calls add(n).
+func (w *dlWriter) cur() []byte { return w.b }
+
+func (w *dlWriter) add(n int) error {
+	w.b = w.b[:len(w.b)+n]
+	if e, _ := w.err.Load().(error); e != nil {
+		return e
+	}
+	if len(w.b) >= cap(w.b)-4096 || (len(w.b) >= 64<<10 && len(w.ch) == 0) {
+		w.flush()
+	}
+	return nil
+}
+
+// flush hands the filled buffer to the writer and takes a fresh one.
+func (w *dlWriter) flush() {
+	if len(w.b) == 0 {
+		return
+	}
+	*w.bp = w.b
+	w.ch <- w.bp
+	w.take()
+}
+
+func (w *dlWriter) run() {
+	defer close(w.done)
+	for bp := range w.ch {
+		b := *bp
+		if e, _ := w.err.Load().(error); e == nil {
+			if _, err := w.t.file.WriteAt(b, w.off); err != nil {
+				w.err.Store(fmt.Errorf("could not write to disk: %v", err))
+			} else {
+				w.off += int64(len(b))
+				w.t.mu.Lock()
+				if h := w.off - w.p.start; h > w.p.have {
+					w.p.have = h
+				}
+				w.t.mu.Unlock()
+				atomic.StoreInt32(&w.t.dirty, 1)
+			}
+		}
+		*bp = b[:0]
+		dlBufs.Put(bp)
+	}
+}
+
+// close writes what is left and waits for the writer. It returns the first write error.
+func (w *dlWriter) close() error {
+	w.flush()
+	close(w.ch)
+	<-w.done
+	if w.bp != nil {
+		*w.bp = w.b[:0]
+		dlBufs.Put(w.bp)
+		w.bp = nil
+	}
+	e, _ := w.err.Load().(error)
+	return e
+}
+
+// ---- replacing a connection that is far slower than the others on its line -------------------------------------------
+
+// replaceSlow cancels one attempt that has been running for a while at a small fraction of what its siblings on the
+// same line get. Servers and CDNs often throttle single connections; the cancelled piece continues where it stopped,
+// on a new connection that is usually faster.
+func (t *dlTask) replaceSlow() {
+	now := time.Now()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	byLine := map[string][]*dlAtt{}
+	owner := map[*dlAtt]*dlPiece{}
+	for _, p := range t.pieces {
+		if p.done {
+			continue
+		}
+		for _, a := range p.atts {
+			b := atomic.LoadInt64(&a.bytes)
+			cur := float64(b - a.prev)
+			a.prev = b
+			a.speed = a.speed*0.5 + cur*0.5
+			byLine[a.line] = append(byLine[a.line], a)
+			owner[a] = p
+		}
+	}
+	for ln, as := range byLine {
+		r := t.runs[ln]
+		if r == nil {
+			continue
+		}
+		avg := r.refSp     // what a good connection of this line gets (from pieces that finished)
+		if avg < 512<<10 { // the line itself is slow, or nothing has finished yet: nothing to compare against
+			continue
+		}
+		cut := 0
+		for _, a := range as {
+			p := owner[a]
+			if cut < (len(as)+1)/2 && now.Sub(a.since) > 2*time.Second && a.speed < avg/8 && p.size()-p.have > 512<<10 && p.cuts < 2 && !a.slow {
+				p.cuts++
+				a.slow = true
+				a.cancel()
+				cut++
+			}
+		}
+	}
 }

@@ -40,6 +40,8 @@ type simSrv struct {
 	seen        map[string]int64 // bytes sent per client address
 	ranged      int32
 	failFirst   int32
+	slowEvery   int32 // every Nth request is served at slowRate (a throttled connection)
+	slowRate    float64
 }
 
 func simByte(i int64) byte { return byte((i*131 + (i>>8)*17 + (i >> 16)) ^ 0x5a) }
@@ -190,6 +192,9 @@ func (s *simSrv) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		if s.perConn > 0 {
 			time.Sleep(time.Duration(float64(nn) / s.perConn * float64(time.Second)))
+		}
+		if s.slowEvery > 0 && n%s.slowEvery == 0 {
+			time.Sleep(time.Duration(float64(nn) / s.slowRate * float64(time.Second)))
 		}
 	}
 }

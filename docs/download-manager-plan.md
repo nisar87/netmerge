@@ -78,3 +78,14 @@ Everything is tested with simulated servers and peers on Linux. Real-world behav
 trackers/peers and real streaming sites must be confirmed on the PC. Torrent: TCP only (no uTP), no protocol
 encryption, so a minority of peers cannot be reached. DRM streams are never supported. Browser store listing
 is not possible from here.
+
+## 6. Results of phase 2 (engine speed)
+
+| Test (loopback, simulated server) | Before | After |
+| --- | --- | --- |
+| 512 MB over 4 unthrottled lines | 549 MB/s | about 630 MB/s |
+| 48 MB, server gives 2 MB/s per connection | 6.1 s | 3.2 s (best possible 3.0 s) |
+| 96 MB, every 8th connection throttled to 100 KB/s | 41 s | 7 s |
+
+Tried and dropped: smaller pieces and "slow lines do not take the last pieces" made no measurable difference; the
+remaining ~0.2 s at the end of a download is a fixed cost, not a throughput loss.
