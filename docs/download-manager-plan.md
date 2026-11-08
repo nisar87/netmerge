@@ -96,3 +96,29 @@ remaining ~0.2 s at the end of a download is a fixed cost, not a throughput loss
 Implemented in `dm/bt_*.go` (bencode, .torrent/magnet, trackers, DHT, peer wire, ut_metadata, ut_pex, piece picking, storage, resume) and `dm/dl_torrent.go` (list integration). Tested against local seeders, an HTTP and a UDP tracker and a fake DHT node, including bad pieces, dropped peers, resume, partial file selection and magnet metadata. Loopback benchmark: 160 MB over two capped lines (20 + 10 MB/s) with eight 4 MB/s peers finished at 22 MB/s.
 
 Not verified: real swarms, real trackers and the real DHT (no internet in the build sandbox), Windows behaviour, NAT-heavy peers. Not implemented: incoming connections, MSE encryption, uTP, seeding, web seeds, BitTorrent v2.
+
+## Phase 5 result (3.10.0): streams
+
+DASH (`.mpd`: segment templates by number and by timeline, segment lists, single-file tracks), separate sound tracks for HLS and DASH, joined to one `.mp4` with ffmpeg when it is found (PATH or next to NetMerge), otherwise two files and a note. The extension popup lists the videos and streams the page loaded, and has a list of file types that are always sent. Tested with local DASH/HLS sites and a stand-in ffmpeg.
+
+Not verified: real streaming sites, real ffmpeg output, players' handling of the joined files. Not supported: live streams, DRM, DASH with several periods.
+
+## Phase 7 result (3.10.1): final audit
+
+- Full `go test -race ./...` passes; `GOOS=windows go vet ./...` is clean; the extension tests pass.
+- The pages were driven in a real browser (Playwright) against the built program: switch off/on, add by pattern, queues, properties, link grabber, torrent magnet and .torrent file, a running download. This found two real bugs that Go tests could not (the segment bar crashed the page while a split download ran; starting a torrent froze the list). Both are fixed and covered by tests.
+- Separation re-checked: `dm` imports nothing from the product (compiler-enforced), the product reaches it through `downloads_host.go` only, and with the manager off nothing runs, no routes answer and no page code loads.
+
+## Left out on purpose
+
+- **Temporary folder for unfinished files.** Unfinished files stay next to the final file, so finishing is an instant rename on the same disk. A separate temp folder would add a copy at the end and more places for leftovers.
+- **Clipboard watching and hooking other programs' downloads** (IDM does this with a system hook). NetMerge uses paste, drag and drop and the browser extension.
+- **Antivirus scanning built in.** There is a "run a program after each download" setting instead.
+- **Torrent:** incoming connections, MSE encryption, uTP, seeding, web seeds, BitTorrent v2.
+- **Signing and store listings** (program signing, browser stores): not possible from here.
+
+## What is verified and what is not
+
+Verified here (Linux, simulated servers, peers, trackers and a fake DHT node): the download engine, queues, folders, login, mirrors, FTP, HLS/DASH, torrents, resume after restart, panics isolated, off-by-default behaviour, the pages in a browser.
+
+Not verified here: Windows behaviour (only cross-compiled and vetted), real swarms and trackers, the real DHT, real streaming sites, real ffmpeg, real multi-line PCs (Wi-Fi + mobile + LAN), the browser extension inside real Chrome, Edge and Firefox.

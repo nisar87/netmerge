@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.10.1
+
+Download manager fixes found while testing the pages in a browser:
+- The segment bar (progress of the parts of a file) crashed the Downloads page while a split download was running; the server sent the list in a form the page could not read. Fixed.
+- Starting a torrent could freeze the download list (it asked for the connections while holding its own lock). Fixed, with a test.
+- Torrent Properties no longer show mirrors and "change link", which do not apply.
+- More tests: hostile peers (garbage messages), fuzzing of the torrent/magnet readers, no leftover background work after a torrent ends.
+
 ## 3.10.0
 
 Download manager, streams:

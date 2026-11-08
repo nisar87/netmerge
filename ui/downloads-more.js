@@ -114,7 +114,7 @@ function dlProps(id){
   const sh = dlLineShare(v);
   dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Properties" style="max-width:680px;max-height:92vh;overflow:auto"><h3 style="margin:0;word-break:break-all">${esc(v.name || 'Download')}</h3>
     <div class="hint2" style="margin:4px 0 10px;word-break:break-all">${esc(v.url)}</div>
-    ${v.map && v.map.length && v.state !== 'done' ? `<div class="hint2">Parts of the file</div>${dlSegBar(v)}` : ''}
+    ${v.map && v.map.length && v.state !== 'done' ? `<div class="hint2">${v.kind === 'torrent' ? 'Pieces' : 'Parts of the file'}</div>${dlSegBar(v)}` : ''}
     <div style="display:grid;grid-template-columns:140px 1fr;gap:6px 12px;margin:12px 0;font-size:13.5px">
       <span class="hint2">State</span><span>${esc(dlStateText(v))}${v.err ? ' · ' + esc(v.err) : ''}</span>
       <span class="hint2">Size</span><span>${v.size > 0 ? bytes(v.size) : 'not known'}${v.done ? ' · ' + bytes(v.done) + ' downloaded' : ''}</span>
@@ -125,7 +125,8 @@ function dlProps(id){
       ${v.verify ? `<span class="hint2">Checksum</span><span>${v.verify === 'ok' ? '✓ matches' : v.verify === 'bad' ? '✗ does NOT match' : 'checking…'}</span>` : ''}
     </div>
     ${v.kind === 'torrent' && (v.files||[]).length ? `<h4 style="margin:10px 0 6px">Files in this torrent</h4><div class="scrollbox" style="max-height:220px;overflow:auto;font-size:13px">${v.files.map((f,i) => `<label style="display:flex;gap:8px;align-items:center;padding:3px 0"><input type="checkbox" class="tfSel" data-i="${i}"${!v.select || v.select[i] ? ' checked' : ''}${v.state === 'done' ? ' disabled' : ''}> <span style="flex:1;word-break:break-all">${esc(f.name)}</span><span class="hint2">${bytes(f.size)}</span></label>`).join('')}</div>${v.state === 'done' ? '' : '<div class="row" style="gap:8px;margin-top:6px"><button class="btn" id="tfSave">Download only the ticked files</button></div>'}` : ''}
-    ${edit ? `<div style="display:grid;gap:10px;margin:8px 0">
+    ${edit && v.kind === 'torrent' ? `<div style="display:grid;gap:10px;margin:8px 0"><label class="hint2">Queue<select class="sel" id="pQ" style="width:100%;margin-top:4px">${dlQueueOpts(v.queue)}</select></label><div class="row" style="gap:8px"><button class="btn" id="pSave">Save</button></div></div>` : ''}
+    ${edit && v.kind !== 'torrent' ? `<div style="display:grid;gap:10px;margin:8px 0">
       <div class="row" style="gap:10px;flex-wrap:wrap"><label class="hint2" style="flex:1;min-width:160px">Queue<select class="sel" id="pQ" style="width:100%;margin-top:4px">${dlQueueOpts(v.queue)}</select></label>
         <label class="hint2" style="flex:1;min-width:160px">Connections per line<select class="sel" id="pC" style="width:100%;margin-top:4px"><option value="0">Automatic</option>${[1,2,4,6,8,12,16].map(n => `<option${v.conns===n?' selected':''}>${n}</option>`).join('')}</select></label></div>
       <label class="hint2">Other addresses of the same file (mirrors, one per line)<textarea class="inp" id="pM" rows="2" style="width:100%;margin-top:4px" spellcheck="false">${esc((v.mirrors||[]).join('\n'))}</textarea></label>
@@ -138,6 +139,7 @@ function dlProps(id){
   $('#dlCancel').onclick = dlClose;
   if ($('#tfSave')) $('#tfSave').onclick = async () => { const sel = $$('.tfSel').map(b => b.checked); const r = await dlAct({action:'select', id, select: sel}, 'Saved'); if (r !== null) dlClose(); };
   if (!edit) return;
+  if (v.kind === 'torrent') { $('#pSave').onclick = async () => { const r = await dlAct({action:'setQueue', id, queue: $('#pQ').value}, 'Saved'); if (r !== null) dlClose(); }; return; }
   $('#pSave').onclick = async () => {
     const r1 = await dlAct({action:'setQueue', id, queue: $('#pQ').value});
     const r2 = r1 !== null ? await dlAct({action:'setConns', id, conns: +$('#pC').value}) : null;

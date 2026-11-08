@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -634,4 +635,120 @@ func TestBtPeerFilter(t *testing.T) {
 			t.Errorf("web %s: got %v", a, got)
 		}
 	}
+}
+
+// the lines of the real product are read through the manager's own settings (which take its lock): starting a torrent
+// must not ask for them while the lock is held
+func TestBtStartDoesNotDeadlockOnLines(t *testing.T) {
+	tt := makeTorrent("Lock", []tFile{{"", 300000}}, 64<<10)
+	sd := newSeeder(t, tt)
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	m := newTestMgr(t, env)
+	m.lines = func() []dlLine { m.config(); return env.Lines() }
+	id := addOne(t, m, btMagnetLink(tt.meta.InfoHash, "Lock", nil)+"&x.pe="+sd.addr())
+	done := make(chan struct{})
+	go func() { waitState(t, m, id, "done", 30*time.Second); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(40 * time.Second):
+		t.Fatal("stuck")
+	}
+}
+
+func TestBtLeavesNoGoroutinesBehind(t *testing.T) {
+	tt := makeTorrent("leak.bin", []tFile{{"", MiB}}, 64<<10)
+	sd := newSeeder(t, tt)
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0), newSimLine("B", "127.0.0.2", 0))
+	time.Sleep(200 * time.Millisecond)
+	before := runtime.NumGoroutine()
+	for i := 0; i < 3; i++ {
+		root := filepath.Join(t.TempDir(), "leak.bin")
+		tk := newBtTask(btSpec{Meta: tt.meta, NoDHT: true, Pick: func(string) (string, error) { return root, nil }}, env)
+		tk.addPeers([]string{sd.addr()})
+		ctx, cancel := ctxTimeout(30 * time.Second)
+		if err := tk.Run(ctx); err != nil {
+			t.Fatal(err)
+		}
+		cancel()
+	}
+	var after int
+	for i := 0; i < 40; i++ {
+		after = runtime.NumGoroutine()
+		if after <= before+6 { // the seeder's own connections are still winding down
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	buf := make([]byte, 1<<16)
+	n := runtime.Stack(buf, true)
+	t.Fatalf("goroutines: %d before, %d after\n%s", before, after, buf[:n])
+}
+
+func FuzzBtParse(f *testing.F) {
+	tt := makeTorrent("f", []tFile{{"a", 100000}, {"b/c", 5}}, 32768, "http://t/a")
+	f.Add(tt.file)
+	f.Add([]byte("d4:infod6:lengthi5e4:name1:x12:piece lengthi16384e6:pieces20:aaaaaaaaaaaaaaaaaaaaee"))
+	f.Fuzz(func(t *testing.T, b []byte) {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			bdecode(b)
+			btParseTorrent(b)
+			btParseMagnet(string(b))
+			btCompactPeers(b, false)
+			btCompactPeers(b, true)
+		}()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("too slow on %d bytes", len(b))
+		}
+	})
+}
+
+// a peer that sends nonsense must not hurt the download, which another peer finishes
+func TestBtHostilePeerIsHarmless(t *testing.T) {
+	tt := makeTorrent("hostile.bin", []tFile{{"", MiB}}, 64<<10)
+	good := newSeeder(t, tt)
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	t.Cleanup(func() { l.Close() })
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				hs := make([]byte, 68)
+				io.ReadFull(c, hs)
+				my := make([]byte, 68)
+				my[0] = 19
+				copy(my[1:], "BitTorrent protocol")
+				my[25] = 0x10
+				copy(my[28:], tt.meta.InfoHash[:])
+				copy(my[48:], "-HOSTILE12345678901-")
+				c.Write(my)
+				c.Write(btFrame(5, []byte{1, 2, 3}))                     // a bitfield of the wrong size
+				c.Write(btFrame(4, be32(1<<30)))                         // a piece that does not exist
+				c.Write(btFrame(7, be32(0), be32(0), []byte("junk")))    // data nobody asked for
+				c.Write(btFrame(20, []byte{0}, []byte("not bencode")))   // a broken extension message
+				c.Write(btFrame(20, []byte{1}, []byte("d3:fooi1ee")))    // metadata nobody asked for
+				c.Write(btFrame(6, be32(1<<20), be32(0), be32(1<<31-1))) // an absurd request
+				c.Write([]byte{0x7f, 0xff, 0xff, 0xff})                  // a frame of 2 GB
+				time.Sleep(time.Second)
+			}(c)
+		}
+	}()
+	meta, _ := btParseTorrent(tt.file)
+	root := filepath.Join(t.TempDir(), "hostile.bin")
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	tk := newBtTask(btSpec{Meta: meta, NoDHT: true, Pick: func(string) (string, error) { return root, nil }}, env)
+	tk.addPeers([]string{l.Addr().String(), good.addr()})
+	ctx, cancel := ctxTimeout(30 * time.Second)
+	defer cancel()
+	if err := tk.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	checkContent(t, tt, root)
 }

@@ -601,14 +601,14 @@ func (m *dlManager) runAfter(e *dlEntry, cmd string) {
 }
 
 // dlPieceMap sums the progress of the pieces into at most n cells (0..100 each) for the segment bar.
-func dlPieceMap(ps []*dlPiece, n int) []uint8 {
+func dlPieceMap(ps []*dlPiece, n int) []int {
 	if len(ps) == 0 {
 		return nil
 	}
 	if n > len(ps) {
 		n = len(ps)
 	}
-	out := make([]uint8, n)
+	out := make([]int, n)
 	for i := 0; i < n; i++ {
 		a, b := i*len(ps)/n, (i+1)*len(ps)/n
 		var have, size int64
@@ -617,7 +617,7 @@ func dlPieceMap(ps []*dlPiece, n int) []uint8 {
 			size += p.size()
 		}
 		if size > 0 {
-			out[i] = uint8(have * 100 / size)
+			out[i] = int(have * 100 / size)
 		}
 	}
 	return out

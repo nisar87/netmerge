@@ -100,7 +100,7 @@ type dlView struct {
 	Speed      float64      `json:"speed"`
 	LineStat   []dlLineStat `json:"lineStats"`
 	Order      int          `json:"order"`
-	Map        []uint8      `json:"map,omitempty"` // progress of the parts of the file, for the segment bar
+	Map        []int        `json:"map,omitempty"` // progress of the parts of the file, for the segment bar
 	Peers      int          `json:"peers,omitempty"`
 	Seeds      int          `json:"seeds,omitempty"`
 	SwarmSeeds int          `json:"swarmSeeds,omitempty"`

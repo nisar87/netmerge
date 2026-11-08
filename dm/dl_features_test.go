@@ -397,3 +397,11 @@ func TestSegmentMapAndPerDownloadConnections(t *testing.T) {
 }
 
 func jsonMarshal(v any) ([]byte, error) { return json.Marshal(v) }
+
+// the page reads the segment map as a list of numbers (bytes would arrive as one text string)
+func TestSegmentMapIsAJSONList(t *testing.T) {
+	b, _ := json.Marshal(dlProgress{Map: dlPieceMap([]*dlPiece{{start: 0, end: 99, have: 50}, {start: 100, end: 199, have: 100}}, 2)})
+	if !strings.Contains(string(b), `"map":[50,100]`) {
+		t.Fatalf("%s", b)
+	}
+}

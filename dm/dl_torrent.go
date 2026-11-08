@@ -186,10 +186,6 @@ func (m *dlManager) newTorrentTask(e *dlEntry) *btTask {
 	default:
 		spec.TorrentURL = e.URL
 	}
-	spec.MaxPeers = 40 * max(1, len(m.lines()))
-	if spec.MaxPeers > 150 {
-		spec.MaxPeers = 150
-	}
 	spec.Pick = func(name string) (string, error) { return m.pickPath(e, dlInfo{Name: name}) }
 	spec.SaveMeta = btSaveCopy
 	spec.OnInfo = func(mt *btMeta, path string) {

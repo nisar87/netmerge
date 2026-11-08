@@ -135,9 +135,6 @@ func newBtTask(spec btSpec, env dlEnv) *btTask {
 		doneCh: make(chan struct{}), failCh: make(chan struct{})}
 	copy(t.pid[:], "-NM3900-")
 	rand.Read(t.pid[8:])
-	if spec.MaxPeers <= 0 {
-		t.spec.MaxPeers = 60
-	}
 	if t.spec.Port == 0 {
 		t.spec.Port = 6881
 	}
@@ -429,7 +426,7 @@ func (t *btTask) finish() error {
 	t.complete = true
 	t.finalPath = root
 	t.mu.Unlock()
-	t.announceOnce("completed")
+	go t.announceOnce("completed") // best effort; the download is finished either way
 	return nil
 }
 
@@ -710,7 +707,7 @@ func (t *btTask) dialOne() bool {
 			dialing++
 		}
 	}
-	if cur+dialing >= t.spec.MaxPeers || dialing >= 12 {
+	if cur+dialing >= t.maxPeers(len(ls)) || dialing >= 12 {
 		t.mu.Unlock()
 		return false
 	}
@@ -821,7 +818,7 @@ func (t *btTask) Progress() dlProgress {
 	if n > len(t.have) {
 		n = len(t.have)
 	}
-	pr.Map = make([]uint8, n)
+	pr.Map = make([]int, n)
 	for i := 0; i < n; i++ {
 		a, b := i*len(t.have)/n, (i+1)*len(t.have)/n
 		c := 0
@@ -830,7 +827,7 @@ func (t *btTask) Progress() dlProgress {
 				c++
 			}
 		}
-		pr.Map[i] = uint8(c * 100 / max(b-a, 1))
+		pr.Map[i] = c * 100 / max(b-a, 1)
 	}
 	for _, name := range t.order {
 		r := t.runs[name]
@@ -906,4 +903,12 @@ func (t *btTask) trackerAllowed(u string) bool {
 		port = "80"
 	}
 	return btPeerAllowed(net.JoinHostPort(p.Hostname(), port), t.spec.NoPrivate)
+}
+
+// maxPeers: how many peer connections to keep (more lines, more peers), unless the caller fixed a number.
+func (t *btTask) maxPeers(lines int) int {
+	if t.spec.MaxPeers > 0 {
+		return t.spec.MaxPeers
+	}
+	return min(150, 40*max(1, lines))
 }
