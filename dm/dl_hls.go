@@ -66,7 +66,7 @@ type hlsVariant struct {
 
 type hlsMaster struct {
 	variants []hlsVariant
-	audioURI map[string]bool // group ids whose renditions have their own playlist
+	audioURI map[string]string // group id -> playlist of its (default) rendition, for sound that is kept apart
 }
 
 func dlHLSLike(info dlInfo) bool {
@@ -87,8 +87,6 @@ func dlPathOf(u string) string {
 	}
 	return p.Path
 }
-
-var errDASH = dlStreamErr("This is a DASH video stream (.mpd). NetMerge cannot download those yet; use the browser, or look for an HLS (.m3u8) link.")
 
 func hlsAttrs(s string) map[string]string {
 	out := map[string]string{}
@@ -163,7 +161,7 @@ func hlsParse(body, base string) (*hlsMaster, *hlsMedia, error) {
 		}
 	}
 	if isMaster {
-		m := &hlsMaster{audioURI: map[string]bool{}}
+		m := &hlsMaster{audioURI: map[string]string{}}
 		var pending *hlsVariant
 		for _, raw := range lines {
 			l := strings.TrimSpace(raw)
@@ -171,7 +169,10 @@ func hlsParse(body, base string) (*hlsMaster, *hlsMedia, error) {
 			case strings.HasPrefix(l, "#EXT-X-MEDIA:"):
 				a := hlsAttrs(strings.TrimPrefix(l, "#EXT-X-MEDIA:"))
 				if strings.EqualFold(a["TYPE"], "AUDIO") && a["URI"] != "" {
-					m.audioURI[a["GROUP-ID"]] = true
+					u, err := hlsResolve(base, a["URI"])
+					if err == nil && (m.audioURI[a["GROUP-ID"]] == "" || strings.EqualFold(a["DEFAULT"], "YES")) {
+						m.audioURI[a["GROUP-ID"]] = u
+					}
 				}
 			case strings.HasPrefix(l, "#EXT-X-STREAM-INF:"):
 				a := hlsAttrs(strings.TrimPrefix(l, "#EXT-X-STREAM-INF:"))
@@ -307,8 +308,10 @@ type hlsInfo struct {
 	Segments int     `json:"segments"`
 	Seconds  float64 `json:"seconds"`
 	Quality  string  `json:"quality"`
-	Kind     string  `json:"kind"` // "ts" | "mp4"
+	Kind     string  `json:"kind"`  // "ts" | "mp4"
+	Audio    bool    `json:"audio"` // the sound is a second track that is joined afterwards
 	media    *hlsMedia
+	audioMed *hlsMedia
 	mediaURL string
 }
 
@@ -367,8 +370,9 @@ func dlHLSInspect(ctx context.Context, c *http.Client, link string, hdr map[stri
 	out := &hlsInfo{mediaURL: link}
 	if m != nil {
 		v := hlsBest(m)
-		if v.audio != "" && m.audioURI[v.audio] {
-			return nil, dlStreamErr("This stream keeps picture and sound in separate parts. NetMerge cannot join them yet; use the browser for this one.")
+		audioURL := ""
+		if v.audio != "" {
+			audioURL = m.audioURI[v.audio]
 		}
 		out.mediaURL, out.Quality = v.uri, v.res
 		if out.Quality == "" && v.bandwidth > 0 {
@@ -384,6 +388,26 @@ func dlHLSInspect(ctx context.Context, c *http.Client, link string, hdr map[stri
 		}
 		if md == nil {
 			return nil, dlStreamErr("The video playlist is not what it should be.")
+		}
+		if audioURL != "" {
+			ab, err := hlsGet(ctx, c, audioURL, hdr, 0, 0, 8<<20)
+			if err != nil {
+				return nil, err
+			}
+			_, am, err := hlsParse(string(ab), audioURL)
+			if err != nil {
+				return nil, err
+			}
+			if am == nil || len(am.segs) == 0 {
+				return nil, dlStreamErr("The sound playlist is not what it should be.")
+			}
+			if am.protectd {
+				return nil, dlStreamErr("This stream is copy-protected. NetMerge cannot download it.")
+			}
+			if !am.endList {
+				return nil, dlStreamErr("This is a live stream (it has no end). NetMerge only downloads recorded videos.")
+			}
+			out.audioMed, out.Audio = am, true
 		}
 	}
 	switch {
@@ -432,6 +456,7 @@ func hlsDigest(md *hlsMedia) string {
 
 type hlsJob struct {
 	t       *dlTask
+	base    string // the file this track belongs to (its parts and state live next to it)
 	md      *hlsMedia
 	dir     string
 	mu      sync.Mutex
@@ -476,9 +501,13 @@ func (t *dlTask) runHLS() (bool, error) {
 	if info == nil {
 		return false, nil
 	}
-	// name and place
+	return true, t.startStream(info, ".m3u8")
+}
+
+// startStream names the file, asks where to save it and downloads the stream (HLS or DASH).
+func (t *dlTask) startStream(info *hlsInfo, playlistExt string) error {
 	name := t.info.Name
-	if ext := filepath.Ext(name); strings.EqualFold(ext, ".m3u8") || strings.EqualFold(ext, ".m3u") {
+	if ext := filepath.Ext(name); strings.EqualFold(ext, playlistExt) || strings.EqualFold(ext, ".m3u") {
 		name = name[:len(name)-len(ext)]
 	}
 	if name == "" || name == "download" {
@@ -488,38 +517,72 @@ func (t *dlTask) runHLS() (bool, error) {
 	t.info.Size, t.info.Ranges = -1, false
 	if t.spec.Path == "" {
 		if t.spec.Pick == nil {
-			return true, errors.New("no place to save the file")
+			return errors.New("no place to save the file")
 		}
 		p, err := t.spec.Pick(t.info)
 		if err != nil {
-			return true, err
+			return err
 		}
 		t.spec.Path = p
 	}
 	if t.spec.OnInfo != nil {
 		t.spec.OnInfo(t.info, t.spec.Path)
 	}
-	return true, t.downloadStream(info)
+	return t.downloadStream(info)
 }
 
 func (t *dlTask) downloadStream(info *hlsInfo) error {
-	md := info.media
-	j := &hlsJob{t: t, md: md, dir: hlsDir(t.spec.Path), have: make([]bool, len(md.segs)), tries: make([]int, len(md.segs)), keys: map[string][]byte{}}
+	audioPath := ""
+	if info.audioMed != nil {
+		ext := ".aac"
+		if info.audioMed.fmp4 {
+			ext = ".m4a"
+		}
+		audioPath = t.spec.Path + ".audio" + ext
+		if fi, err := os.Stat(audioPath); err != nil || fi.Size() == 0 {
+			t.setNote("Downloading the sound track")
+			aj, err := t.fetchTrack(info.audioMed, t.spec.Path+".audio")
+			if err != nil {
+				return err
+			}
+			n, err := aj.joinFile(audioPath)
+			if err != nil {
+				return err
+			}
+			atomic.AddInt64(&t.hlsPrev, n)
+		}
+	}
+	j, err := t.fetchTrack(info.media, t.spec.Path)
+	if err != nil {
+		return err
+	}
+	if err := j.join(); err != nil {
+		return err
+	}
+	if audioPath != "" {
+		t.mux(audioPath)
+	}
+	return nil
+}
+
+// fetchTrack downloads all parts of one track over all lines (no joining yet).
+func (t *dlTask) fetchTrack(md *hlsMedia, base string) (*hlsJob, error) {
+	j := &hlsJob{t: t, md: md, base: base, dir: hlsDir(base), have: make([]bool, len(md.segs)), tries: make([]int, len(md.segs)), keys: map[string][]byte{}}
 	// earlier parts on the disk are kept when the playlist is the same
 	dig := hlsDigest(md)
 	var st hlsState
 	same := false
-	if b, e := os.ReadFile(hlsStatePath(t.spec.Path)); e == nil && json.Unmarshal(b, &st) == nil && st.V == 1 && st.Digest == dig && st.N == len(md.segs) {
+	if b, e := os.ReadFile(hlsStatePath(base)); e == nil && json.Unmarshal(b, &st) == nil && st.V == 1 && st.Digest == dig && st.N == len(md.segs) {
 		same = true
 	}
 	if !same {
 		_ = os.RemoveAll(j.dir)
 	}
 	if err := os.MkdirAll(j.dir, 0o755); err != nil {
-		return fmt.Errorf("cannot write to the download folder: %v", err)
+		return nil, fmt.Errorf("cannot write to the download folder: %v", err)
 	}
 	b, _ := json.Marshal(hlsState{V: 1, Digest: dig, N: len(md.segs)})
-	_ = dlWriteFileAtomic(hlsStatePath(t.spec.Path), b)
+	_ = dlWriteFileAtomic(hlsStatePath(base), b)
 	for i := range md.segs {
 		if fi, e := os.Stat(hlsSegPath(j.dir, i)); e == nil && fi.Mode().IsRegular() && fi.Size() > 0 {
 			j.have[i] = true
@@ -539,11 +602,17 @@ func (t *dlTask) downloadStream(info *hlsInfo) error {
 	t.mu.Lock()
 	t.hls = j
 	t.mu.Unlock()
-	t.setNote(fmt.Sprintf("Video stream in %d parts, downloaded over all connections", len(md.segs)))
+	if base != t.spec.Path {
+		t.setNote(fmt.Sprintf("Sound track in %d parts, downloaded over all connections", len(md.segs)))
+	} else if t.hlsPrev > 0 {
+		t.setNote(fmt.Sprintf("Video in %d parts, downloaded over all connections (the sound track is done)", len(md.segs)))
+	} else {
+		t.setNote(fmt.Sprintf("Video stream in %d parts, downloaded over all connections", len(md.segs)))
+	}
 
 	if md.mapURI != "" {
 		if err := j.fetchInit(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if j.nHave < len(md.segs) {
@@ -553,15 +622,15 @@ func (t *dlTask) downloadStream(info *hlsInfo) error {
 	fatal := t.fatal
 	t.mu.Unlock()
 	if fatal != nil {
-		return fatal
+		return nil, fatal
 	}
 	if t.ctx.Err() != nil {
-		return t.ctx.Err()
+		return nil, t.ctx.Err()
 	}
 	if j.nHave < len(md.segs) {
-		return errors.New("download stopped before the video was complete")
+		return nil, errors.New("download stopped before the video was complete")
 	}
-	return j.join()
+	return j, nil
 }
 
 func (j *hlsJob) fetchInit() error {
@@ -944,8 +1013,48 @@ func (j *hlsJob) join() error {
 		return err
 	}
 	_ = os.RemoveAll(j.dir)
-	_ = os.Remove(hlsStatePath(t.spec.Path))
+	_ = os.Remove(hlsStatePath(j.base))
 	return nil
+}
+
+// joinFile writes the parts of a track into its own file (the sound track of a stream) and clears the parts.
+func (j *hlsJob) joinFile(dst string) (int64, error) {
+	part := dst + ".part"
+	f, err := os.OpenFile(part, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		return 0, fmt.Errorf("cannot write to the download folder: %v", err)
+	}
+	var total int64
+	copyIn := func(p string) error {
+		in, err := os.Open(p)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		n, err := io.Copy(f, in)
+		total += n
+		return err
+	}
+	var jerr error
+	if j.md.mapURI != "" {
+		jerr = copyIn(hlsSegPath(j.dir, -1))
+	}
+	for i := 0; jerr == nil && i < len(j.md.segs); i++ {
+		jerr = copyIn(hlsSegPath(j.dir, i))
+	}
+	if jerr == nil {
+		jerr = f.Sync()
+	}
+	f.Close()
+	if jerr != nil {
+		return 0, fmt.Errorf("could not join the sound track: %v", jerr)
+	}
+	if err := os.Rename(part, dst); err != nil {
+		return 0, fmt.Errorf("could not finish the sound track: %v", err)
+	}
+	_ = os.RemoveAll(j.dir)
+	_ = os.Remove(hlsStatePath(j.base))
+	return total, nil
 }
 
 // progress of a stream download: done bytes and an estimate of the total from the parts finished so far.

@@ -48,3 +48,23 @@ test('helpers', () => {
   assert.equal(C.cleanName(''), '');
   assert.equal(C.cleanName('bad<name>.zip'), '');
 });
+
+test('media sniffer: playlists and files yes, stream parts and small things no', () => {
+  assert.equal(C.mediaKind('https://v.example.com/a/master.m3u8?x=1', 'application/vnd.apple.mpegurl', -1), 'stream');
+  assert.equal(C.mediaKind('https://v.example.com/a/manifest.mpd', 'application/dash+xml', 1000), 'stream');
+  assert.equal(C.mediaKind('https://v.example.com/a/movie.mp4', 'video/mp4', 50e6), 'video');
+  assert.equal(C.mediaKind('https://v.example.com/a/song', 'audio/mpeg', 5e6), 'audio');
+  assert.equal(C.mediaKind('https://v.example.com/a/seg-1.ts', 'video/mp2t', 900000), '');
+  assert.equal(C.mediaKind('https://v.example.com/a/seg-1.m4s', 'video/mp4', 900000), '');
+  assert.equal(C.mediaKind('https://v.example.com/a/click.mp3', 'audio/mpeg', 30000), '');
+  assert.equal(C.mediaKind('https://v.example.com/a/page.html', 'text/html', 90000), '');
+  assert.equal(C.mediaKind('http://192.168.1.5/a/movie.mp4', 'video/mp4', 50e6), '');
+});
+
+test('file types on the list are always sent', () => {
+  const c2 = Object.assign({}, cfg, { types: C.parseTypes('PDF, .epub; x y!') });
+  assert.deepEqual(C.parseTypes('PDF, .epub; x y!'), ['pdf', 'epub', 'x']);
+  assert.equal(C.shouldCatch(it({ url: 'https://x.com/book.pdf', fileSize: 1000 }), c2).catch, true);
+  assert.equal(C.shouldCatch(it({ url: 'https://x.com/book.txt', fileSize: 1000 }), c2).catch, false);
+  assert.equal(C.shouldCatch(it({ url: 'http://192.168.0.2/book.pdf', fileSize: 1000 }), c2).catch, false);
+});

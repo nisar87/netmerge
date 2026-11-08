@@ -3,7 +3,7 @@ if (typeof importScripts === 'function') importScripts('core.js');
 const api = globalThis.browser || globalThis.chrome;
 const BASE = 'http://127.0.0.1:9196';
 
-async function store() { return api.storage.local.get(['token', 'enabled', 'minMB', 'localOn', 'ignore', 'seen']); }
+async function store() { return api.storage.local.get(['token', 'enabled', 'minMB', 'localOn', 'ignore', 'types', 'seen']); }
 
 async function nm(path, opt) {
   const s = await store();
@@ -50,7 +50,7 @@ function flash(text, color) {
 api.downloads.onCreated.addListener(async (item) => {
   try {
     const s = await store();
-    const cfg = { paired: !!s.token, enabled: s.enabled !== false, localOn: s.localOn !== false, minMB: s.minMB == null ? 5 : s.minMB, ignore: s.ignore || [] };
+    const cfg = { paired: !!s.token, enabled: s.enabled !== false, localOn: s.localOn !== false, minMB: s.minMB == null ? 5 : s.minMB, ignore: s.ignore || [], types: s.types || [] };
     const d = NMCore.shouldCatch(item, cfg);
     if (!d.catch) return;
     try { await api.downloads.pause(item.id); } catch (e) { }
@@ -85,6 +85,25 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
   flash(r.ok ? (r.data.duplicate ? '=' : '+') : '!', r.ok ? '#16a34a' : '#dc2626');
 });
 
+// ---- videos and sounds the page loads, for the "Videos on this page" list in the popup ----
+// Only works for sites the person allowed ("Allow for all sites"); nothing is stored on disk.
+const media = new Map(); // tab id -> list
+function headerOf(h, name) { const x = (h || []).find((y) => y.name.toLowerCase() === name); return x ? x.value : ''; }
+try {
+  api.webRequest.onResponseStarted.addListener((d) => {
+    if (d.tabId < 0 || d.statusCode >= 300) return;
+    const kind = NMCore.mediaKind(d.url, headerOf(d.responseHeaders, 'content-type'), parseInt(headerOf(d.responseHeaders, 'content-length') || '-1', 10));
+    if (!kind) return;
+    const list = media.get(d.tabId) || [];
+    if (list.some((m) => m.url === d.url)) return;
+    list.push({ url: d.url, kind, size: parseInt(headerOf(d.responseHeaders, 'content-range').split('/')[1] || headerOf(d.responseHeaders, 'content-length') || '-1', 10), time: Date.now() });
+    while (list.length > 30) list.shift();
+    media.set(d.tabId, list);
+  }, { urls: ['<all_urls>'], types: ['media', 'xmlhttprequest', 'other'] }, ['responseHeaders']);
+  api.tabs.onRemoved.addListener((id) => media.delete(id));
+  api.tabs.onUpdated.addListener((id, ch) => { if (ch.status === 'loading' && ch.url) media.delete(id); });
+} catch (e) { }
+
 api.alarms.create('nm-refresh', { periodInMinutes: 1 });
 api.alarms.onAlarm.addListener((a) => { if (a.name === 'nm-refresh') refresh(); });
 
@@ -92,6 +111,13 @@ api.runtime.onMessage.addListener((msg, _s, reply) => {
   (async () => {
     if (msg.type === 'ping') return reply(await nm('/ext/ping', { timeout: 1500 }));
     if (msg.type === 'refresh') return reply(await refresh());
+    if (msg.type === 'media') return reply({ list: (media.get(msg.tab) || []).slice().reverse() });
+    if (msg.type === 'sendMedia') {
+      if (!/^https?:/i.test(msg.url || '') || NMCore.isLocalHost(NMCore.hostOf(msg.url))) return reply({ ok: false });
+      const r = await send(msg.url, msg.referrer || '', '');
+      flash(r.ok ? (r.data.duplicate ? '=' : '+') : '!', r.ok ? '#16a34a' : '#dc2626');
+      return reply({ ok: r.ok, duplicate: !!(r.data && r.data.duplicate) });
+    }
     if (msg.type === 'pair') {
       const r = await nm('/ext/pair', { body: { code: msg.code, name: msg.name } });
       if (r.ok && r.data.token) await api.storage.local.set({ token: r.data.token });

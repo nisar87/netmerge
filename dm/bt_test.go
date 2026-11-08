@@ -618,3 +618,20 @@ func TestBtDHTFindsPeers(t *testing.T) {
 		t.Fatalf("peers: %v", found)
 	}
 }
+
+func TestBtPeerFilter(t *testing.T) {
+	old := btAllowLoopback
+	btAllowLoopback = false
+	defer func() { btAllowLoopback = old }()
+	for a, want := range map[string]bool{"127.0.0.1:9196": false, "0.0.0.0:80": false, "169.254.1.1:80": false, "8.8.8.8:6881": true, "8.8.8.8:0": false,
+		"[2001:db8::1]:6881": true, "nope": false, "192.168.1.5:6881": true, "peer.example.com:6881": true} {
+		if got := btPeerAllowed(a, false); got != want {
+			t.Errorf("%s: got %v", a, got)
+		}
+	}
+	for a, want := range map[string]bool{"192.168.1.5:6881": false, "10.0.0.2:1": false, "localhost:80": false, "8.8.8.8:6881": true} {
+		if got := btPeerAllowed(a, true); got != want {
+			t.Errorf("web %s: got %v", a, got)
+		}
+	}
+}

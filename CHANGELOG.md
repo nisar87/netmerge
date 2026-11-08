@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.10.0
+
+Download manager, streams:
+- **DASH** (`.mpd`) videos: segment templates (number and timeline), segment lists and single-file tracks; best picture and sound are chosen.
+- **Separate sound track** (HLS and DASH): picture and sound are downloaded one after the other over all lines and joined into one `.mp4` when `ffmpeg` is found (PATH, or next to NetMerge). Without ffmpeg both files are kept and the list says so.
+- **Browser extension:** the popup lists the videos, sounds and streams the current page loaded, with a Download button. It sees only sites you allowed with "Allow for all sites", keeps nothing on disk, and ignores stream parts, tiny files and addresses in your own network.
+- **Extension:** a list of file types that are always sent whatever their size (for example pdf).
+- Torrents: peers and trackers on this PC or in the local network are never contacted for torrents added from a web page; link-local and multicast addresses are never contacted.
+- Not supported: live streams, DRM, DASH with several periods.
+
 ## 3.9.0
 
 Download manager: **torrents** (own BitTorrent client, part of the separate download module, off unless the manager is on):

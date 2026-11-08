@@ -40,6 +40,10 @@ var NMCore = (function () {
     return false;
   }
 
+  function parseTypes(text) {
+    return String(text || '').split(/[\s,;]+/).map(function (s) { return s.replace(/^\./, '').trim().toLowerCase(); }).filter(function (s) { return /^[a-z0-9]{1,8}$/.test(s); }).slice(0, 50);
+  }
+
   function parseIgnore(text) {
     return String(text || '').split(/[\s,;]+/).map(function (s) { return s.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim().toLowerCase(); }).filter(Boolean).slice(0, 200);
   }
@@ -56,6 +60,9 @@ var NMCore = (function () {
     var host = hostOf(item.url);
     if (isLocalHost(host)) return no('local address');
     if (ignored(host, cfg.ignore)) return no('ignored site');
+    var wanted = (cfg.types || []).map(function (x) { return String(x).replace(/^\./, '').toLowerCase(); });
+    var fext = extOf(item.filename) || extOf(pathOf(item.url));
+    if (fext && wanted.indexOf(fext) >= 0) return { catch: true, why: 'file type is on the list' };
     var minB = Math.max(0, +cfg.minMB || 0) * 1048576;
     var size = item.fileSize > 0 ? item.fileSize : (item.totalBytes > 0 ? item.totalBytes : -1);
     if (size > 0) return size >= minB ? { catch: true, why: 'big enough' } : no('small file');
@@ -74,6 +81,23 @@ var NMCore = (function () {
     return /^[^\x00-\x1f<>:"|?*]{1,200}$/.test(n) ? n : '';
   }
 
-  return { shouldCatch: shouldCatch, isLocalHost: isLocalHost, hostOf: hostOf, parseIgnore: parseIgnore, cookieHeader: cookieHeader, cleanName: cleanName, extOf: extOf, BIG: BIG };
+  // Is this response a video or sound file / playlist that the person may want? Parts of a stream (.ts, .m4s) are not.
+  function mediaKind(url, contentType, length) {
+    var ct = String(contentType || '').toLowerCase().split(';')[0].trim();
+    var path = '';
+    try { path = new URL(url).pathname.toLowerCase(); } catch (e) { return ''; }
+    if (isLocalHost(hostOf(url))) return '';
+    var ext = extOf(path);
+    if (/\.(ts|m4s|m4f|cmfv|cmfa|aac|vtt|webvtt|srt|jpg|jpeg|png|gif|svg|js|css|json|html|woff2?)$/.test(path) && ext !== 'ts') return '';
+    if (ext === 'ts' || ext === 'm4s' || ext === 'm4f') return '';
+    if (ct.indexOf('mpegurl') >= 0 || ext === 'm3u8') return 'stream';
+    if (ct.indexOf('dash+xml') >= 0 || ext === 'mpd') return 'stream';
+    var isMedia = ct.indexOf('video/') === 0 || ct.indexOf('audio/') === 0 || ['mp4', 'webm', 'mkv', 'mov', 'm4v', 'mp3', 'm4a', 'flac', 'ogg', 'opus', 'wav'].indexOf(ext) >= 0;
+    if (!isMedia) return '';
+    if (length > 0 && length < 200 * 1024) return ''; // a tiny clip or a sound effect
+    return ct.indexOf('audio/') === 0 || ['mp3', 'm4a', 'flac', 'ogg', 'opus', 'wav'].indexOf(ext) >= 0 ? 'audio' : 'video';
+  }
+
+  return { parseTypes: parseTypes, mediaKind: mediaKind, shouldCatch: shouldCatch, isLocalHost: isLocalHost, hostOf: hostOf, parseIgnore: parseIgnore, cookieHeader: cookieHeader, cleanName: cleanName, extOf: extOf, BIG: BIG };
 })();
 if (typeof module !== 'undefined') module.exports = NMCore;

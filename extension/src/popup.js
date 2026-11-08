@@ -8,7 +8,7 @@ async function paint() {
   const ping = await ask({ type: 'ping' });
   if (ping.status === 404) return show('v-off'); // NetMerge runs, but its download manager is switched off
   if (!ping.ok) return show('v-down');
-  const s = await api.storage.local.get(['token', 'localOn', 'ignore']);
+  const s = await api.storage.local.get(['token', 'localOn', 'ignore', 'types']);
   if (!s.token) return show('v-pair');
   const st = await ask({ type: 'refresh' });
   if (!st.ok) return show('v-pair'); // the token was refused: NetMerge forgot this browser
@@ -19,9 +19,30 @@ async function paint() {
   $('on').disabled = d.enabled === false;
   $('min').textContent = d.enabled === false ? 'Switched off in NetMerge.' : 'Files of ' + d.minMB + ' MB and more are sent (change this in NetMerge).';
   $('ign').value = (s.ignore || []).join('\n');
+  $('typ').value = (s.types || []).join(', ');
   try { const has = await api.permissions.contains({ origins: ['<all_urls>'] }); $('perm').hidden = has; } catch (e) { $('perm').hidden = true; }
+  paintMedia();
 }
 
+async function paintMedia() {
+  try {
+    const tabs = await api.tabs.query({ active: true, currentWindow: true });
+    if (!tabs[0]) return;
+    const r = await ask({ type: 'media', tab: tabs[0].id });
+    const box = $('mlist');
+    box.textContent = '';
+    for (const m of (r.list || []).slice(0, 8)) {
+      const row = document.createElement('div'); row.className = 'row';
+      const name = decodeURIComponent(m.url.split('?')[0].split('/').pop() || m.url).slice(0, 40);
+      const label = document.createElement('span'); label.className = 'm'; label.style.flex = '1'; label.style.overflow = 'hidden';
+      label.textContent = (m.kind === 'stream' ? 'Stream · ' : m.kind === 'audio' ? 'Sound · ' : 'Video · ') + (m.size > 0 ? (m.size / 1048576).toFixed(1) + ' MB · ' : '') + name;
+      const b = document.createElement('button'); b.textContent = 'Download';
+      b.onclick = async () => { b.disabled = true; const x = await ask({ type: 'sendMedia', url: m.url, referrer: tabs[0].url || '' }); b.textContent = x.ok ? (x.duplicate ? 'Already there' : 'Added') : 'Failed'; };
+      row.appendChild(label); row.appendChild(b); box.appendChild(row);
+    }
+    $('media').hidden = !(r.list || []).length;
+  } catch (e) { $('media').hidden = true; }
+}
 $('retry').onclick = paint;
 $('retry2').onclick = paint;
 $('pair').onclick = async () => {
@@ -35,6 +56,7 @@ $('ign').onchange = async () => {
   const list = $('ign').value.split(/[\s,;]+/).map((s) => s.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim().toLowerCase()).filter(Boolean).slice(0, 200);
   await api.storage.local.set({ ignore: list });
 };
+$('typ').onchange = async () => { await api.storage.local.set({ types: NMCore.parseTypes($('typ').value) }); };
 $('grant').onclick = async () => { try { await api.permissions.request({ origins: ['<all_urls>'] }); } catch (e) { } paint(); };
 $('unpair').onclick = async () => { await ask({ type: 'unpair' }); paint(); };
 paint();

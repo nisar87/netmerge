@@ -175,7 +175,7 @@ func (m *dlManager) addTorrent(a dlAdd) (*dlItem, error) {
 }
 
 func (m *dlManager) newTorrentTask(e *dlEntry) *btTask {
-	spec := btSpec{Header: e.Header, Lines: e.Lines, Selected: e.Select}
+	spec := btSpec{Header: e.Header, Lines: e.Lines, Selected: e.Select, NoPrivate: e.Web}
 	hash := btHashOfLink(e.URL)
 	switch {
 	case hash != "" && btLoadCopy(hash) != nil:

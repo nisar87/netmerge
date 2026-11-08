@@ -352,6 +352,7 @@ type dlTask struct {
 	pieces       []*dlPiece
 	pieceSize    int64
 	hls          *hlsJob
+	hlsPrev      int64 // bytes of the tracks of a stream that are already finished (the sound)
 	probeClients []*http.Client
 	runs         map[string]*dlRun
 	order        []string
@@ -477,7 +478,9 @@ func (t *dlTask) Run(ctx context.Context) error {
 		return perr
 	}
 	if dlDASHLike(t.info) {
-		return errDASH
+		if handled, err := t.runDASH(); handled {
+			return err
+		}
 	}
 	if dlHLSLike(t.info) {
 		if handled, err := t.runHLS(); handled {
@@ -1422,6 +1425,10 @@ func (t *dlTask) Progress() dlProgress {
 	pr := dlProgress{Total: t.info.Size, Note: t.note}
 	if t.hls != nil {
 		pr.Done, pr.Total = t.hls.progress()
+		if pv := atomic.LoadInt64(&t.hlsPrev); pv > 0 {
+			pr.Done += pv
+			pr.Total += pv
+		}
 	} else if t.stream {
 		pr.Done = atomic.LoadInt64(&t.streamN)
 	} else {

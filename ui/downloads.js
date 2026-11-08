@@ -147,6 +147,7 @@ function dlShowProbe(link, p){
   const fine = p.ok;
   const hls = fine && p.hls;
   const can = hls ? p.lines > 1 : fine && info.ranges && info.size > 0 && p.lines > 1 && !p.locked;
+  const audioNote = hls && p.hls.audio ? (p.mux ? ' The sound is a separate track and is joined to the picture with ffmpeg.' : ' The sound is a separate track. ffmpeg was not found on this PC, so you get two files (picture and sound).') : '';
   const why = hls ? (p.lines > 1 ? `The video comes in ${p.hls.segments} parts. They are downloaded over all ${p.lines} connections and joined into one file.` : `The video comes in ${p.hls.segments} parts and is downloaded over your one connection.`) : !fine ? '' : !info.ranges ? 'This website does not allow splitting the file, so one connection is used.' : info.size <= 0 ? 'The size is not known, so one connection is used.' : p.lines < 2 ? 'Only one connection is available right now.' : p.locked ? 'This website only accepts one address per file, so one line is used.' : `The file can be split over all ${p.lines} connections.`;
   dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Add download" style="max-width:560px"><h3 style="margin:0">Add this download</h3>
     ${fine ? '' : `<div class="note bad" style="margin:12px 0">${esc(p.error || 'The link could not be checked.')} You can still add it.</div>`}
@@ -159,7 +160,7 @@ function dlShowProbe(link, p){
       ${(p.lineNames||[]).length > 1 ? `<div>Use these connections<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">${p.lineNames.map(n => `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="dlLn" value="${esc(n)}" checked> ${esc(labelOf(n))}</label>`).join('')}</div></div>` : ''}
     </div></details></div>
     ${p.duplicate ? '<div class="note warn" style="margin:0 0 10px"><b>This link is already in your list.</b> Adding it again makes a second copy.</div>' : ''}
-    ${fine ? `<div class="hint2" style="margin-bottom:6px">${hls ? '<b>Video stream</b> · about ' + (p.hls.seconds < 90 ? Math.round(p.hls.seconds) + ' sec' : Math.round(p.hls.seconds/60) + ' min') + (p.hls.quality ? ' · ' + esc(p.hls.quality) : '') + ' · ' : (info.size > 0 ? '<b>' + bytes(info.size) + '</b> · ' : '')}${hls ? '' : esc(info.type || 'unknown type')}</div><div class="hint2" style="${can?'color:var(--good)':''}">${esc(why)}</div>` : ''}
+    ${fine ? `<div class="hint2" style="margin-bottom:6px">${hls ? '<b>Video stream</b> · about ' + (p.hls.seconds < 90 ? Math.round(p.hls.seconds) + ' sec' : Math.round(p.hls.seconds/60) + ' min') + (p.hls.quality ? ' · ' + esc(p.hls.quality) : '') + ' · ' : (info.size > 0 ? '<b>' + bytes(info.size) + '</b> · ' : '')}${hls ? '' : esc(info.type || 'unknown type')}</div><div class="hint2" style="${can?'color:var(--good)':''}">${esc(why + audioNote)}</div>` : ''}
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn" id="dlCancel">Cancel</button><button class="btn" id="dlLater">Add, start later</button><button class="btn pri" id="dlGo">Download now</button></div></div>`);
   $('#dlGo').onclick = () => dlConfirm(link, p, true);
   $('#dlLater').onclick = () => dlConfirm(link, p, false);

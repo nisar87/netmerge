@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Sends big downloads to NetMerge, which downloads them over all your internet connections at once.",
   "browser_specific_settings": { "gecko": { "id": "downloads@netmerge.app", "strict_min_version": "115.0" } },
-  "permissions": ["downloads", "storage", "contextMenus", "alarms", "cookies"],
+  "permissions": ["downloads", "storage", "contextMenus", "alarms", "cookies", "webRequest"],
   "host_permissions": ["http://127.0.0.1:9196/*"],
   "optional_permissions": [],
   "background": { "scripts": ["core.js", "background.js"] },

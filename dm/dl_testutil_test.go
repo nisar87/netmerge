@@ -310,7 +310,7 @@ const MiB = 1 << 20
 
 func (s *simSrv) set(f func()) { s.mu.Lock(); f(); s.mu.Unlock() }
 
-func init() { enabledFlag.set(true) } // the tests use the manager as if it were switched on
+func init() { enabledFlag.set(true); btAllowLoopback = true } // the tests use the manager as if it were switched on
 
 func ctxTimeout(d time.Duration) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), d)

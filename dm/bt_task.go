@@ -18,8 +18,10 @@ import (
 	mrand "math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,6 +43,7 @@ type btSpec struct {
 	DHT        []string // replaces the built-in entry points (tests)
 	Port       int
 	Selected   []bool // files to download (nil = all)
+	NoPrivate  bool   // added by a web page: peers and trackers inside the local network are not contacted
 }
 
 type btKey struct{ pc, off int }
@@ -542,7 +545,7 @@ func (t *btTask) addPeers(list []string) {
 		if len(t.known) >= 4000 {
 			break
 		}
-		if _, _, err := net.SplitHostPort(a); err != nil {
+		if !btPeerAllowed(a, t.spec.NoPrivate) {
 			continue
 		}
 		if t.known[a] == nil {
@@ -590,7 +593,7 @@ func (t *btTask) announceLoop() {
 	seen := map[string]bool{}
 	for {
 		for _, u := range t.trackers() {
-			if !seen[u] {
+			if !seen[u] && t.trackerAllowed(u) {
 				seen[u] = true
 				list = append(list, &trk{url: u, first: true})
 			}
@@ -868,3 +871,39 @@ var _ = fmt.Sprint
 var _ = btNew20
 
 func (t *btTask) completeNow() bool { t.mu.Lock(); defer t.mu.Unlock(); return t.complete }
+
+var btAllowLoopback = false // tests talk to peers on the loopback
+
+// btPeerAllowed refuses addresses that can never be a real peer (this PC, link-local, multicast) and, for torrents
+// that a web page added, also addresses inside the local network.
+func btPeerAllowed(addr string, noPrivate bool) bool {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil || port == "" || port == "0" {
+		return false
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return !noPrivate || (host != "localhost" && !strings.HasSuffix(host, ".local") && !strings.HasSuffix(host, ".lan"))
+	}
+	switch {
+	case ip.IsUnspecified() || ip.IsMulticast() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast():
+		return false
+	case ip.IsLoopback():
+		return btAllowLoopback
+	case noPrivate && ip.IsPrivate():
+		return false
+	}
+	return true
+}
+
+func (t *btTask) trackerAllowed(u string) bool {
+	p, err := url.Parse(u)
+	if err != nil || p.Hostname() == "" {
+		return false
+	}
+	port := p.Port()
+	if port == "" {
+		port = "80"
+	}
+	return btPeerAllowed(net.JoinHostPort(p.Hostname(), port), t.spec.NoPrivate)
+}

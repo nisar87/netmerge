@@ -333,9 +333,8 @@ func TestHLSRefusals(t *testing.T) {
 		url  string
 		want string
 	}{
-		"live":           {hlsOpt{live: true}, "/v/index.m3u8", "live stream"},
-		"drm":            {hlsOpt{drm: true}, "/v/index.m3u8", "copy-protected"},
-		"separate sound": {hlsOpt{sepAudio: true}, "/v/master.m3u8", "separate parts"},
+		"live": {hlsOpt{live: true}, "/v/index.m3u8", "live stream"},
+		"drm":  {hlsOpt{drm: true}, "/v/index.m3u8", "copy-protected"},
 	}
 	for name, c := range cases {
 		s := newHLSSrv(t, c.o)
@@ -349,18 +348,6 @@ func TestHLSRefusals(t *testing.T) {
 		if retry || msg != err.Error() {
 			t.Errorf("%s: friendly=%q retry=%v", name, msg, retry)
 		}
-	}
-	// DASH
-	mux := http.NewServeMux()
-	mux.HandleFunc("/a.mpd", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/dash+xml")
-		w.Write([]byte("<MPD/>"))
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-	env, _, _ := twoLines()
-	if _, err := hlsRun(t, env, srv.URL+"/a.mpd", filepath.Join(t.TempDir(), "x")); err == nil || !strings.Contains(err.Error(), "DASH") {
-		t.Errorf("dash: %v", err)
 	}
 }
 

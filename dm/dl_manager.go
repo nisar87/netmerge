@@ -1170,6 +1170,12 @@ func (m *dlManager) remove(id string, deleteFiles bool) error {
 			_ = os.Remove(dlStatePath(e.Path))
 			_ = os.RemoveAll(hlsDir(e.Path))
 			_ = os.Remove(hlsStatePath(e.Path))
+			_ = os.RemoveAll(hlsDir(e.Path + ".audio"))
+			_ = os.Remove(hlsStatePath(e.Path + ".audio"))
+			for _, x := range []string{".aac", ".m4a"} {
+				_ = os.Remove(e.Path + ".audio" + x)
+				_ = os.Remove(e.Path + ".audio" + x + ".part")
+			}
 		} else if deleteFiles {
 			_ = os.Remove(e.Path)
 		}
