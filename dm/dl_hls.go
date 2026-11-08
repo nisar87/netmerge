@@ -1,4 +1,4 @@
-package main
+package dm
 
 import (
 	"bytes"
@@ -639,10 +639,10 @@ func (j *hlsJob) supervise() {
 			t.order = append(t.order, l.Name)
 			r.active = n
 			t.mu.Unlock()
-			go t.speedLoop(r)
+			goSafe("speed", func() { t.speedLoop(r) })
 			for k := 0; k < n; k++ {
 				wg.Add(1)
-				go func() { defer wg.Done(); j.worker(r) }()
+				goSafe("segment", func() { defer wg.Done(); j.worker(r) })
 			}
 		}
 		select {

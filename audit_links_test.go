@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"netmerge/dm"
 	"sort"
 	"strings"
 	"testing"
@@ -245,26 +246,18 @@ func TestDownloadLinesFollowTheSameRules(t *testing.T) {
 	mix := []Adapter{lan, wifi1, wifi2, mobile}
 	setAdapters(mix...)
 	syncLinks(mix)
-	setMobile := func(v bool) { dlMgr.mu.Lock(); dlMgr.cfg.AllowMobile = v; dlMgr.mu.Unlock() }
-	defer setMobile(false)
-	setMobile(false)
-	got := dlProdLines()
+	got := dmLines()
 	var names []string
-	for _, l := range got {
+	for _, l := range got.Use {
 		names = append(names, l.Name)
 	}
-	if len(got) != 3 || strings.Contains(strings.Join(names, ","), "Ethernet 3") {
-		t.Fatalf("lines for downloads: %v", names)
-	}
-	setMobile(true)
-	if all := dlProdLines(); len(all) != 4 {
-		t.Fatalf("with the mobile line allowed: %d", len(all))
+	if len(got.Use) != 3 || len(got.Mobile) != 1 || strings.Contains(strings.Join(names, ","), "Ethernet 3") {
+		t.Fatalf("lines for downloads: %v + %d mobile", names, len(got.Mobile))
 	}
 	// a line that left (unplugged) or one whose name is only in the old settings is simply not there
-	setMobile(false)
 	setAdapters(wifi1, wifi2)
-	if got := dlProdLines(); len(got) != 2 {
-		t.Fatalf("after the LAN left: %d", len(got))
+	if got := dmLines(); len(got.Use) != 2 || len(got.Mobile) != 0 {
+		t.Fatalf("after the LAN left: %d", len(got.Use))
 	}
 }
 
@@ -301,8 +294,8 @@ func TestDownloadsFollowAnAdapterWhoseAddressChanges(t *testing.T) {
 			c.Close()
 		}
 	}()
-	var line dlLine
-	for _, l := range dlProdLines() {
+	var line dm.Line
+	for _, l := range dmLines().Use {
 		if l.Name == "Wi-Fi" {
 			line = l
 		}
@@ -347,7 +340,12 @@ func TestBusyOnlyAndBackupLinesStayOutOfDownloads(t *testing.T) {
 	})
 	names := func() string {
 		var n []string
-		for _, l := range dlProdLines() {
+		ls := dmLines()
+		use := append(append([]dm.Line{}, ls.Use...), ls.Mobile...)
+		if len(use) == 0 { // the only line is used anyway
+			use = ls.Held
+		}
+		for _, l := range use {
 			n = append(n, l.Name)
 		}
 		sort.Strings(n)
@@ -360,8 +358,11 @@ func TestBusyOnlyAndBackupLinesStayOutOfDownloads(t *testing.T) {
 		t.Fatalf("busy-only line is used for downloads while the others have room: %s", got)
 	}
 	var ui []string
-	for _, l := range dlUILines() {
-		ui = append(ui, l.Name)
+	{
+		ls := dmLines()
+		for _, l := range append(append(append([]dm.Line{}, ls.Use...), ls.Held...), ls.Mobile...) {
+			ui = append(ui, l.Name)
+		}
 	}
 	sort.Strings(ui)
 	if strings.Join(ui, ",") != "Ethernet,Wi-Fi,Wi-Fi 2" {

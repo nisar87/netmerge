@@ -1,4 +1,4 @@
-package main
+package dm
 
 import (
 	"context"
@@ -301,3 +301,5 @@ func mustOK(t *testing.T, tk *dlTask, err error, size int64) {
 const MiB = 1 << 20
 
 func (s *simSrv) set(f func()) { s.mu.Lock(); f(); s.mu.Unlock() }
+
+func init() { enabledFlag.set(true) } // the tests use the manager as if it were switched on

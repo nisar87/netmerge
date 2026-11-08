@@ -1,4 +1,4 @@
-package main
+package dm
 
 import (
 	"context"
@@ -28,7 +28,15 @@ type dlReq struct {
 
 func registerDownloadRoutes(mux *http.ServeMux) {
 	registerExtRoutes(mux)
-	mux.HandleFunc("/api/downloads", guard(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/downloads", H.Guard(safeHandler(func(w http.ResponseWriter, r *http.Request) {
+		if !Enabled() {
+			if r.Method == http.MethodPost {
+				writeErr(w, 409, "The download manager is off. Turn it on in Settings.")
+				return
+			}
+			writeJSON(w, map[string]any{"enabled": false})
+			return
+		}
 		if r.Method == http.MethodPost {
 			var in dlReq
 			if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in) != nil {
@@ -45,8 +53,10 @@ func registerDownloadRoutes(mux *http.ServeMux) {
 				return
 			}
 		}
-		writeJSON(w, dlMgr.snapshot())
-	}))
+		snap := dlMgr.snapshot()
+		snap["enabled"] = true
+		writeJSON(w, snap)
+	})))
 }
 
 func (m *dlManager) snapshot() map[string]any {
@@ -131,7 +141,7 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 		m.mu.Lock()
 		m.powerAt = 0
 		m.mu.Unlock()
-		return nil, dlPowerCancel()
+		return nil, hPowerCancel()
 	case "extCode":
 		code, exp := ext.newCode()
 		return map[string]any{"code": code[:5] + "-" + code[5:], "expires": exp.Unix()}, nil
@@ -183,11 +193,11 @@ func (m *dlManager) openItem(id string, reveal bool) error {
 	}
 	if _, err := os.Stat(p); err != nil {
 		if reveal {
-			return openPath(filepath.Dir(p), false)
+			return hOpen(filepath.Dir(p), false)
 		}
 		return errors.New("the file was moved or deleted")
 	}
-	return openPath(p, reveal)
+	return hOpen(p, reveal)
 }
 
 // probe: what is behind this link? Used by the "add" dialog.

@@ -13,19 +13,19 @@ import (
 // line without the tunnel, so such an address leads nowhere: the name is asked again out of that very line.
 
 var (
-	dlLookup  = func(ctx context.Context, host string) ([]net.IP, error) { return dlSystemLookup(ctx, host) }
-	dlDNSPort = "53"
+	lookupIPs  = func(ctx context.Context, host string) ([]net.IP, error) { return systemLookup(ctx, host) }
+	dnsPort = "53"
 
-	dlResMu    sync.Mutex
-	dlResCache = map[string]dlResEntry{}
+	resMu    sync.Mutex
+	resCache = map[string]resEntry{}
 )
 
-type dlResEntry struct {
+type resEntry struct {
 	ips []net.IP
 	at  time.Time
 }
 
-func dlSystemLookup(ctx context.Context, host string) ([]net.IP, error) {
+func systemLookup(ctx context.Context, host string) ([]net.IP, error) {
 	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	var out []net.IP
 	for _, a := range addrs {
@@ -39,45 +39,45 @@ func dlSystemLookup(ctx context.Context, host string) ([]net.IP, error) {
 	return out, err
 }
 
-// dlFakeIP: addresses of the benchmarking range 198.18.0.0/15, used by the merge engine's fake DNS answers.
-func dlFakeIP(ip net.IP) bool {
+// fakeIP: addresses of the benchmarking range 198.18.0.0/15, used by the merge engine's fake DNS answers.
+func fakeIP(ip net.IP) bool {
 	v := ip.To4()
 	return v != nil && v[0] == 198 && (v[1] == 18 || v[1] == 19)
 }
 
-func dlRealOnly(ips []net.IP) []net.IP {
+func realOnly(ips []net.IP) []net.IP {
 	var out []net.IP
 	for _, ip := range ips {
-		if !dlFakeIP(ip) {
+		if !fakeIP(ip) {
 			out = append(out, ip)
 		}
 	}
 	return out
 }
 
-// dlResolveOn gives the IPv4 addresses of host as seen from the adapter a.
-func dlResolveOn(ctx context.Context, a Adapter, host string) ([]net.IP, error) {
+// resolveOn gives the IPv4 addresses of host as seen from the adapter a.
+func resolveOn(ctx context.Context, a Adapter, host string) ([]net.IP, error) {
 	key := a.Name + "|" + host
-	dlResMu.Lock()
-	if e, ok := dlResCache[key]; ok && time.Since(e.at) < 5*time.Minute {
-		dlResMu.Unlock()
+	resMu.Lock()
+	if e, ok := resCache[key]; ok && time.Since(e.at) < 5*time.Minute {
+		resMu.Unlock()
 		return e.ips, nil
 	}
-	dlResMu.Unlock()
+	resMu.Unlock()
 	store := func(ips []net.IP) ([]net.IP, error) {
-		dlResMu.Lock()
-		if len(dlResCache) > 2000 {
-			dlResCache = map[string]dlResEntry{}
+		resMu.Lock()
+		if len(resCache) > 2000 {
+			resCache = map[string]resEntry{}
 		}
-		dlResCache[key] = dlResEntry{ips, time.Now()}
-		dlResMu.Unlock()
+		resCache[key] = resEntry{ips, time.Now()}
+		resMu.Unlock()
 		return ips, nil
 	}
 	sctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	ips, err := dlLookup(sctx, host)
+	ips, err := lookupIPs(sctx, host)
 	cancel()
 	if err == nil && len(ips) > 0 {
-		if real := dlRealOnly(ips); len(real) > 0 {
+		if real := realOnly(ips); len(real) > 0 {
 			return store(real)
 		}
 	}
@@ -102,7 +102,7 @@ func dlResolveOn(ctx context.Context, a Adapter, host string) ([]net.IP, error) 
 					d.LocalAddr = &net.UDPAddr{IP: ip}
 				}
 			}
-			return d.DialContext(c, network, net.JoinHostPort(srv, dlDNSPort))
+			return d.DialContext(c, network, net.JoinHostPort(srv, dnsPort))
 		}}
 		qctx, qc := context.WithTimeout(ctx, 4*time.Second)
 		addrs, e := r.LookupIP(qctx, "ip4", host)
@@ -111,7 +111,7 @@ func dlResolveOn(ctx context.Context, a Adapter, host string) ([]net.IP, error) 
 			lastErr = e
 			continue
 		}
-		if real := dlRealOnly(addrs); len(real) > 0 {
+		if real := realOnly(addrs); len(real) > 0 {
 			return store(real)
 		}
 	}
@@ -121,8 +121,8 @@ func dlResolveOn(ctx context.Context, a Adapter, host string) ([]net.IP, error) 
 	return nil, lastErr
 }
 
-// dlDialOn opens a connection out of the adapter a, looking the name up through that adapter.
-func dlDialOn(ctx context.Context, a Adapter, network, addr string) (net.Conn, error) {
+// dialOn opens a connection out of the adapter a, looking the name up through that adapter.
+func dialOn(ctx context.Context, a Adapter, network, addr string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func dlDialOn(ctx context.Context, a Adapter, network, addr string) (net.Conn, e
 	if net.ParseIP(host) != nil {
 		return d.DialContext(ctx, network, addr)
 	}
-	ips, err := dlResolveOn(ctx, a, host)
+	ips, err := resolveOn(ctx, a, host)
 	if err != nil {
 		return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
 	}

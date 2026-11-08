@@ -1,4 +1,4 @@
-package main
+package dm
 
 // The download manager: the list of downloads, the queue, what is kept on disk, and the connection to the lines.
 
@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -120,14 +119,8 @@ var dlMgr *dlManager
 func init() { dlMgr = newDlManager(dlProdLines); dlMgr.uiLinesFn = dlUILines }
 
 func newDlManager(lines func() []dlLine) *dlManager {
-	m := &dlManager{hosts: map[string]int64{}, perLn: map[string]*dlBucket{}, lines: lines, callInfo: dlCallNow, power: dlPower,
-		presetInfo: func() (string, string) {
-			s := getSettings()
-			if p, ok := findPreset(s, s.Preset); ok && s.Preset != "" {
-				return p.Name, p.Downloads
-			}
-			return "", ""
-		}}
+	m := &dlManager{hosts: map[string]int64{}, perLn: map[string]*dlBucket{}, lines: lines, callInfo: func() (bool, string) { return false, "" }, power: hPower,
+		presetInfo: hPreset}
 	m.cfg = dlFixConfig(dlConfig{Dir: defaultDlDir(), UseCategories: true, MaxActive: 3, MaxPerLine: 8})
 	return m
 }
@@ -136,10 +129,10 @@ func defaultDlDir() string {
 	if h, err := os.UserHomeDir(); err == nil {
 		return filepath.Join(h, "Downloads")
 	}
-	return filepath.Join(rootDir, "downloads")
+	return filepath.Join(hRoot(), "downloads")
 }
 
-func dlFile() string { return filepath.Join(rootDir, "data", "downloads.json") }
+func dlFile() string { return filepath.Join(hRoot(), "data", "downloads.json") }
 
 // ---- dlEnv ---------------------------------------------------------------------------------------------------------
 
@@ -205,34 +198,25 @@ func (m *dlManager) LockHost(host string) {
 	m.hosts[host] = time.Now().Add(3 * 24 * time.Hour).Unix()
 	m.dirty = true
 	m.mu.Unlock()
-	note("info", "Downloads: %s only accepts one address per file, so downloads from it use one line", host)
+	hNote("info", "Downloads: %s only accepts one address per file, so downloads from it use one line", host)
 }
 
 func (m *dlManager) Changed() { m.mu.Lock(); m.dirty = true; m.mu.Unlock() }
 
 // ---- the real lines ------------------------------------------------------------------------------------------------
 
-var (
-	dlCapMu   sync.Mutex
-	dlCapAt   time.Time
-	dlCapData map[string][2]float64
-)
+func dlLineCap(name string) float64 { return hLineRate(name) }
 
-func dlLineCap(name string) float64 {
-	dlCapMu.Lock()
-	defer dlCapMu.Unlock()
-	if time.Since(dlCapAt) > 30*time.Second {
-		dlCapAt = time.Now()
-		dlCapData = nil
-		if b, err := os.ReadFile(capFile()); err == nil {
-			_ = json.Unmarshal(b, &dlCapData)
-		}
+func dlHostLines() (out, mobile, held []dlLine) {
+	if H.Lines == nil {
+		return nil, nil, nil
 	}
-	return dlCapData[capKey(name)][0]
+	l := H.Lines()
+	return l.Use, l.Mobile, l.Held
 }
 
 func dlProdLines() []dlLine {
-	out, mobile, held := dlBuildLines()
+	out, mobile, held := dlHostLines()
 	if len(out)+len(mobile) == 0 { // never leave downloads without any line
 		out = held
 	}
@@ -241,50 +225,8 @@ func dlProdLines() []dlLine {
 
 // dlUILines: the lines the settings page lists (every fixed line, also one that a role keeps out for now).
 func dlUILines() []dlLine {
-	out, mobile, held := dlBuildLines()
+	out, mobile, held := dlHostLines()
 	return dlPickLines(append(out, held...), mobile, dlMgr.config().AllowMobile)
-}
-
-func dlBuildLines() (out, mobile, held []dlLine) {
-	s := getSettings()
-	ads := map[string]Adapter{}
-	for _, a := range getAdapters(false) {
-		ads[a.Name] = a
-	}
-	links := activeLinks(s)
-	for _, l := range links {
-		if _, ok := ads[l.Name]; !ok {
-			continue
-		}
-		name := l.Name
-		line := dlLine{Name: name, Kind: l.Kind, Rate: dlLineCap(name),
-			// The address and index of the adapter are looked up when a connection is opened, not once: Wi-Fi
-			// reconnects, DHCP renewals and replugged cables change them in the middle of a download.
-			Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				a, ok := adapterByName(name)
-				if !ok {
-					return nil, errors.New("this connection is not available any more")
-				}
-				return dlDialOn(ctx, a, network, addr)
-			},
-			Alive: func() bool {
-				for _, al := range activeLinks(getSettings()) {
-					if al.Name == name {
-						return !al.Dead
-					}
-				}
-				return false
-			}}
-		switch {
-		case isStandby(l.Link): // a "busy only" or "backup" line stays out of downloads while its role keeps it out
-			held = append(held, line)
-		case l.Kind == "mobile":
-			mobile = append(mobile, line)
-		default:
-			out = append(out, line)
-		}
-	}
-	return out, mobile, held
 }
 
 // dlPickLines: the mobile line (metered, slow) is only used for downloads when the person allowed it, or when it is the only line.
@@ -310,6 +252,18 @@ type dlDisk struct {
 	Seq    int              `json:"seq"`
 }
 
+// reset puts the manager back to a clean "just created" state (used when it is switched on again).
+func (m *dlManager) reset() {
+	m.mu.Lock()
+	m.quit = false
+	m.items = nil
+	m.hosts = map[string]int64{}
+	m.perLn = map[string]*dlBucket{}
+	m.hold, m.powerAt, m.finished, m.armedFor = "", 0, 0, ""
+	m.cfg = dlFixConfig(dlConfig{Dir: defaultDlDir(), UseCategories: true, MaxActive: 3, MaxPerLine: 8})
+	m.mu.Unlock()
+}
+
 func (m *dlManager) load() {
 	b, err := os.ReadFile(dlFile())
 	if err != nil {
@@ -317,7 +271,7 @@ func (m *dlManager) load() {
 	}
 	var d dlDisk
 	if json.Unmarshal(b, &d) != nil {
-		logf("downloads.json could not be read - starting with an empty list")
+		hLog("downloads.json could not be read - starting with an empty list")
 		_ = os.Rename(dlFile(), dlFile()+".bad")
 		return
 	}
@@ -526,7 +480,7 @@ func (m *dlManager) add(a dlAdd) (*dlItem, error) {
 	m.dirty = true
 	it := e.dlItem
 	it.Header = nil
-	note("info", "Download added: %s", e.Name)
+	hNote("info", "Download added: %s", e.Name)
 	return &it, nil
 }
 
@@ -619,7 +573,16 @@ func (m *dlManager) startLocked(e *dlEntry) {
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-		err := t.Run(ctx)
+		var err error
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					hLog("download manager: recovered from a crash while downloading: %v", r)
+					err = errors.New("the download stopped because of an internal error")
+				}
+			}()
+			err = t.Run(ctx)
+		}()
 		m.finishRun(e, t, err)
 	}()
 }
@@ -653,12 +616,12 @@ func (m *dlManager) finishRun(e *dlEntry, t *dlTask, err error) {
 		}
 		e.Done = e.Size
 		e.Note = pr.Note
-		note("good", "Download finished: %s", e.Name)
-		go trayBalloon("Download finished", e.Name)
+		hNote("good", "Download finished: %s", e.Name)
+		goSafe("notify", func() { hNotify("Download finished", e.Name) })
 		m.finished++
 		if e.Hash != "" {
 			e.Verify = "checking"
-			go m.verify(e.ID, e.Path, e.Hash)
+			goSafe("verify", func() { m.verify(e.ID, e.Path, e.Hash) })
 		}
 	case e.wantPause:
 		e.State = "paused"
@@ -670,7 +633,7 @@ func (m *dlManager) finishRun(e *dlEntry, t *dlTask, err error) {
 		msg, retry := dlFriendly(err)
 		e.Err, e.Detail, e.Note = msg, dlFmtErr(err), ""
 		if !retry || e.Retries >= 6 {
-			go trayBalloon("Download needs attention", e.Name)
+			goSafe("notify", func() { hNotify("Download needs attention", e.Name) })
 		}
 		if retry && e.Retries < 6 {
 			e.Retries++
@@ -679,10 +642,10 @@ func (m *dlManager) finishRun(e *dlEntry, t *dlTask, err error) {
 			e.Note = "Trying again soon"
 		} else if retry && e.Retries >= 6 {
 			e.State = "error"
-			note("bad", "Download failed: %s (%s)", e.Name, msg)
+			hNote("bad", "Download failed: %s (%s)", e.Name, msg)
 		} else {
 			e.State = "error"
-			note("bad", "Download failed: %s (%s)", e.Name, msg)
+			hNote("bad", "Download failed: %s (%s)", e.Name, msg)
 		}
 	}
 }
@@ -739,7 +702,7 @@ func dlFriendly(err error) (string, bool) {
 // startLoop runs the queue in the background until shutdown.
 func (m *dlManager) startLoop() {
 	m.loopWG.Add(1)
-	go func() { defer m.loopWG.Done(); m.loop() }()
+	goSafe("queue", func() { defer m.loopWG.Done(); m.loop() })
 }
 
 // loop starts queued downloads when there is room, applies limits and "wait" rules, refreshes progress and saves.
@@ -762,9 +725,9 @@ func (m *dlManager) loop() {
 		if m.hold != hold {
 			m.hold = hold
 			if hold != "" {
-				note("info", "Downloads: %s", strings.ToLower(m.holdTextForLocked(hold)))
+				hNote("info", "Downloads: %s", strings.ToLower(m.holdTextForLocked(hold)))
 			} else {
-				note("info", "Downloads continue")
+				hNote("info", "Downloads continue")
 			}
 		}
 		active := 0
@@ -824,8 +787,8 @@ func (m *dlManager) loop() {
 		save := m.dirty && n%4 == 0
 		m.mu.Unlock()
 		if power != "" {
-			note("info", "Downloads finished: %s", map[string]string{"sleep": "the PC goes to sleep", "shutdown": "the PC shuts down in one minute"}[power])
-			trayBalloon("Downloads finished", map[string]string{"sleep": "The PC is going to sleep.", "shutdown": "The PC shuts down in one minute. Open NetMerge to cancel."}[power])
+			hNote("info", "Downloads finished: %s", map[string]string{"sleep": "the PC goes to sleep", "shutdown": "the PC shuts down in one minute"}[power])
+			hNotify("Downloads finished", map[string]string{"sleep": "The PC is going to sleep.", "shutdown": "The PC shuts down in one minute. Open NetMerge to cancel."}[power])
 			if power == "shutdown" {
 				m.mu.Lock()
 				m.powerAt = time.Now().Unix()
@@ -940,8 +903,8 @@ func (m *dlManager) verify(id, path, want string) {
 			e.Verify = "ok"
 		} else {
 			e.Verify = "bad"
-			note("bad", "Checksum does NOT match: %s", e.Name)
-			go trayBalloon("Checksum does not match", e.Name+" may be damaged or not the file you expected.")
+			hNote("bad", "Checksum does NOT match: %s", e.Name)
+			goSafe("notify", func() { hNotify("Checksum does not match", e.Name+" may be damaged or not the file you expected.") })
 		}
 		m.dirty = true
 	}

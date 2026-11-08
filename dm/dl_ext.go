@@ -1,4 +1,4 @@
-package main
+package dm
 
 import (
 	"crypto/sha256"
@@ -40,7 +40,7 @@ type extStore struct {
 
 var ext = &extStore{MinMB: 5}
 
-func extFile() string { return filepath.Join(rootDir, "data", "extension.json") }
+func extFile() string { return filepath.Join(hRoot(), "data", "extension.json") }
 
 func (s *extStore) load() {
 	s.mu.Lock()
@@ -173,7 +173,11 @@ func extOrigin(o string) bool {
 }
 
 func extHandler(auth bool, h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return safeHandler(func(w http.ResponseWriter, r *http.Request) {
+		if !Enabled() { // the manager is off: the browser extension sees a plain "not found"
+			http.NotFound(w, r)
+			return
+		}
 		o := r.Header.Get("Origin")
 		if o != "" && !extOrigin(o) {
 			writeErr(w, 403, "forbidden")
@@ -199,12 +203,12 @@ func extHandler(auth bool, h http.HandlerFunc) http.HandlerFunc {
 			}
 		}
 		h(w, r)
-	}
+	})
 }
 
 func registerExtRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/ext/ping", extHandler(false, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"app": "netmerge", "version": appVersion})
+		writeJSON(w, map[string]any{"app": "netmerge", "version": H.Version})
 	}))
 	mux.HandleFunc("/ext/pair", extHandler(false, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -226,7 +230,7 @@ func registerExtRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/ext/status", extHandler(true, func(w http.ResponseWriter, r *http.Request) {
 		act, sp := dlMgr.summary()
 		v := ext.view()
-		writeJSON(w, map[string]any{"version": appVersion, "enabled": v["enabled"], "minMB": v["minMB"], "active": act, "speed": sp, "lines": len(dlMgr.lines())})
+		writeJSON(w, map[string]any{"version": H.Version, "enabled": v["enabled"], "minMB": v["minMB"], "active": act, "speed": sp, "lines": len(dlMgr.lines())})
 	}))
 	mux.HandleFunc("/ext/unpair", extHandler(true, func(w http.ResponseWriter, r *http.Request) {
 		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")

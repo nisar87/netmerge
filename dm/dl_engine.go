@@ -1,4 +1,4 @@
-package main
+package dm
 
 // Download engine: splits one file into small pieces and fetches them over several lines at once. Each line has its own
 // small pool of connections (bound to that adapter), pieces are handed out on demand so fast lines take more, and a
@@ -78,7 +78,7 @@ var errDlChanged = errors.New("the file on the server changed while downloading"
 // dlNoLineGrace: how long a download waits with every line down before it reports that no connection is available.
 var dlNoLineGrace = 25 * time.Second
 
-var dlUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetMerge/" + appVersion
+func dlUA() string { return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetMerge/" + H.Version }
 
 const (
 	dlMinPiece  = 512 << 10
@@ -145,7 +145,7 @@ func dlRequest(ctx context.Context, link string, hdr map[string]string) (*http.R
 	if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
 		return nil, errors.New("only http and https links can be downloaded")
 	}
-	req.Header.Set("User-Agent", dlUA)
+	req.Header.Set("User-Agent", dlUA())
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Accept-Encoding", "identity")
 	for k, v := range hdr {
@@ -651,14 +651,14 @@ func (t *dlTask) finish() error {
 		return fmt.Errorf("could not finish the file: %v", rerr)
 	}
 	_ = os.Remove(dlStatePath(t.spec.Path))
-	markFromInternet(final, t.spec.URL)
+	hMark(final, t.spec.URL)
 	t.mu.Lock()
 	t.finalPath = final
 	t.mu.Unlock()
 	return nil
 }
 
-var dlFreeSpace = freeSpace // replaced in tests
+var dlFreeSpace = hFree // replaced in tests
 
 // dlPieceSize: small pieces for small files, bigger ones for huge files so there are never more than a few thousand.
 func dlPieceSize(size int64) int64 {
@@ -683,6 +683,11 @@ func (t *dlTask) supervise() {
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				hLog("download manager: recovered from a crash in supervisor: %v", r)
+			}
+		}()
 		tick := time.NewTicker(time.Second)
 		defer tick.Stop()
 		n := 0
@@ -787,7 +792,7 @@ func (t *dlTask) syncLines() {
 		for r.active < want && !t.finishedLocked() {
 			r.active++
 			t.wg.Add(1)
-			go t.worker(r)
+			goSafe("worker", func() { t.worker(r) })
 		}
 	}
 }
@@ -1049,7 +1054,7 @@ func (t *dlTask) checkRefused() bool {
 				x.rejected = true
 				x.cancel()
 				t.note = "A line was left out: this site only accepts the file from one address"
-				go t.env.LockHost(dlHostOf(t.spec.URL))
+				goSafe("lock", func() { t.env.LockHost(dlHostOf(t.spec.URL)) })
 				stop = true
 			}
 		}
@@ -1066,7 +1071,7 @@ func (t *dlTask) checkRefused() bool {
 		}
 	}
 	if any && all {
-		go t.fail(t.lastRefuse)
+		goSafe("fail", func() { t.fail(t.lastRefuse) })
 	}
 	return false
 }
@@ -1245,7 +1250,7 @@ func (t *dlTask) runStream() error {
 		run.active = 1
 		t.streamN = 0
 		t.mu.Unlock()
-		go t.speedLoop(run)
+		goSafe("speed", func() { t.speedLoop(run) })
 		err := t.streamOnce(run)
 		t.mu.Lock()
 		run.active = 0

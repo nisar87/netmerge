@@ -135,7 +135,7 @@ func clientFor(a *Adapter) *http.Client {
 		// lookups return made-up addresses that only exist inside the merge tunnel
 		ac := *a
 		dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return dlDialOn(ctx, ac, network, addr)
+			return dialOn(ctx, ac, network, addr)
 		}
 	}
 	tr := &http.Transport{

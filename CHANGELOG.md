@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.6.0
+
+- The download manager is now a separate module (`dm/`) and is **off by default**. Turn it on in Settings → Download manager. While it is off it starts nothing, reads and writes no files, shows no Downloads page and does not answer the browser extension (which then says the manager is off), so it cannot clash with another download manager.
+- It cannot affect the product: it imports nothing from NetMerge, talks to it through one adapter file, and its crashes are caught inside the module.
+- The Downloads page now loads only when the manager is on.
+- Upgrading: if you used the old built-in downloads, turn the manager on once; your list and settings are kept.
+
 ## 3.5.0
 Audit for any mix of connections (two Wi-Fi, two Wi-Fi + LAN, three LANs, a LAN swapped for a second Wi-Fi):
 - Fixed: usage could jump by up to 4 GB when the adapter behind a connection name changed (a USB adapter plugged in again, a cable moved to another adapter).

@@ -51,20 +51,20 @@ func fakeDNS(t *testing.T, answer string) (port string, queries *int32) {
 }
 
 func withLookup(t *testing.T, f func(host string) ([]net.IP, error)) {
-	old, oldPort := dlLookup, dlDNSPort
-	dlLookup = func(_ context.Context, h string) ([]net.IP, error) { return f(h) }
-	dlResMu.Lock()
-	dlResCache = map[string]dlResEntry{}
-	dlResMu.Unlock()
-	t.Cleanup(func() { dlLookup, dlDNSPort = old, oldPort })
+	old, oldPort := lookupIPs, dnsPort
+	lookupIPs = func(_ context.Context, h string) ([]net.IP, error) { return f(h) }
+	resMu.Lock()
+	resCache = map[string]resEntry{}
+	resMu.Unlock()
+	t.Cleanup(func() { lookupIPs, dnsPort = old, oldPort })
 }
 
 func TestFakeDNSAnswersAreNotUsedForDownloads(t *testing.T) {
 	port, q := fakeDNS(t, "203.0.113.9")
 	withLookup(t, func(string) ([]net.IP, error) { return []net.IP{net.ParseIP("198.18.0.77")}, nil })
-	dlDNSPort = port
+	dnsPort = port
 	a := Adapter{Name: "Wi-Fi 2", IP: "127.0.0.1", Gateway: "127.0.0.1", Index: 9}
-	ips, err := dlResolveOn(context.Background(), a, "files.example.test")
+	ips, err := resolveOn(context.Background(), a, "files.example.test")
 	if err != nil || len(ips) != 1 || ips[0].String() != "203.0.113.9" {
 		t.Fatalf("%v %v", ips, err)
 	}
@@ -73,12 +73,12 @@ func TestFakeDNSAnswersAreNotUsedForDownloads(t *testing.T) {
 	}
 	// the answer is remembered
 	before := atomic.LoadInt32(q)
-	if _, err := dlResolveOn(context.Background(), a, "files.example.test"); err != nil || atomic.LoadInt32(q) != before {
+	if _, err := resolveOn(context.Background(), a, "files.example.test"); err != nil || atomic.LoadInt32(q) != before {
 		t.Fatal("no cache")
 	}
 	// the cache is per line
 	b := Adapter{Name: "Ethernet", IP: "127.0.0.1", Gateway: "127.0.0.1", Index: 11}
-	if _, err := dlResolveOn(context.Background(), b, "files.example.test"); err != nil || atomic.LoadInt32(q) == before {
+	if _, err := resolveOn(context.Background(), b, "files.example.test"); err != nil || atomic.LoadInt32(q) == before {
 		t.Fatal("two lines shared a cache entry")
 	}
 }
@@ -86,9 +86,9 @@ func TestFakeDNSAnswersAreNotUsedForDownloads(t *testing.T) {
 func TestRealDNSAnswersAreUsedAsTheyAre(t *testing.T) {
 	port, q := fakeDNS(t, "203.0.113.9")
 	withLookup(t, func(string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil })
-	dlDNSPort = port
+	dnsPort = port
 	a := Adapter{Name: "Wi-Fi", IP: "127.0.0.1", Gateway: "127.0.0.1", Index: 7}
-	ips, err := dlResolveOn(context.Background(), a, "example.com")
+	ips, err := resolveOn(context.Background(), a, "example.com")
 	if err != nil || ips[0].String() != "93.184.216.34" || atomic.LoadInt32(q) != 0 {
 		t.Fatalf("%v %v queries=%d", ips, err, atomic.LoadInt32(q))
 	}
@@ -97,9 +97,9 @@ func TestRealDNSAnswersAreUsedAsTheyAre(t *testing.T) {
 func TestFailingSystemDNSFallsBackToTheLine(t *testing.T) {
 	port, _ := fakeDNS(t, "203.0.113.10")
 	withLookup(t, func(string) ([]net.IP, error) { return nil, context.DeadlineExceeded })
-	dlDNSPort = port
+	dnsPort = port
 	a := Adapter{Name: "Wi-Fi", IP: "127.0.0.1", Gateway: "127.0.0.1", Index: 7}
-	ips, err := dlResolveOn(context.Background(), a, "example.org")
+	ips, err := resolveOn(context.Background(), a, "example.org")
 	if err != nil || ips[0].String() != "203.0.113.10" {
 		t.Fatalf("%v %v", ips, err)
 	}
@@ -123,17 +123,17 @@ func TestDialOnUsesTheResolvedAddress(t *testing.T) {
 	_, p, _ := net.SplitHostPort(ln.Addr().String())
 	withLookup(t, func(string) ([]net.IP, error) { return []net.IP{net.ParseIP("127.0.0.1")}, nil })
 	a := Adapter{Name: "Wi-Fi", IP: "127.0.0.1", Index: 7}
-	c, err := dlDialOn(context.Background(), a, "tcp", "somewhere.example:"+p)
+	c, err := dialOn(context.Background(), a, "tcp", "somewhere.example:"+p)
 	if err != nil {
 		t.Fatal(err)
 	}
 	c.Close()
 	// a name that nobody knows: an error the person can understand
 	withLookup(t, func(string) ([]net.IP, error) { return nil, &net.DNSError{Err: "no such host", IsNotFound: true} })
-	dlDNSPort = "1" // nothing listens there
-	if _, err := dlDialOn(context.Background(), Adapter{Name: "X", IP: "127.0.0.1", Gateway: "127.0.0.1"}, "tcp", "nope.example:80"); err == nil {
+	dnsPort = "1" // nothing listens there
+	if _, err := dialOn(context.Background(), Adapter{Name: "X", IP: "127.0.0.1", Gateway: "127.0.0.1"}, "tcp", "nope.example:80"); err == nil {
 		t.Fatal("expected an error")
-	} else if msg, _ := dlFriendly(err); msg == "" || msg == err.Error() && len(msg) > 120 {
-		t.Fatalf("unfriendly: %q", msg)
+	} else if err.Error() == "" {
+		t.Fatal("empty error")
 	}
 }

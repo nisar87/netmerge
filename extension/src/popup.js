@@ -6,6 +6,7 @@ function fmt(b) { return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB/s' : Math
 
 async function paint() {
   const ping = await ask({ type: 'ping' });
+  if (ping.status === 404) return show('v-off'); // NetMerge runs, but its download manager is switched off
   if (!ping.ok) return show('v-down');
   const s = await api.storage.local.get(['token', 'localOn', 'ignore']);
   if (!s.token) return show('v-pair');
@@ -22,6 +23,7 @@ async function paint() {
 }
 
 $('retry').onclick = paint;
+$('retry2').onclick = paint;
 $('pair').onclick = async () => {
   $('perr').textContent = '';
   const r = await ask({ type: 'pair', code: $('code').value, name: /Edg\//.test(navigator.userAgent) ? 'Edge' : /Firefox\//.test(navigator.userAgent) ? 'Firefox' : 'Chrome' });

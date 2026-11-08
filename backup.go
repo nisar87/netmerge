@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"netmerge/dm"
 	"strings"
 	"time"
 )
@@ -17,8 +18,9 @@ func registerBackupRoutes(mux *http.ServeMux) {
 		out := sanitizedSettings()
 		var m map[string]any
 		if json.Unmarshal(out, &m) == nil {
-			c := dlMgr.config()
-			m["downloadConfig"] = c
+			if c := dm.BackupExport(); c != nil {
+				m["downloadConfig"] = c
+			}
 			if o, err := json.MarshalIndent(m, "", "  "); err == nil {
 				out = o
 			}
@@ -42,10 +44,10 @@ func registerBackupRoutes(mux *http.ServeMux) {
 		}
 		updateSettings(func(s *Settings) { restoreInto(s, in) })
 		var extra struct {
-			DownloadConfig *dlConfig `json:"downloadConfig"`
+			DownloadConfig json.RawMessage `json:"downloadConfig"`
 		}
-		if json.Unmarshal(b, &extra) == nil && extra.DownloadConfig != nil {
-			restoreDownloadConfig(*extra.DownloadConfig)
+		if json.Unmarshal(b, &extra) == nil && len(extra.DownloadConfig) > 0 {
+			dm.BackupImport(extra.DownloadConfig)
 		}
 		if err := engine.Apply(); err != nil {
 			writeErr(w, 500, err.Error())
@@ -88,14 +90,5 @@ func restoreInto(s *Settings, in Settings) {
 	}
 	for i := range s.AppRules {
 		s.AppRules[i].Process = strings.TrimSpace(s.AppRules[i].Process)
-	}
-}
-
-// restoreDownloadConfig brings back the download settings. A folder that does not exist on this PC keeps the current one.
-func restoreDownloadConfig(c dlConfig) {
-	cur := dlMgr.config()
-	if err := dlMgr.setConfig(c); err != nil {
-		c.Dir = cur.Dir
-		_ = dlMgr.setConfig(c)
 	}
 }

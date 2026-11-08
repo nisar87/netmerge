@@ -1,7 +1,8 @@
-package main
+package dm
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -303,12 +304,13 @@ func TestDLBackupKeepsDownloadSettings(t *testing.T) {
 	defer func() { dlMgr = old }()
 	dlMgr = newTestMgr(t, newSimEnv())
 	dir := t.TempDir()
-	restoreDownloadConfig(dlConfig{Dir: dir, MaxActive: 5, CallMode: "pause", LimitAll: 2 * MiBf, ExcludeLines: []string{"4G"}})
+	restore := func(c dlConfig) { b, _ := json.Marshal(c); BackupImport(b) }
+	restore(dlConfig{Dir: dir, MaxActive: 5, CallMode: "pause", LimitAll: 2 * MiBf, ExcludeLines: []string{"4G"}})
 	c := dlMgr.config()
 	if c.Dir != dir || c.MaxActive != 5 || c.CallMode != "pause" || c.LimitAll != 2*MiBf || len(c.ExcludeLines) != 1 {
 		t.Fatalf("%+v", c)
 	}
-	restoreDownloadConfig(dlConfig{Dir: "/proc/definitely/not/writable/here", MaxActive: 2})
+	restore(dlConfig{Dir: "/proc/definitely/not/writable/here", MaxActive: 2})
 	if c := dlMgr.config(); c.Dir != dir || c.MaxActive != 2 {
 		t.Fatalf("bad folder must keep the old one: %+v", c)
 	}

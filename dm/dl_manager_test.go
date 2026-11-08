@@ -1,4 +1,4 @@
-package main
+package dm
 
 import (
 	"encoding/json"
@@ -12,11 +12,11 @@ import (
 
 func newTestMgr(t *testing.T, env *simEnv) *dlManager {
 	t.Helper()
-	oldRoot := rootDir
-	rootDir = t.TempDir()
-	t.Cleanup(func() { rootDir = oldRoot })
+	oldRoot := H.Root
+	H.Root = t.TempDir()
+	t.Cleanup(func() { H.Root = oldRoot })
 	m := newDlManager(env.Lines)
-	m.cfg.Dir = filepath.Join(rootDir, "dl")
+	m.cfg.Dir = filepath.Join(H.Root, "dl")
 	m.startLoop()
 	t.Cleanup(func() { m.shutdown() })
 	return m
