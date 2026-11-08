@@ -876,7 +876,7 @@ function renderLinks(sn, act, P){
       tag(bytes(l.useDay||0) + ' today', 'Data used on this connection today (this month: ' + bytes(l.useMonth||0) + ')', !l.useDay),
       tag((h.share == null ? '—' : h.share) + '% of traffic', 'Share of the traffic over the last few seconds', !(run && on && h.share != null))
     ].join(''));
-    f('missing').innerHTML = l.present ? '' : '<div class="warn-line">Unplugged or no internet. It rejoins by itself when it comes back.</div>';
+    f('missing').innerHTML = l.present ? '' : '<div class="warn-line">Unplugged or no internet. It rejoins by itself when it comes back. <button class="btn" style="margin-left:8px;padding:2px 10px" data-forget="' + esc(l.name) + '">Forget it</button></div>';
     f('w').textContent = '×'+ll.weight;
     { const r = f('role'); if (document.activeElement !== r) r.value = ll.role || ''; f('roleHint').textContent = ll.role === 'busy' ? 'Saves this line: it joins only when the other lines are nearly full.' : ll.role === 'backup' ? 'Kept in reserve: it is used only if the other lines stop working.' : 'Used all the time, together with the other lines.'; }
     { const poor = run && on && !ll.role && (l.slow || (l.quality && l.quality.label === 'Poor')); f('slowHint').hidden = !poor; }
@@ -1061,6 +1061,12 @@ $('#balSel').onchange = e => { local.classicBalance = e.target.value === 'classi
 $('#stackSel').onchange = e => { local.tunStack = e.target.value; saveSoon('Engine mode changed - reconnecting…'); };
 $('#callTog').onclick = () => { local.noCallProtect = !local.noCallProtect; renderSettings(); saveSoon(local.noCallProtect ? 'Call protection off' : 'Call protection on'); };
 $('#debugTog').onclick = () => { local.debugLog = !local.debugLog; renderSettings(); saveSoon(local.debugLog ? 'Detailed logging on' : 'Detailed logging off'); };
+document.addEventListener('click', async e => {
+  const b = e.target.closest && e.target.closest('[data-forget]'); if (!b) return;
+  const lbl = (local.links.find(x => x.name === b.dataset.forget) || {}).label || b.dataset.forget;
+  if (!confirm('Forget "' + lbl + '"?\nIt is removed from the list and from your rules. If you plug it in again it is found as a new connection. Its usage history stays.')) return;
+  try { await api('linkforget', {name: b.dataset.forget}); await poll(true); toast('Connection forgotten'); } catch (err) { toast(err.message, true); }
+});
 $('#rescan').onclick = async () => { await api('rescan',{}); await poll(true); toast('Connections scanned'); };
 $('#quit').onclick = async () => {
   if (!confirm('Stop merging and quit NetMerge?\nYour normal internet will be restored.')) return;

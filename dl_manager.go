@@ -98,10 +98,12 @@ type dlManager struct {
 	global dlBucket
 	perLn  map[string]*dlBucket
 	lines  func() []dlLine
-	seq    int
-	quit   bool
-	wg     sync.WaitGroup
-	loopWG sync.WaitGroup
+	// uiLinesFn lists the lines for the settings page (nil: the same as lines)
+	uiLinesFn func() []dlLine
+	seq       int
+	quit      bool
+	wg        sync.WaitGroup
+	loopWG    sync.WaitGroup
 
 	callInfo   func() (bool, string)   // is a call running, on which line
 	presetInfo func() (string, string) // the active preset's name and what it wants for downloads
@@ -115,7 +117,7 @@ type dlManager struct {
 
 var dlMgr *dlManager
 
-func init() { dlMgr = newDlManager(dlProdLines) }
+func init() { dlMgr = newDlManager(dlProdLines); dlMgr.uiLinesFn = dlUILines }
 
 func newDlManager(lines func() []dlLine) *dlManager {
 	m := &dlManager{hosts: map[string]int64{}, perLn: map[string]*dlBucket{}, lines: lines, callInfo: dlCallNow, power: dlPower,
@@ -226,34 +228,44 @@ func dlLineCap(name string) float64 {
 			_ = json.Unmarshal(b, &dlCapData)
 		}
 	}
-	return dlCapData[name][0]
+	return dlCapData[capKey(name)][0]
 }
 
 func dlProdLines() []dlLine {
+	out, mobile, held := dlBuildLines()
+	if len(out)+len(mobile) == 0 { // never leave downloads without any line
+		out = held
+	}
+	return dlPickLines(out, mobile, dlMgr.config().AllowMobile)
+}
+
+// dlUILines: the lines the settings page lists (every fixed line, also one that a role keeps out for now).
+func dlUILines() []dlLine {
+	out, mobile, held := dlBuildLines()
+	return dlPickLines(append(out, held...), mobile, dlMgr.config().AllowMobile)
+}
+
+func dlBuildLines() (out, mobile, held []dlLine) {
 	s := getSettings()
-	allowMobile := dlMgr.config().AllowMobile
 	ads := map[string]Adapter{}
 	for _, a := range getAdapters(false) {
 		ads[a.Name] = a
 	}
 	links := activeLinks(s)
-	var out, mobile []dlLine
 	for _, l := range links {
-		a, ok := ads[l.Name]
-		if !ok {
+		if _, ok := ads[l.Name]; !ok {
 			continue
 		}
 		name := l.Name
-		d := &net.Dialer{Timeout: 12 * time.Second, KeepAlive: 30 * time.Second, Control: bindControl(a.Index)}
-		if ip := net.ParseIP(a.IP); ip != nil && ip.To4() != nil {
-			d.LocalAddr = &net.TCPAddr{IP: ip}
-		}
 		line := dlLine{Name: name, Kind: l.Kind, Rate: dlLineCap(name),
+			// The address and index of the adapter are looked up when a connection is opened, not once: Wi-Fi
+			// reconnects, DHCP renewals and replugged cables change them in the middle of a download.
 			Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				if network == "tcp" {
-					network = "tcp4"
+				a, ok := adapterByName(name)
+				if !ok {
+					return nil, errors.New("this connection is not available any more")
 				}
-				return d.DialContext(ctx, network, addr)
+				return dlDialOn(ctx, a, network, addr)
 			},
 			Alive: func() bool {
 				for _, al := range activeLinks(getSettings()) {
@@ -263,13 +275,16 @@ func dlProdLines() []dlLine {
 				}
 				return false
 			}}
-		if l.Kind == "mobile" {
+		switch {
+		case isStandby(l.Link): // a "busy only" or "backup" line stays out of downloads while its role keeps it out
+			held = append(held, line)
+		case l.Kind == "mobile":
 			mobile = append(mobile, line)
-		} else {
+		default:
 			out = append(out, line)
 		}
 	}
-	return dlPickLines(out, mobile, allowMobile)
+	return out, mobile, held
 }
 
 // dlPickLines: the mobile line (metered, slow) is only used for downloads when the person allowed it, or when it is the only line.

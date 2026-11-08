@@ -86,6 +86,8 @@ type linkTrack struct {
 	hist           []float64
 	totRx, totTx   uint64
 	known, was     bool // presence seen before / last presence (for the history)
+	idx            int
+	desc           string
 }
 
 type connTrack struct{ down, up int64 }
@@ -374,6 +376,13 @@ func sample(slow bool) {
 		}
 		tr.known, tr.was = true, present
 		if present {
+			// the same name can end up on another adapter or index (a USB adapter plugged in again, a cable moved):
+			// the old byte counter means nothing for the new one, so start counting again instead of adding a
+			// huge false difference to the usage
+			if tr.have && (tr.idx != a.Index || tr.desc != a.Desc) {
+				tr.have = false
+			}
+			tr.idx, tr.desc = a.Index, a.Desc
 			if c, ok := counters[a.Index]; ok {
 				if tr.have {
 					dr, dtx := c[0]-tr.lastRx, c[1]-tr.lastTx // uint32 wrap-safe

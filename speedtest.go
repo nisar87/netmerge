@@ -129,9 +129,18 @@ func clientFor(a *Adapter) *http.Client {
 			d.LocalAddr = &net.TCPAddr{IP: ip}
 		}
 	}
+	dial := d.DialContext
+	if a != nil {
+		// names are looked up out of this very adapter (see dl_dns.go): with the built-in DNS on, the PC's own
+		// lookups return made-up addresses that only exist inside the merge tunnel
+		ac := *a
+		dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return dlDialOn(ctx, ac, network, addr)
+		}
+	}
 	tr := &http.Transport{
 		Proxy:               nil,
-		DialContext:         d.DialContext,
+		DialContext:         dial,
 		TLSClientConfig:     &tls.Config{},
 		DisableCompression:  true,
 		MaxIdleConnsPerHost: 0,

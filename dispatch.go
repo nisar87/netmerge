@@ -440,8 +440,17 @@ func buildInfo(set []*dispLink, cur map[string]int) string {
 // learned capacities survive a restart (data\\capacity.json), so the first minutes after start are not blind.
 var capSaved time.Time
 
-// capacity2.json: the first file (capacity.json) held speeds inflated by false counter spikes in older versions
-func capFile() string { return filepath.Join(rootDir, "data", "capacity2.json") }
+// capacity3.json: the first file (capacity.json) held speeds inflated by false counter spikes in older versions
+// capKey names a line for the speed memory: the name together with the hardware, so a different adapter that
+// ends up with the same name (a cable moved to another adapter, a Wi-Fi stick swapped) starts fresh.
+func capKey(name string) string {
+	if a, ok := adapterByName(name); ok {
+		return name + "|" + a.Desc
+	}
+	return name
+}
+
+func capFile() string { return filepath.Join(rootDir, "data", "capacity3.json") }
 
 func loadCaps(d *dispLink) {
 	if d.capRx != 0 {
@@ -455,7 +464,7 @@ func loadCaps(d *dispLink) {
 	if json.Unmarshal(b, &m) != nil {
 		return
 	}
-	if v, ok := m[d.name]; ok && v[0] > 0 && v[1] > 0 {
+	if v, ok := m[capKey(d.name)]; ok && v[0] > 0 && v[1] > 0 {
 		d.capRx, d.capTx, d.seenRx, d.seenTx = v[0], v[1], true, true
 	}
 }
@@ -468,7 +477,7 @@ func saveCaps(set []*dispLink) {
 	m := map[string][2]float64{}
 	for _, d := range set {
 		if d.seenRx && d.seenTx {
-			m[d.name] = [2]float64{d.capRx, d.capTx}
+			m[capKey(d.name)] = [2]float64{d.capRx, d.capTx}
 		}
 	}
 	if len(m) == 0 {

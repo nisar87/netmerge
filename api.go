@@ -175,6 +175,25 @@ func routes() http.Handler {
 		writeJSON(w, map[string]any{"events": allEvents()})
 	}))
 
+	mux.HandleFunc("/api/linkforget", guard(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Name string `json:"name"`
+		}
+		if r.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in) != nil {
+			writeErr(w, 400, "bad request")
+			return
+		}
+		if err := forgetLink(in.Name); err != nil {
+			writeErr(w, 400, err.Error())
+			return
+		}
+		if err := engine.Apply(); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, map[string]bool{"ok": true})
+	}))
+
 	mux.HandleFunc("/api/rescan", guard(func(w http.ResponseWriter, r *http.Request) {
 		syncLinks(getAdapters(true))
 		writeJSON(w, map[string]bool{"ok": true})

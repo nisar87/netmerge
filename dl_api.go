@@ -52,7 +52,7 @@ func registerDownloadRoutes(mux *http.ServeMux) {
 func (m *dlManager) snapshot() map[string]any {
 	act, sp := m.summary()
 	lines := []map[string]any{}
-	for _, l := range m.lines() {
+	for _, l := range m.uiLines() {
 		lines = append(lines, map[string]any{"name": l.Name, "kind": l.Kind})
 	}
 	return map[string]any{"items": m.views(), "config": m.config(), "active": act, "speed": sp, "lines": lines, "knownSites": m.knownHosts(), "hold": m.holdText(), "powerAt": m.powerAtTime(), "ext": ext.view()}
@@ -288,4 +288,11 @@ func dlNames(ls []dlLine) []string {
 		out = append(out, l.Name)
 	}
 	return out
+}
+
+func (m *dlManager) uiLines() []dlLine {
+	if m.uiLinesFn != nil {
+		return m.uiLinesFn()
+	}
+	return m.lines()
 }

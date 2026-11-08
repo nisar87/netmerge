@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -253,4 +254,65 @@ func syncLinks(adapters []Adapter) {
 		normalizeLocked()
 		saveSettingsLocked()
 	}
+}
+
+// forgetLink removes a connection that is not plugged in any more (a LAN cable moved to a second Wi-Fi, an old USB
+// adapter) together with every setting that pointed at it. Its usage history stays. A connection that is present
+// right now cannot be forgotten.
+func forgetLink(name string) error {
+	if _, here := adapterByName(name); here {
+		return errors.New("this connection is plugged in right now")
+	}
+	found := false
+	updateSettings(func(s *Settings) {
+		var keep []Link
+		for _, l := range s.Links {
+			if l.Name == name {
+				found = true
+				continue
+			}
+			keep = append(keep, l)
+		}
+		if !found {
+			return
+		}
+		s.Links = keep
+		if s.Mode == "link:"+name {
+			s.Mode = "fast"
+		}
+		if s.VPNLink == name {
+			s.VPNLink = ""
+		}
+		for i := range s.AppRules {
+			if s.AppRules[i].Target == "link:"+name {
+				s.AppRules[i].Target = "fast"
+			}
+		}
+		clean := func(rs []AppRule) {
+			for i := range rs {
+				if rs[i].Target == "link:"+name {
+					rs[i].Target = "fast"
+				}
+			}
+		}
+		for i := range s.CustomPresets {
+			clean(s.CustomPresets[i].Rules)
+		}
+		if s.PresetBackup != nil {
+			clean(s.PresetBackup.AppRules)
+			delete(s.PresetBackup.Roles, name)
+		}
+	})
+	if !found {
+		return errors.New("unknown connection")
+	}
+	probeMu.Lock()
+	delete(probes, name)
+	probeMu.Unlock()
+	statsMu.Lock()
+	delete(tracks, name)
+	delete(health, name)
+	statsMu.Unlock()
+	note("info", "%s was forgotten", name)
+	return nil
 }

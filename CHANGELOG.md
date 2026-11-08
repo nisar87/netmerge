@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.5.0
+Audit for any mix of connections (two Wi-Fi, two Wi-Fi + LAN, three LANs, a LAN swapped for a second Wi-Fi):
+- Fixed: usage could jump by up to 4 GB when the adapter behind a connection name changed (a USB adapter plugged in again, a cable moved to another adapter).
+- Fixed: downloads kept using an old address after a Wi-Fi reconnected or got a new address, and failed until they were restarted. The address is now read each time a connection is opened.
+- Fixed: with the built-in DNS on, downloads, the speed test, health checks and the internet-address lookup could be sent to made-up addresses and fail. Names are now asked again out of the connection itself when that happens.
+- A line set to "only when the others are busy" or "backup" is now respected by downloads too (and still listed in the downloads settings).
+- The learned speed of a connection is remembered per adapter, so a different adapter that ends up with the same name starts fresh.
+- New: "Forget it" on a connection that is no longer plugged in (for example the LAN after moving to a second Wi-Fi). It also fixes the rules and settings that pointed at it.
+
 ## 3.4.1
 - Fixed: the Downloads page could show up empty (only the title) when no browser had been connected yet.
 
