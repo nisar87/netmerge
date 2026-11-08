@@ -1,6 +1,8 @@
 # NetMerge Download Manager: Test Plan (for Codex)
 
-Version under test: 3.11.0. Audience: an engineer or agent who has not seen this code. Follow it top to bottom. Record every result in the table format of section 12.
+Version under test: **3.11.1** (source `main`, the `VERSION` file must say 3.11.1). Audience: an engineer or agent who has not seen this code. Record every result in the table format of section 12.
+
+This is revision 2. A first run (3.11.0, Windows, `download-manager-test-results.md`) covered part of the plan; section 0.5 says what is already proven, what was fixed, and what still has to be done. **Do not repeat what is proven, except the retests.** Spend the time on the BLOCKED items.
 
 ## 0. What the thing is
 
@@ -8,52 +10,66 @@ The download manager is a separate module (`dm/` package, UI in `ui/downloads*.j
 
 Known limits (not bugs, do not report): torrents have no incoming connections, no encryption (MSE), no uTP, and no seeding after finish (upload happens only while downloading). Magnet links cannot be previewed before they start.
 
+## 0.5 Status after the first run
+
+Already PASSED on Windows (spot-check only if something looks off): C2 C3 C6 C7, D11 D18 D19 D20 D25 D27 D33 D34 D35 D37, F1 F2, S2 S3 S4 S5 S9 S13 S14, T1 T3 T4 T5, U1 U6 U7 U8 U16, X1 X2 X9. Fuzzing `FuzzBtParse` 5 minutes: clean.
+
+Fixed in 3.11.1, **retest these first**:
+
+| Retest | Steps | Expected |
+|---|---|---|
+| R1 (was BUG-01) | Add with options, 1 connection, "Add, start later", open Properties | Connections shows 1, not Automatic. Also `POST add` with `"conns":1`: the item has `conns:1` |
+| R2 (was BUG-04) | Open "Add with options", press Shift+Tab 3 times, then Tab 40 times, then Enter | Focus never leaves the dialog; the page behind cannot be tabbed or clicked by keyboard; Esc closes the dialog and focus returns to the button that opened it |
+| R3 (was BUG-05) | At 390x800 open every dialog (Add with options, Properties, Queues, Link grabber, torrent preview, Connect a browser) | For each: card `scrollWidth` equals `clientWidth` (no hidden overflow) and every control is reachable |
+| R4 | Run `go test -run TestHLSRealFFmpegStreams -v ./dm` on the Windows machine with real ffmpeg on PATH | PASS for plain, aes and fmp4. If fmp4 still returns 404, attach the playlist and the folder listing; do not call it a product bug until a real fMP4 stream (S-section) also fails |
+
+Not bugs (plan errors, corrected below): there is no "ask" file-exists policy (D28), and `move` only reorders the queue (D38).
+
 ## 1. Rules for the tester
 
 1. Never mark a test PASS without observing the "Expected" result yourself. Write what you saw.
-2. A test you could not run is **BLOCKED**, with the reason. Never guess a PASS.
+2. A test you could not run is **BLOCKED**, with a reason written for that test alone (not one sentence copied to many rows) and what you tried first. "No fixture" is not a reason any more: the fixtures are in `scripts/dmtest/`. Never guess a PASS.
 3. Capture evidence: screenshot, log lines, API response, file hash.
 4. Do not change product code while testing. File bugs instead (section 12). Exception: fixture and helper scripts of your own.
 5. Run the destructive tests (delete, remove, overwrite) only in the test folder.
 6. Use only content you are allowed to download. For torrents use a torrent you create yourself (T-section) or a legal public one (e.g. a Linux distribution ISO).
 7. Test on every platform you can reach. State the platform in each result. The author could test only Linux with simulated lines, so **Windows is the highest priority** (section 3).
 
+## 1.5 Rules for an isolated test run
+
+- The app listens on a fixed port, **9196**. You cannot run a second instance beside the user's live NetMerge. Ask the user to close it, start yours with `-root <test folder>`, and tell the user to restart the real one afterwards. Never run restart/hard-kill tests against the live instance or the live data folder.
+- The API only answers `Host: 127.0.0.1:9196` or `localhost:9196`. Any `POST` needs the header `X-NetMerge: 1`, and an `Origin` header (if sent) must start with `http://127.0.0.1:` or `http://localhost:`. Without that you get 403 (that is the protection, not a bug).
+- `NM_STUB_LOOPBACK` and `NM_STUB_ADAPTERS` exist only in non-Windows builds. On Windows you test with the real adapters.
+- Torrents: peers and trackers on 127.0.0.1 are refused in normal builds, by design. Use this PC's LAN address (see `torrent_fixture.py`). Torrents added by a web page (the extension) additionally refuse LAN addresses; add local-seeder torrents through the app's own page.
+
 ## 2. Setup
 
 ### 2.1 Build and start
 ```
 cd netmerge
-go build -o nm .            # Windows: go build -o nm.exe .
+go build -o nm.exe .                  # Linux/mac: go build -o nm .
 go vet ./... && GOOS=windows go vet ./...
-go test -race -count=1 ./...   # about 5 minutes; must be all "ok". -race needs a C compiler (CGo); on Windows install MinGW-w64/MSYS2 gcc, or run it on Linux. A few tests are skipped on Windows by design (they fake adapter numbers or use a /bin/sh stand-in for ffmpeg).
-node --test extension/core.test.js   # must report pass 8, fail 0
+go test -count=1 ./...                # on Windows a few tests are skipped by design (fake adapter numbers, /bin/sh ffmpeg stand-in)
+go test -race -count=1 ./...          # needs a C compiler (install MinGW-w64/MSYS2 gcc) or use Linux; about 5 minutes; all "ok"
+node --test extension/core.test.js    # pass 8, fail 0
+mkdir C:\nmtest
+nm.exe -root C:\nmtest -background    # UI: http://127.0.0.1:9196/ ; enable the manager in Settings
 ```
-Start with an empty root so nothing old interferes:
-```
-mkdir /tmp/nmtest
-NM_STUB_LOOPBACK=1 ./nm -root /tmp/nmtest -background     # Linux/mac, fake two lines on loopback
-./nm -root C:\nmtest -background                             # Windows, real lines
-```
-The UI is at `http://127.0.0.1:9196/`. `NM_STUB_LOOPBACK` is development-only (two fake lines on 127.0.0.1). For real-line tests on Windows do not set it.
 
-### 2.2 Fixtures
-Create a folder `fixtures/` and serve it. Required servers (write them yourself, a few lines each):
-- **HTTP-range server** (port 8765): serves files of 1 KB, 5 MB, 200 MB with `Accept-Ranges`, `Content-Length`, `Content-Disposition`, ETag. Deterministic content (e.g. byte i = i mod 251) so you can verify by hash.
-- **No-range server**: same but ignores Range (returns 200 full) and omits Content-Length (chunked).
-- **Flaky server**: drops the connection after N bytes the first time, then serves normally; also a mode returning 503 twice then 200; a mode returning 403 on the first request; a mode with a redirect chain (302 to 302 to file); a mode that changes the file (new ETag) between requests.
-- **Slow server**: throttles to about 200 KB/s so pause/resume/limits can be observed.
-- **Auth server**: Basic auth protected file.
-- **HLS site**: master playlist with 3 variants (640x360, 1280x720, 1920x1080), media playlists with 10 short `.ts` segments, `#EXT-X-ENDLIST`; a variant with separate audio (`#EXT-X-MEDIA TYPE=AUDIO`); an encrypted (AES-128) variant; a live playlist (no ENDLIST).
-- **DASH site**: an `.mpd` with video reps of 360/1080 and a separate audio rep; one audio-only mpd.
-- **FTP server** (e.g. `pyftpdlib`) with one file, and one that needs a login.
-- **Web page** containing links: `.zip`, `.pdf`, `.torrent`, a `magnet:?xt=urn:btih:...&dn=Name` link, and plain page links (to test the link grabber).
-- **Torrent**: create a 3-file torrent (e.g. 300 KB, 300 KB, 2 MB, piece length 64 KB) with `mktorrent`/`transmission-create`/a script, plus a local seeder (`transmission-cli`, `qbittorrent-nox`, or `aria2c --seed-ratio=0`). Add an HTTP tracker (a minimal script is fine). Also a private-flag copy.
-- `ffmpeg` binary available, and a run with it absent (rename/PATH).
+### 2.2 Ready-made fixtures (in the repo, `scripts/dmtest/`)
+Use these instead of writing your own. Python 3.8+, standard library only.
+
+1. `python scripts/dmtest/fixtures.py --out fx --ffmpeg`
+   Serves port 8765 with deterministic content (byte i = i mod 251). Routes: `/file/5MB`, `/norange/..`, `/nolength/..`, `/flaky/5MB?drop=N`, `/status503/..`, `/status403/..`, `/redirect/..`, `/changing/..` (new ETag and content from the 2nd request), `/slow/..?bps=200000`, `/auth/..` (user/pass), `/disp?name=<tricky name>`, `/page` (links for the grabber), `/sha256/<name>` (expected hash), `/reset`. `--ffmpeg` also generates HLS (3 variants, AES, fMP4, live, separate audio) and DASH (video+audio, audio only) under `/static/hls/...` and `/static/dash/...`. Read the docstring at the top of the file.
+2. `python scripts/dmtest/torrent_fixture.py --host <this PC's LAN IP> --out fx` makes a 3-file torrent (`fx/demo.torrent`, `fx/demo-magnet.txt`, `fx/demo-expected.json` with hashes), runs an HTTP tracker (6969) and a seeder (6881) and prints every tracker call (so you can see `started` / `stopped` / `completed`). Options: `--private`, `--corrupt-piece N`, `--throttle BPS`, `--upload-test` (the seeder also asks NetMerge for pieces NetMerge already has, over the connection NetMerge opened, and prints `CORRECT`, `WRONG` or `choked`). Run two copies on different ports/hosts for T13 (one corrupt, one good).
+3. `python scripts/dmtest/smoke.py C:\nmtest\dl` runs the ordinary-download cases (file, flaky, 503, 403, redirect, no-range, slow) against the running app and checks every SHA-256. It was run on Linux: all passed.
+Still to provide yourself: an FTP server (you already did), a mobile-hotspot line, a quota-limited disk or small VHD, a second machine for a real swarm, Chrome/Firefox.
+Also for torrents on the real internet (legal content only, e.g. an Ubuntu ISO torrent): this tests real trackers, DHT, and real peers, which no local fixture can.
 
 ### 2.3 API helper
-The page talks to `POST /api/downloads` with JSON `{"action": ..., ...}`. Actions: `probe add torrentInfo files select pause resume retry remove clear pauseAll resumeAll open move limit setMirrors setQueue setConns export import grab startQueue forgetHosts config extCode extRevoke extConfig relink cancelPower`. `GET /api/downloads` returns `{enabled, items, config, speed, ffmpeg, ...}`. Use curl for the API tests and Playwright (or the in-app browser) for UI tests. The API only accepts the `Host` 127.0.0.1:9196 / localhost:9196.
+`GET /api/downloads` returns `{enabled, items, config, speed, ffmpeg, ...}`. `POST /api/downloads` takes `{"action": ...}` with the header from 1.5. Actions: `probe add torrentInfo files select pause resume retry remove clear pauseAll resumeAll open move limit setMirrors setQueue setConns export import grab startQueue forgetHosts config extCode extRevoke extConfig relink cancelPower`. `add` accepts `url`/`urls`, `torrent` (base64 .torrent), `select` (bool per file), `height`, `conns`, `queue`, `dir`, `start`, `force`, user/password fields. `probe` takes `url` and optional `height`. Use curl or Python for API tests and Playwright (or the in-app browser) for UI tests.
 
-## 3. Platform priority list (do these first on Windows)
+## 3. Platform priority list (Windows; none of these has been done yet)
 
 | # | Test | Expected |
 |---|------|----------|
@@ -162,7 +178,9 @@ Use `probe` first, then `add`. ffmpeg present unless stated.
 
 ## 8. Torrents
 
-Use your own seeder and tracker on localhost (loopback peers are accepted only in test builds; in a normal build you must test with a seeder on another machine or a reachable address, state which).
+How: start `torrent_fixture.py --host <LAN IP> --out fx` (add `--upload-test` for T14/T15, `--private` for T20, `--corrupt-piece 5` plus a second good seeder for T13, `--throttle 200000` when you need time to pause/kill). Add `fx/demo.torrent` through the app's file chooser, or paste the line from `fx/demo-magnet.txt`. Compare file hashes with `fx/demo-expected.json`. Read the tracker lines in the fixture's console for T21. This was verified on Linux: download complete with correct hashes, tracker `started`/`completed`, and NetMerge uploaded a correct piece to the fixture while downloading.
+
+The seeder must be on this PC's LAN address or another machine (loopback peers are refused in normal builds). State which you used.
 
 | # | Case | Expected |
 |---|------|----------|
