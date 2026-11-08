@@ -285,12 +285,46 @@ func (m *dlManager) addFromBrowser(link, referrer, cookie, ua, name string) (map
 	if ua != "" {
 		h["User-Agent"] = ua
 	}
-	it, err := m.add(dlAdd{URL: link, Header: h, Name: name, FromWeb: true})
-	if err != nil {
-		if errors.Is(err, errDlDuplicate) {
+	a := dlAdd{URL: link, Header: h, Name: name, FromWeb: true}
+	it, err := m.add(a)
+	if errors.Is(err, errDlDuplicate) {
+		// The browser download is cancelled once we answer ok, so the person must be left with something that works:
+		// a running or waiting copy is enough; a stopped or failed one is restarted; a finished one (the person asked
+		// for the file again) becomes a new download, named by the file-exists rule.
+		switch st := m.restartDuplicate(link); st {
+		case "running":
 			return map[string]any{"ok": true, "duplicate": true}, nil
+		case "restarted":
+			return map[string]any{"ok": true, "duplicate": true, "restarted": true}, nil
+		default:
+			a.Force = true
+			it, err = m.add(a)
 		}
+	}
+	if err != nil {
 		return nil, err
 	}
 	return map[string]any{"ok": true, "id": it.ID}, nil
+}
+
+// restartDuplicate looks at the existing download of a link: "running" (queued or downloading), "restarted" (it was paused or
+// had failed and is started again) or "finished"/"" (nothing to continue).
+func (m *dlManager) restartDuplicate(link string) string {
+	m.mu.Lock()
+	var id, state string
+	for _, o := range m.items {
+		if o.URL == link {
+			id, state = o.ID, o.State
+		}
+	}
+	m.mu.Unlock()
+	switch state {
+	case "done":
+		return "finished"
+	case "paused", "error":
+		if m.resume(id) == nil {
+			return "restarted"
+		}
+	}
+	return "running"
 }

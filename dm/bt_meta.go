@@ -287,6 +287,9 @@ func btParseInfo(raw []byte) (*btMeta, error) {
 			off += ln
 		}
 		m.Total = off
+		if err := btNoCollisions(m.Files); err != nil {
+			return nil, err
+		}
 	} else {
 		ln := btInt(info, "length")
 		if ln <= 0 {
@@ -437,4 +440,27 @@ func btLooksLikeTorrentURL(link string) bool {
 		return false
 	}
 	return strings.HasSuffix(strings.ToLower(path.Base(u.Path)), ".torrent")
+}
+
+// btNoCollisions refuses a torrent in which two files would end up in the same place: the same path twice, a file that is
+// also a folder of another file ("a" and "a/b"), or names that differ only in capital letters (Windows and macOS see
+// them as one). The names were already cleaned (reserved names, forbidden letters), so cleaned-up clashes show here too.
+func btNoCollisions(files []btFile) error {
+	paths := map[string]bool{}
+	dirs := map[string]bool{}
+	for _, f := range files {
+		key := strings.ToLower(strings.Join(f.Path, "/"))
+		if paths[key] || dirs[key] {
+			return errors.New("the torrent has two files with the same name or place: " + strings.Join(f.Path, "/"))
+		}
+		paths[key] = true
+		for i := 1; i < len(f.Path); i++ {
+			d := strings.ToLower(strings.Join(f.Path[:i], "/"))
+			if paths[d] {
+				return errors.New("the torrent has a file that is also a folder: " + strings.Join(f.Path[:i], "/"))
+			}
+			dirs[d] = true
+		}
+	}
+	return nil
 }

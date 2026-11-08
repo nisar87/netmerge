@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.11.4
+
+Fixes from an independent review of the download manager's code:
+- A link pattern with huge numbers (for example `file[9223372036854775807-9223372036854775807].bin`) made the pattern expansion count past the biggest number, wrap around and never stop, using more and more memory. Numbers that are too large are now refused and counting is bounded. Reproduced with a test, then fixed.
+- Torrents whose files would land in the same place are refused before anything is written: the same path twice, a file that is also a folder, names that differ only in capital letters, or names that become equal once forbidden letters are replaced.
+- Importing a plain list of links now accepts `ftp://` and magnet lines too (not only http and https).
+- Browser extension: when a link is already in the list, the browser download is no longer just cancelled. A paused or failed copy is restarted; a finished copy (you asked for the file again) becomes a new download.
+- Exported lists keep links, names, folders, queues, mirrors and hashes; they do not keep file selection, connection counts, quality or speed limits.
+
 ## 3.11.3
 
 - "Connect a browser" now explains everything in place: download buttons for the Chrome/Edge/Brave and Firefox extension files (always the latest release), the steps to add the extension by hand, a button that copies `chrome://extensions`, and then the pairing code. Before, it only said to look in the README.

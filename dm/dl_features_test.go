@@ -300,7 +300,7 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 	// a plain list of links
 	res, err = m2.handle(dlReq{Action: "import", Text: "# my list\n" + s.URL + "/file.bin?z1\r\n\r\nftp://nope\n" + s.URL + "/file.bin?z2\n"})
-	if err != nil || res["imported"].(int) != 2 {
+	if err != nil || res["imported"].(int) != 3 { // ftp lines are links too (they used to be skipped)
 		t.Fatalf("%v %v", res, err)
 	}
 	if _, err := m2.handle(dlReq{Action: "import", Text: "hello"}); err == nil {
@@ -431,5 +431,46 @@ func TestAddKeepsTheConnectionCountFromJSON(t *testing.T) {
 	}
 	if got := out["added"].([]*dlItem)[0].Conns; got != 1 {
 		t.Fatalf("conns = %d, want 1", got)
+	}
+}
+
+// Found by an outside review: [max-max] counted past the largest number, wrapped around and never stopped.
+func TestPatternArithmeticCannotOverflow(t *testing.T) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for _, in := range []string{
+			"http://x/f[9223372036854775807-9223372036854775807].bin",
+			"http://x/f[9223372036854775806-9223372036854775807].bin",
+			"http://x/f[99999999999999999999-99999999999999999999].bin",
+			"http://x/f[1-9223372036854775807:9223372036854775807].bin",
+			"http://x/f[1-2:99999999999999999999].bin",
+		} {
+			out, err := dlExpand(in)
+			if err == nil && len(out) > 500 {
+				t.Errorf("%s made %d links", in, len(out))
+			}
+			if err == nil && strings.Contains(in, "99999999999999999999") {
+				t.Errorf("%s was accepted", in)
+			}
+		}
+		if out, err := dlExpand("http://x/f[1-9223372036854775807:9223372036854775807].bin"); err != nil || len(out) != 1 {
+			t.Errorf("a huge step: only the first value fits: %v %v", out, err)
+		}
+		if out, err := dlExpand("http://x/f[007-010].bin"); err != nil || len(out) != 4 || !strings.Contains(out[0], "007") {
+			t.Errorf("ordinary pattern: %v %v", out, err)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("pattern expansion did not stop")
+	}
+}
+
+func TestImportAcceptsFTPAndMagnetLines(t *testing.T) {
+	items, _, err := dlParseImport("# list\nhttp://a/1.bin\nftp://b/2.bin\nmagnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567\nnotalink\n")
+	if err != nil || len(items) != 3 {
+		t.Fatalf("%v %v", items, err)
 	}
 }

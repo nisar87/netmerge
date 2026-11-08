@@ -999,3 +999,59 @@ func TestBtPreviewThenAddWithChosenFiles(t *testing.T) {
 		t.Fatal("duplicate not noticed")
 	}
 }
+
+func TestBtRefusesTorrentsWhoseFilesCollide(t *testing.T) {
+	mk := func(paths ...[]string) error {
+		var fl []any
+		for _, p := range paths {
+			var pl []any
+			for _, x := range p {
+				pl = append(pl, x)
+			}
+			fl = append(fl, map[string]any{"length": int64(100), "path": pl})
+		}
+		info := bencode(map[string]any{"name": "T", "piece length": int64(16384), "pieces": string(make([]byte, 20)), "files": fl})
+		_, err := btParseInfo(info)
+		return err
+	}
+	if err := mk([]string{"a.bin"}, []string{"b.bin"}); err != nil {
+		t.Fatalf("good torrent refused: %v", err)
+	}
+	if err := mk([]string{"a.bin"}, []string{"sub", "b.bin"}, []string{"sub", "c.bin"}); err != nil {
+		t.Fatalf("good torrent with folders refused: %v", err)
+	}
+	for name, p := range map[string][][]string{
+		"same path twice":       {{"same.bin"}, {"same.bin"}},
+		"file and folder":       {{"a"}, {"a", "b"}},
+		"folder then file":      {{"a", "b"}, {"a"}},
+		"capital letters":       {{"Same.bin"}, {"same.BIN"}},
+		"cleaned names collide": {{"x:y"}, {"x?y"}},
+	} {
+		if err := mk(p...); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+}
+
+func TestBrowserDuplicateLeavesAWorkingDownload(t *testing.T) {
+	m := newTestMgr(t, newSimEnv())
+	link := "http://example.com/big.zip"
+	first, err := m.add(dlAdd{URL: link, Start: new(bool)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.pause(first.ID); err != nil {
+		t.Fatal(err)
+	}
+	r, err := m.addFromBrowser(link, "", "", "", "")
+	if err != nil || r["duplicate"] != true || r["restarted"] != true {
+		t.Fatalf("a paused copy must be restarted: %v %v", r, err)
+	}
+	m.mu.Lock()
+	m.find(first.ID).State = "done"
+	m.mu.Unlock()
+	r, err = m.addFromBrowser(link, "", "", "", "")
+	if err != nil || r["id"] == nil {
+		t.Fatalf("a finished copy must give a new download: %v %v", r, err)
+	}
+}

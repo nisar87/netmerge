@@ -364,21 +364,25 @@ func dlPatValues(s string, loc []int) ([]string, error) {
 		}
 		return vals, nil
 	}
-	lo, _ := strconv.ParseInt(g(1), 10, 64)
-	hi, _ := strconv.ParseInt(g(2), 10, 64)
+	bad := errors.New("the pattern " + s[loc[0]:loc[1]] + " is not valid (or makes more than 500 links)")
+	lo, e1 := strconv.ParseInt(g(1), 10, 64)
+	hi, e2 := strconv.ParseInt(g(2), 10, 64)
 	step := int64(1)
+	var e3 error
 	if g(3) != "" {
-		step, _ = strconv.ParseInt(g(3), 10, 64)
+		step, e3 = strconv.ParseInt(g(3), 10, 64)
 	}
-	if step < 1 || hi < lo || (hi-lo)/step >= 500 {
-		return nil, errors.New("the pattern " + s[loc[0]:loc[1]] + " is not valid (or makes more than 500 links)")
+	// numbers too big to parse are refused (they used to become the largest number, and counting up from there wrapped around forever)
+	if e1 != nil || e2 != nil || e3 != nil || step < 1 || hi < lo || (hi-lo)/step >= 500 {
+		return nil, bad
 	}
 	width := 0
 	if len(g(1)) > 1 && g(1)[0] == '0' {
 		width = len(g(1))
 	}
-	for v := lo; v <= hi; v += step {
-		vals = append(vals, fmt.Sprintf("%0*d", width, v))
+	n := (hi - lo) / step // at most 499: counting by number of steps cannot overflow
+	for i := int64(0); i <= n; i++ {
+		vals = append(vals, fmt.Sprintf("%0*d", width, lo+i*step))
 	}
 	return vals, nil
 }
@@ -436,7 +440,7 @@ func dlParseImport(text string) ([]dlExportItem, []dlQueue, error) {
 		if ln == "" || strings.HasPrefix(ln, "#") {
 			continue
 		}
-		if strings.HasPrefix(strings.ToLower(ln), "http://") || strings.HasPrefix(strings.ToLower(ln), "https://") {
+		if l := strings.ToLower(ln); strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://") || strings.HasPrefix(l, "ftp://") || strings.HasPrefix(l, "magnet:?") {
 			items = append(items, dlExportItem{URL: ln})
 		}
 	}
