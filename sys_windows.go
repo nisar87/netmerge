@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -23,6 +24,12 @@ var (
 	shell32     = syscall.NewLazyDLL("shell32.dll")
 	pShellExec  = shell32.NewProc("ShellExecuteW")
 	user32      = syscall.NewLazyDLL("user32.dll")
+	ole32       = syscall.NewLazyDLL("ole32.dll")
+	pCoInit     = ole32.NewProc("CoInitializeEx")
+	pCoUninit   = ole32.NewProc("CoUninitialize")
+	pCoFree     = ole32.NewProc("CoTaskMemFree")
+	pParseName  = shell32.NewProc("SHParseDisplayName")
+	pOpenSelect = shell32.NewProc("SHOpenFolderAndSelectItems")
 	pMessageBox = user32.NewProc("MessageBoxW")
 )
 
@@ -320,15 +327,46 @@ Start-Process $Cur
 // openPath opens a file with its normal program, or shows it selected in Explorer. The command line is written by hand
 // because Explorer and rundll32 want the path in quotes exactly like this, spaces and all.
 func openPath(path string, reveal bool) error {
-	var c *exec.Cmd
+	path = filepath.Clean(path)
 	if reveal {
-		c = hiddenCmd("explorer.exe")
+		// Ask the shell itself to open the folder with the file selected: it works the same whether NetMerge runs
+		// as administrator or not. "explorer.exe /select" can land on Home when started from an elevated program.
+		if err := revealInShell(path); err == nil {
+			return nil
+		}
+		c := hiddenCmd("explorer.exe")
 		c.SysProcAttr.CmdLine = `explorer.exe /select,"` + path + `"`
-	} else {
-		c = hiddenCmd("rundll32.exe")
-		c.SysProcAttr.CmdLine = `rundll32.exe url.dll,FileProtocolHandler "` + path + `"`
+		return c.Start()
 	}
+	c := hiddenCmd("rundll32.exe")
+	c.SysProcAttr.CmdLine = `rundll32.exe url.dll,FileProtocolHandler "` + path + `"`
 	return c.Start()
+}
+
+// revealInShell opens the file's folder in Explorer with the file selected (SHOpenFolderAndSelectItems).
+func revealInShell(path string) error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	p, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+	// 2 = apartment threaded; a result of 1 or 0x80010106 (already started another way) is fine, the matching Uninitialize is only for 0 and 1
+	hr, _, _ := pCoInit.Call(0, 2)
+	if int32(hr) >= 0 {
+		defer pCoUninit.Call()
+	}
+	var pidl uintptr
+	hr, _, _ = pParseName.Call(uintptr(unsafe.Pointer(p)), 0, uintptr(unsafe.Pointer(&pidl)), 0, 0)
+	if int32(hr) < 0 || pidl == 0 {
+		return fmt.Errorf("the shell could not find %s (0x%x)", path, uint32(hr))
+	}
+	defer pCoFree.Call(pidl)
+	hr, _, _ = pOpenSelect.Call(pidl, 0, 0, 0)
+	if int32(hr) < 0 {
+		return fmt.Errorf("the shell could not show %s (0x%x)", path, uint32(hr))
+	}
+	return nil
 }
 
 // dlPower sleeps or shuts the PC down after the downloads (a shutdown has a one minute warning that can be cancelled).

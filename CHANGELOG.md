@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.11.10
+
+From the Windows retest of 3.11.9:
+- "Show in folder" now asks Windows itself to open the folder with the file selected. In the sandbox the old way (starting `explorer.exe /select`) opened Home instead when NetMerge ran as administrator. If Windows cannot do it, the old way is the fallback. Not covered by an automatic test (it needs a Windows desktop), so it needs a check on Windows.
+
 ## 3.11.9
 
 Found by running the download manager on Windows with merging on:
