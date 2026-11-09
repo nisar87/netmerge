@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.5
+
+- For testing inside a virtual machine such as Windows Sandbox: starting NetMerge with the environment variable `NM_ALLOW_VIRTUAL=1` makes it treat virtual adapters (for example Hyper-V) as real connections. Without it nothing changes: virtual adapters are still ignored, so merging and downloads work only over real lines.
+
 ## 3.11.4
 
 Fixes from an independent review of the download manager's code:
