@@ -1048,6 +1048,23 @@ func TestBrowserDuplicateLeavesAWorkingDownload(t *testing.T) {
 	if err != nil || r["duplicate"] != true || r["restarted"] != true {
 		t.Fatalf("a paused copy must be restarted: %v %v", r, err)
 	}
+	// a download that failed earlier is restarted too, not left failed or duplicated
+	if err := m.pause(first.ID); err != nil {
+		t.Fatal(err)
+	}
+	m.mu.Lock()
+	m.find(first.ID).State = "error"
+	m.find(first.ID).Err = "the server said no"
+	m.mu.Unlock()
+	count := func() int { m.mu.Lock(); defer m.mu.Unlock(); return len(m.items) }
+	before := count()
+	r, err = m.addFromBrowser(link, "", "", "", "")
+	if err != nil || r["duplicate"] != true || r["restarted"] != true {
+		t.Fatalf("a failed copy must be restarted: %v %v", r, err)
+	}
+	if count() != before {
+		t.Fatalf("a failed copy must not be duplicated (%d rows, had %d)", count(), before)
+	}
 	m.mu.Lock()
 	m.find(first.ID).State = "done"
 	m.mu.Unlock()
