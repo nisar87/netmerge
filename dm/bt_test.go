@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"io"
+	mrand "math/rand"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -1092,5 +1093,91 @@ func TestBtResumeRepairsMiddleDamageAndDeletedFile(t *testing.T) {
 			t.Fatal(err)
 		}
 		checkContent(t, tt, root)
+	}
+}
+
+// A stress test for resuming: stop at a random point, damage the files in a random way (flip a byte anywhere, delete a
+// file, cut a file short, make one longer, wipe a stretch with zeros, or do nothing), resume, and the result must be
+// exactly the torrent. Run many rounds with a fixed seed so a failure can be repeated.
+func TestBtResumeChaos(t *testing.T) {
+	rng := mrand.New(mrand.NewSource(20261109))
+	for round := 0; round < 14; round++ {
+		tt := makeTorrent("chaos", []tFile{{"a.bin", 700000}, {"d/b.bin", 250000}, {"d/e/c.bin", 900000}, {"z.bin", 1}}, 16<<10)
+		sd := newSeeder(t, tt)
+		sd.rate = 4 * MiB
+		meta, _ := btParseTorrent(tt.file)
+		root := filepath.Join(t.TempDir(), "chaos")
+		env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+		mk := func() *btTask {
+			tk := newBtTask(btSpec{Meta: meta, NoDHT: true, Pick: func(string) (string, error) { return root, nil }}, env)
+			tk.addPeers([]string{sd.addr()})
+			return tk
+		}
+		stopAt := int64(100000 + rng.Intn(1700000))
+		tk := mk()
+		ctx, cancel := ctxTimeout(30 * time.Second)
+		go func() {
+			for tk.Progress().Done < stopAt {
+				time.Sleep(10 * time.Millisecond)
+			}
+			cancel()
+		}()
+		tk.Run(ctx)
+		cancel()
+		names := []string{"a.bin", "d/b.bin", "d/e/c.bin", "z.bin"}
+		what := rng.Intn(7)
+		p := filepath.Join(root, filepath.FromSlash(names[rng.Intn(3)]))
+		switch what {
+		case 0: // flip a byte
+			if f, err := os.OpenFile(p, os.O_RDWR, 0); err == nil {
+				st, _ := f.Stat()
+				f.WriteAt([]byte{0x7E}, rng.Int63n(max(st.Size(), 1)))
+				f.Close()
+			}
+		case 1:
+			os.Remove(p)
+		case 2:
+			if st, err := os.Stat(p); err == nil {
+				os.Truncate(p, rng.Int63n(max(st.Size(), 1)))
+			}
+		case 3:
+			if f, err := os.OpenFile(p, os.O_RDWR, 0); err == nil {
+				st, _ := f.Stat()
+				f.WriteAt([]byte("extra"), st.Size()+int64(rng.Intn(500)))
+				f.Close()
+			}
+		case 4: // zeros over a stretch
+			if f, err := os.OpenFile(p, os.O_RDWR, 0); err == nil {
+				st, _ := f.Stat()
+				n := int64(1 + rng.Intn(60000))
+				f.WriteAt(make([]byte, n), rng.Int63n(max(st.Size()-n, 1)))
+				f.Close()
+			}
+		case 5: // remove the saved list as well
+			os.Remove(btStatePath(root))
+			os.Remove(p)
+		}
+		tk2 := mk()
+		ctx2, cancel2 := ctxTimeout(40 * time.Second)
+		err := tk2.Run(ctx2)
+		cancel2()
+		if err != nil {
+			t.Fatalf("round %d (damage %d, stopped at %d): %v", round, what, stopAt, err)
+		}
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("round %d (damage %d, stopped at %d): %v", round, what, stopAt, r)
+				}
+			}()
+			off := 0
+			for _, f := range tt.files {
+				got, err := os.ReadFile(filepath.Join(root, f.name))
+				if err != nil || !bytes.Equal(got, tt.content[off:off+int(f.size)]) {
+					t.Fatalf("round %d (damage %d, stopped at %d): file %s is wrong (%v)", round, what, stopAt, f.name, err)
+				}
+				off += int(f.size)
+			}
+		}()
 	}
 }
