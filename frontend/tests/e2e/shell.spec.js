@@ -25,10 +25,12 @@ for (const [route, nav, heading] of routes) {
     await enableDownloads(fixture);
     await navigate(page, route);
     await expect(page.locator('#pageTitle')).toHaveText(heading);
+    await expect(page).toHaveTitle(/^NetMerge · /);
     await expect(page.locator(`[data-p="${nav}"][aria-current="page"]`)).toBeVisible();
     await page.reload();
     await expect(page).toHaveURL(new RegExp(`#/${route}$`));
     await expect(page.locator('#pageTitle')).toHaveText(heading);
+    await expect(page).toHaveTitle(/^NetMerge · /);
   });
 }
 

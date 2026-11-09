@@ -48,7 +48,8 @@ function go(destination,fromHash=false){
   const titles={rules:'Protection',share:'Sharing',history:'Activity'};
   $('#pageTitle').textContent=titles[config.group]||PAGES[config.group][0];
   $('#pageSub').textContent=PAGES[page][1];
-  document.title=$('#pageTitle').textContent+' · NetMerge';
+  // The Windows tray finds our browser app window by its NetMerge title prefix.
+  document.title='NetMerge · '+$('#pageTitle').textContent;
   const tabs=TABS[config.group]||[];
   $('#subnav').hidden=!tabs.length;
   setHTML($('#subnav'),tabs.map(([path,label])=>`<a href="#/${path}" ${path===route?'aria-current="page" class="selected"':''}>${label}</a>`).join(''));

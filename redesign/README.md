@@ -8,6 +8,8 @@ Design and implementation package · 9 November 2026 · source baseline `39987fa
 
 Latest refinement: [focused speed meter, throughput graph and expandable results](evidence/speed-test.md). The earlier [compact, context-colored download actions](evidence/compact-download-actions.md) remain included.
 
+Desktop follow-up: [preview startup diagnosis and permanent EXE branding](evidence/windows-desktop-build.md). The user additionally authorized Windows icon resources and build-time verification; the backend Go source remains unchanged.
+
 ## Start here
 
 1. Open [the visual preview](preview/index.html) in a browser. Switch between Overview, Downloads, and Settings and between light/dark themes. This is a design reference, not the implemented application.

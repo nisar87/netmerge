@@ -64,6 +64,7 @@ jobs:
         run: |
           GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
             -ldflags "-s -w -H=windowsgui -X main.appVersion=${{ steps.v.outputs.ver }} -X main.updateRepo=${GITHUB_REPOSITORY}" -o NetMerge.exe .
+          python3 scripts/check-windows-icon.py NetMerge.exe
           sha256sum NetMerge.exe > NetMerge.exe.sha256
           cat NetMerge.exe.sha256
       - name: Build the browser extension

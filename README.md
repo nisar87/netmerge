@@ -69,9 +69,12 @@ NetMerge looks for a new release on GitHub a few times a day. When there is one,
 ```
 go vet ./... && go test ./...
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w -H=windowsgui" -o NetMerge.exe .
+python3 scripts/check-windows-icon.py NetMerge.exe
 ```
 
 The window (HTML, CSS, JavaScript) is embedded from `ui/`. You can run the app on Linux or macOS for interface work; it then uses fake data.
+
+Every Windows build automatically embeds the NetMerge icon from the committed architecture-specific `.syso` resource. CI and releases verify the embedded icon; see [Windows icon maintenance](assets/windows/README.md) to regenerate it after changing the logo. Before testing a different EXE, choose **Quit NetMerge** from the existing tray icon: closing its window leaves the old instance running, and launching a second EXE opens that existing instance.
 
 ### Publish a release
 
