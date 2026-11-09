@@ -34,6 +34,7 @@ def main():
     ap.add_argument("--private", action="store_true"); ap.add_argument("--corrupt-piece", type=int, default=-1)
     ap.add_argument("--upload-test", action="store_true"); ap.add_argument("--throttle", type=int, default=0)
     ap.add_argument("--tracker-port", type=int, default=6969); ap.add_argument("--seed-port", type=int, default=6881)
+    ap.add_argument("--bad-seed-port", type=int, default=0, help="also run a second seeder on this port that corrupts EVERY piece it sends (T13); the tracker lists both seeders")
     a = ap.parse_args(); os.makedirs(a.out, exist_ok=True)
     data = content(); pieces = [data[i:i + PL] for i in range(0, len(data), PL)]
     info = {"name": "Demo", "piece length": PL, "pieces": b"".join(hashlib.sha1(p).digest() for p in pieces),
@@ -55,6 +56,7 @@ def main():
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             print("[tracker] announce event=%s left=%s port=%s uploaded=%s" % (q.get("event", ["-"])[0], q.get("left", ["?"])[0], q.get("port", ["?"])[0], q.get("uploaded", ["?"])[0]), flush=True)
             peers = socket.inet_aton(a.host) + struct.pack(">H", a.seed_port)
+            if a.bad_seed_port: peers += socket.inet_aton(a.host) + struct.pack(">H", a.bad_seed_port)
             body = be({"interval": 60, "complete": 1, "incomplete": 0, "peers": peers})
             self.send_response(200); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
     class TS(socketserver.ThreadingMixIn, http.server.HTTPServer): daemon_threads = True; allow_reuse_address = True
@@ -70,12 +72,12 @@ def main():
     def msg(c, i, payload=b""): c.sendall(struct.pack(">IB", 1 + len(payload), i) + payload)
     bitfield = bytearray((len(pieces) + 7) // 8)
     for i in range(len(pieces)): bitfield[i // 8] |= 0x80 >> (i % 8)
-    def serve(c, addr):
+    def serve(c, addr, bad=False):
         try:
             hs = recvn(c, 68)
             if hs[28:48] != ih: return
             c.sendall(b"\x13BitTorrent protocol" + b"\0" * 8 + ih + b"-FX0001-" + os.urandom(12))
-            msg(c, 5, bytes(bitfield)); print("[seeder] peer", addr, flush=True)
+            msg(c, 5, bytes(bitfield)); print("[seeder%s] peer" % (" BAD" if bad else ""), addr, flush=True)
             theirs, asked = set(), [False]
             def want():
                 # upload test: ask NetMerge for a piece it says it has
@@ -99,16 +101,20 @@ def main():
                 elif t == 6:
                     idx, begin, ln = struct.unpack(">III", b[1:13])
                     blk = pieces[idx][begin:begin + ln]
-                    if idx == a.corrupt_piece: blk = bytes(x ^ 0xFF for x in blk)
+                    if begin == 0: print("[request%s] piece %d" % (" BAD-seeder" if bad else "", idx), flush=True)
+                    if bad or idx == a.corrupt_piece: blk = bytes(x ^ 0xFF for x in blk)
                     if a.throttle: time.sleep(len(blk) / a.throttle)
                     msg(c, 7, struct.pack(">II", idx, begin) + blk)
         except Exception: pass
         finally: c.close()
-    ls = socket.socket(); ls.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); ls.bind((a.host, a.seed_port)); ls.listen(50)
-    def acc():
-        while True:
-            c, ad = ls.accept(); threading.Thread(target=serve, args=(c, ad), daemon=True).start()
-    threading.Thread(target=acc, daemon=True).start()
+    def listen(port, bad):
+        ls = socket.socket(); ls.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); ls.bind((a.host, port)); ls.listen(50)
+        def acc():
+            while True:
+                c, ad = ls.accept(); threading.Thread(target=serve, args=(c, ad, bad), daemon=True).start()
+        threading.Thread(target=acc, daemon=True).start()
+    listen(a.seed_port, False)
+    if a.bad_seed_port: listen(a.bad_seed_port, True)
     print("tracker %s  seeder %s:%d  (Ctrl+C to stop)" % (ann, a.host, a.seed_port), flush=True)
     try:
         while True: time.sleep(3600)
