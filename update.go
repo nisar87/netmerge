@@ -23,7 +23,7 @@ import (
 
 // Set at build time:  -ldflags "-X main.appVersion=2.2.0 -X main.updateRepo=owner/netmerge"
 var (
-	appVersion = "3.11.6"
+	appVersion = "3.11.7"
 	updateRepo = "nisar87/netmerge" // "owner/repo" of the GitHub project (the release build sets it too)
 )
 

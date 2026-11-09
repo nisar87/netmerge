@@ -120,7 +120,11 @@ func isAdmin() bool {
 
 func relaunchAsAdmin() bool {
 	exe, _ := os.Executable()
-	args := quoteArgs(os.Args[1:])
+	rest := append([]string(nil), os.Args[1:]...)
+	if allowVirtual { // the environment variable does not reach a process started as administrator, a flag does
+		rest = append(rest, "-allow-virtual")
+	}
+	args := quoteArgs(rest)
 	verb, _ := syscall.UTF16PtrFromString("runas")
 	file, _ := syscall.UTF16PtrFromString(exe)
 	par, _ := syscall.UTF16PtrFromString(args)

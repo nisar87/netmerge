@@ -51,7 +51,7 @@ func kindOf(name, desc string) string {
 	return "ethernet"
 }
 
-// allowVirtual: set NM_ALLOW_VIRTUAL=1 to treat virtual adapters as real connections. Meant for testing inside a
+// allowVirtual: NM_ALLOW_VIRTUAL=1 or the flag -allow-virtual (the flag also survives the restart as administrator) to treat virtual adapters as real connections. Meant for testing inside a
 // virtual machine such as Windows Sandbox, whose only adapter is a Hyper-V one; it is off for everyone else.
 var allowVirtual = os.Getenv("NM_ALLOW_VIRTUAL") != ""
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.7
+
+- Testing in a virtual machine: the new start option `-allow-virtual` (same as the variable `NM_ALLOW_VIRTUAL=1`) now survives the automatic restart as administrator. Windows does not pass environment variables to a program started as administrator, so the variable alone was lost and the virtual adapter was ignored again ("No internet connection found"). Without the option nothing changes.
+
 ## 3.11.6
 
 - Fixed: a torrent could finish as "done" with wrong file content after it was paused or closed while a file was edited or deleted. Resuming trusted the saved list of finished pieces after hashing only a sample of them, so damage the sample missed was never noticed (found by the independent Windows test, reproduced with a test, then fixed). NetMerge now saves each file's size and modification time with that list; on resume every file that differs, including one that was deleted and made again, has its finished pieces hashed again and the damaged ones are fetched again. Older saved lists are checked once in full.

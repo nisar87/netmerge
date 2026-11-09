@@ -19,7 +19,11 @@ func main() {
 	background := flag.Bool("background", false, "start without opening the window")
 	autotest := flag.Bool("autotest", false, "run the speed test automatically after start")
 	dev := flag.String("root", "", "root folder (development)")
+	virt := flag.Bool("allow-virtual", false, "treat virtual adapters (Hyper-V, VMware) as real connections; for testing in a virtual machine")
 	flag.Parse()
+	if *virt {
+		allowVirtual = true
+	}
 
 	exe, _ := os.Executable()
 	rootDir = filepath.Dir(exe)
