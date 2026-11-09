@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -50,6 +51,10 @@ func kindOf(name, desc string) string {
 	return "ethernet"
 }
 
+// allowVirtual: set NM_ALLOW_VIRTUAL=1 to treat virtual adapters as real connections. Meant for testing inside a
+// virtual machine such as Windows Sandbox, whose only adapter is a Hyper-V one; it is off for everyone else.
+var allowVirtual = os.Getenv("NM_ALLOW_VIRTUAL") != ""
+
 var adapterRefreshing bool
 
 // getAdapters returns physical adapters that have an internet gateway. The scan takes seconds on Windows,
@@ -80,7 +85,7 @@ func refreshAdapters() []Adapter {
 	}
 	var out []Adapter
 	for _, a := range list {
-		if isVirtual(a.Name, a.Desc) || a.IP == "" {
+		if (isVirtual(a.Name, a.Desc) && !allowVirtual) || a.IP == "" {
 			continue
 		}
 		a.Kind = kindOf(a.Name, a.Desc)
