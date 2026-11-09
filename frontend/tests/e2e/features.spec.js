@@ -68,6 +68,7 @@ test('allowance settings preserve adapter identity, role and weights', async ({ 
 test('speed test and share application use empty action bodies and confirmed results', async ({ page, fixture }) => {
   await navigate(page, 'connections/speed-test');
   await mutate(page, 'speedtest', {}, () => page.locator('#testBtn').click());
+  await page.locator('#testDetails > summary').click();
   await expect(page.locator('#applyW')).toBeVisible({ timeout: 10_000 });
   await mutate(page, 'applyweights', {}, () => page.locator('#applyW').click());
   const state = await fixture.read('state');

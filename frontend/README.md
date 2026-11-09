@@ -21,6 +21,8 @@ Install Chromium with `cd frontend && npx playwright install chromium`, or set `
 
 The audit checks all routes in light and dark themes at 375, 390, 768, 1024, 1440 and 1920 pixels, records accessibility violations, document overflow, browser errors and unexpected external requests, and captures representative screenshots. Its output defaults to `/tmp/netmerge-frontend-audit`; set `NETMERGE_AUDIT_OUTPUT` to choose another directory. Audit data is synthetic and safe to share.
 
+For the speed meter, observed throughput timeline and expandable results, run `node frontend/scripts/audit-speed-test.mjs`. It checks idle, live and expanded-result states in both themes at the same six widths. Screenshots and accessibility results default to `/tmp/netmerge-speedtest-review/audit`. The graph samples in this audit are synthetic API readings; the shipped UI only plots readings received from the existing state endpoint.
+
 Runtime boundaries:
 
 - `ui/app/boot.mjs` owns the API client, settings write queue, polling scheduler, icon helper and confirmation service.

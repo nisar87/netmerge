@@ -1,0 +1,34 @@
+
+> test:unit
+> node --test tests/contract/*.test.mjs
+
+﹣ Downloads browser workflows, draft retention, paging, keyboard and request contracts (0.553148ms) # SKIP
+✔ 1000 transfers are paged without losing matches or off-page selection (18.231698ms)
+✔ config merges only intended edits into fresh maps and queues (2.089718ms)
+✔ config writes serialize fresh reads, preserve unrelated changes and inverse flags (2.622634ms)
+✔ polling deduplicates slow reads, normalizes null lists and tolerates manager off (1.764775ms)
+✔ unknown totals never invent percentages and names render as text (1.690222ms)
+✔ router accepts only local Downloads tabs and reads initial hash (1.28553ms)
+✔ an old poll cannot replace a mutation and failed config POST is never retried (7.530203ms)
+✔ new map entries preserve externally added keys and queue deletion preserves other queues (1.471484ms)
+✔ live speed sorting stays stable until an explicit sort/filter change (2.007548ms)
+✔ partial add results and duplicate feedback do not claim all jobs started (2.018394ms)
+✔ concurrent browser preferences preserve the latest untouched preference (2.16464ms)
+✔ POST uses existing header and body; requests are never replayed (27.670435ms)
+✔ concurrent GET reads share one request; errors include HTTP status (0.816592ms)
+✔ editing a connection label preserves newly changed weights, roles and unrelated settings (1.353476ms)
+✔ rule deletion/edit preserves rules added since the draft snapshot (0.338276ms)
+✔ settings writes serialize and read authoritative state before each complete write (10.910359ms)
+✔ a failed settings write does not poison the queue (0.424475ms)
+✔ live rate conversion and contribution states preserve unknowns (0.272421ms)
+✔ authoritative reads can bypass a pending stale poll (0.600961ms)
+✔ a slow poll has one owner and a replaced owner cannot restart itself (1.510318ms)
+✔ failed reads back off and a successful read resets the delay (0.377652ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 115.025057

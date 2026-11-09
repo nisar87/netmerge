@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/components.css">
 <link rel="stylesheet" href="styles/application.css">
+<link rel="stylesheet" href="styles/speed-test.css">
 <script src="app/theme-init.js"></script>
 </head><body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -81,21 +82,54 @@
 
     <!-- SPEED TEST -->
     <section class="page" id="pg-test" hidden>
-      <div class="card">
-        <div class="row">
-          <div>
-            <h3>Speed test</h3>
-            <p class="d" style="margin-bottom:0">Tests each connection alone, then all together, then through NetMerge. About a minute — please pause other downloads.</p>
-            <p class="d" style="margin:6px 0 0">It uses real data on every connection: on a mobile connection about 100–300 MB per test, which counts towards its allowance.</p>
+      <div class="card speed-panel">
+        <header class="speed-heading">
+          <div><h2><span data-icon="gauge"></span> Speed test</h2><p>Each connection. All together. Through NetMerge.</p></div>
+          <span class="speed-status" id="testStatus" role="status">Ready to test</span>
+        </header>
+        <div class="speed-hero">
+          <div class="speed-gauge" id="testMeter" role="img" aria-label="Download speed: not measured">
+            <svg viewBox="0 0 440 268" aria-hidden="true">
+              <g id="testMeterTicks"></g>
+              <path class="speed-gauge-track" d="M36 230 A184 184 0 0 1 404 230"/>
+              <path class="speed-gauge-fill" id="testMeterFill" d="M36 230 A184 184 0 0 1 404 230" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>
+              <g id="testMeterNeedle" class="speed-gauge-needle"><circle cx="36" cy="230" r="8"/></g>
+            </svg>
+            <div class="speed-reading"><span data-icon="arrow-down"></span><strong id="testSpeed">—</strong><span class="speed-unit">Mbps</span></div>
           </div>
-          <div class="spacer"></div>
-          <button class="btn pri" id="testBtn">Start test</button>
+          <div class="speed-scope" id="testSpeedScope">Download speed</div>
+          <div class="speed-phase" id="testPhase" aria-live="polite">Ready when you are</div>
+          <div class="speed-progress" id="testProg" role="progressbar" aria-label="Speed test progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div></div></div>
+          <button class="btn pri speed-start" id="testBtn"><span data-icon="play"></span><span>Start test</span></button>
+          <p class="speed-help">Allow a few minutes. Pause other downloads for a clearer result.</p>
+          <p class="speed-help">It uses real data on every connection: on a mobile connection about 100–300 MB per test, which counts towards its allowance.</p>
         </div>
-        <div class="progress" id="testProg" hidden><div></div></div>
-        <div style="margin-top:10px;color:var(--mute);font-size:13px" id="testPhase"></div>
-        <div class="bars" id="testBars"></div>
-        <div id="testNotes" style="margin-top:16px"></div>
+        <figure class="speed-graph" aria-labelledby="testGraphTitle">
+          <div class="speed-graph-heading">
+            <h3 id="testGraphTitle"><span data-icon="activity"></span> Throughput</h3>
+            <div class="speed-graph-tools"><span id="testGraphSummary">Waiting for readings</span><button class="btn icon-button" id="testChartPause" aria-label="Pause graph" title="Pause graph" disabled><span data-icon="pause"></span></button></div>
+          </div>
+          <div class="speed-plot">
+            <svg id="testChart" aria-hidden="true"></svg>
+            <div class="speed-graph-empty" id="testGraphEmpty">Start a test to see live throughput.</div>
+          </div>
+          <div class="speed-inspector" id="testInspector" hidden>
+            <input type="range" id="testSample" min="0" max="0" value="0" aria-label="Inspect throughput samples" aria-describedby="testSampleValue">
+            <output id="testSampleValue" for="testSample" aria-live="off"></output>
+          </div>
+          <figcaption id="testGraphCaption">Time observed in this window. Breaks separate test stages or gaps in readings.</figcaption>
+        </figure>
       </div>
+      <div id="testWarnings" class="speed-warnings" aria-live="polite"></div>
+      <details class="card speed-details" id="testDetails">
+        <summary><span class="speed-detail-icon" data-icon="list-checks"></span><span><strong>Test details</strong><span id="testDetailsHint">Connection speeds, parallel streams and recommendations</span></span><span class="speed-chevron" data-icon="chevron-down"></span></summary>
+        <div class="speed-detail-content">
+          <section aria-labelledby="testConnectionsTitle"><h3 id="testConnectionsTitle">Connection comparison</h3><p class="hint2">Single-stream speed compared with eight simultaneous downloads.</p><div id="testResults"></div></section>
+          <section aria-labelledby="testScalingTitle"><h3 id="testScalingTitle">Through NetMerge</h3><p class="hint2">How download speed changes as more streams run in parallel.</p><div id="testScaling"></div></section>
+          <div id="testNotes"></div>
+          <details class="speed-samples" id="testSampleDetails"><summary>Recorded samples <span id="testSampleCount">(0)</span></summary><p class="hint2" id="testSampleNote">Live readings are kept in this window for the current test, up to 600 samples.</p><div class="table-scroll"><table class="tbl" id="testSamples"><caption class="sr-only">Live download samples for this test</caption><thead><tr><th scope="col">Elapsed</th><th scope="col">Test stage</th><th scope="col">Mbps</th></tr></thead><tbody></tbody></table></div></details>
+        </div>
+      </details>
     </section>
 
     <!-- PROTECTION -->

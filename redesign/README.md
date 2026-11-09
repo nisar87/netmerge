@@ -6,7 +6,7 @@ Design and implementation package · 9 November 2026 · source baseline `39987fa
 
 **Branch:** `design/frontend-redesign-plan`. **Implementation:** the redesigned application is in `ui/`, with the browser popup in `extension/src/popup.*`. The backend, extension interception logic and release configuration are unchanged. The original design preview remains a separate reference with illustrative data.
 
-Latest refinement: [compact, context-colored download actions](evidence/compact-download-actions.md), with updated component screenshots and 128 passing browser tests.
+Latest refinement: [focused speed meter, throughput graph and expandable results](evidence/speed-test.md). The earlier [compact, context-colored download actions](evidence/compact-download-actions.md) remain included.
 
 ## Start here
 

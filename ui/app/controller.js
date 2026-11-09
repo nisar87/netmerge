@@ -115,6 +115,7 @@ $('#power').onclick = togglePower;
 function activeLinks(){ return NM.contributingLinks(S.snap); }
 
 function render(){
+  observeSpeedTest();
   updateHeld(S.snap);
   const sn = S.snap, run = sn.running, act = activeLinks();
   const P = pal();
