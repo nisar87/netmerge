@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NetMerge — redesign study</title>
+  <link rel="stylesheet" href="../design-system/tokens.css"><link rel="stylesheet" href="preview.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+  <symbol id="i-overview" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-network" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="5" rx="1"/><path d="M12 8v5M5 17v-4h14v4"/><rect x="2" y="17" width="6" height="4" rx="1"/><rect x="16" y="17" width="6" height="4" rx="1"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 20V4m-5 5 5-5 5 5"/></symbol>
+  <symbol id="i-apps" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M7 6h.01M10 6h.01"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 3v17h17M8 16v-4m5 4V7m5 9V4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="5" cy="12" r="3"/><circle cx="18" cy="5" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8 10 7-4M8 14l7 4"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M2 12h5l3-8 4 16 3-8h5"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6h5m4 0h7M4 12h10m4 0h2M4 18h3m4 0h9"/><circle cx="11" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="9" cy="18" r="2"/></symbol>
+  <symbol id="i-cable" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="13" rx="2"/><path d="M8 17v3m4-3v3m4-3v3M8 9v3m4-3v3m4-3v3"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0M9 16a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r=".8"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-5-5 5 5-5 5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6v18h12V7zM14 3v5h4M9 13h6m-6 4h6"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 14A9 9 0 0 1 10 3a9 9 0 1 0 11 11Z"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+</defs></svg>
+<div class="study"><span><b>DESIGN STUDY</b> <span class="study-detail">Illustrative data · Frontend planning only</span></span><button id="theme-toggle" class="quiet"><svg><use href="#i-moon"/></svg><span>Dark theme</span></button></div>
+<div class="shell">
+  <aside class="sidebar" aria-label="Application navigation">
+    <div class="brand"><span class="brand-mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 8c8 0 8 8 15 8h7M5 24c8 0 8-8 15-8"/><circle cx="26" cy="16" r="2"/></svg></span> <span>NetMerge<small>Connected. Together.</small></span></div>
+    <nav aria-label="Preview screens">
+      <p class="nav-label">MONITOR</p>
+      <button class="nav active" data-view="overview" aria-current="page"><svg><use href="#i-overview"/></svg><span>Overview</span></button>
+      <span class="nav unavailable" title="Specified in the design plan"><svg><use href="#i-network"/></svg><span>Connections</span></span>
+      <button class="nav" data-view="downloads"><svg><use href="#i-download"/></svg><span>Downloads</span><span class="count">2</span></button>
+      <p class="nav-label">CONFIGURE</p>
+      <span class="nav unavailable"><svg><use href="#i-apps"/></svg><span>Apps</span></span>
+      <span class="nav unavailable"><svg><use href="#i-chart"/></svg><span>Usage</span></span>
+      <span class="nav unavailable"><svg><use href="#i-shield"/></svg><span>Protection</span></span>
+      <span class="nav unavailable"><svg><use href="#i-share"/></svg><span>Sharing</span></span>
+      <div class="nav-bottom"><span class="nav unavailable"><svg><use href="#i-activity"/></svg><span>Activity</span></span><button class="nav" data-view="settings"><svg><use href="#i-settings"/></svg><span>Settings</span></button></div>
+    </nav>
+    <div class="sidebar-foot"><span class="health-dot"></span><span>All systems normal<small>Sample connected state</small></span></div>
+  </aside>
+  <div class="workspace">
+    <header><button id="menu" class="quiet menu"><svg><use href="#i-menu"/></svg> Menu</button><span class="breadcrumb">Workspace <span>/</span> <b id="crumb">Overview</b></span><span class="merge-status"><span class="health-dot"></span>Merging on <span class="switch" aria-hidden="true"></span></span></header>
+    <main id="main" tabindex="-1">
+      <section id="overview" class="view">
+        <div class="page-heading"><div><p class="eyebrow">YOUR NETWORK, AT A GLANCE</p><h1 tabindex="-1">Overview</h1><p>Two connections. One smoother experience.</p></div><span class="badge"><svg><use href="#i-check"/></svg> Everything looks good</span></div>
+        <div class="metrics">
+          <article><div class="metric-label"><svg><use href="#i-download"/></svg> Download</div><div class="metric-value">126.4 <small>Mbps</small></div><p>Across your contributing connections</p></article>
+          <article><div class="metric-label"><svg><use href="#i-up"/></svg> Upload</div><div class="metric-value">18.2 <small>Mbps</small></div><p>Ready for calls and large uploads</p></article>
+          <article><div class="metric-label"><svg><use href="#i-network"/></svg> Contributing</div><div class="metric-value">2 <small>connections</small></div><p><span class="health-dot"></span> Both connections healthy</p></article>
+          <article><div class="metric-label"><svg><use href="#i-clock"/></svg> Merging uptime</div><div class="metric-value">2<small>h</small> 14<small>m</small></div><p>Since your last start</p></article>
+        </div>
+        <article class="panel traffic"><div class="panel-head"><div><h2>Network traffic</h2><p>Your connections, working together</p></div><span class="sample-tag">Sample · last 90 seconds</span></div><div class="chart-wrap"><svg id="traffic-chart" viewBox="0 0 1020 220" role="img" aria-label="Illustrative traffic chart: Ethernet and Wi-Fi over ninety seconds. Current sample download total is 126.4 Mbps."></svg></div><div class="chart-bottom"><span><i class="series blue"></i>Ethernet <b>84.2 Mbps</b></span><span><i class="series teal"></i>Wi-Fi <b>42.2 Mbps</b></span><button class="text-action" id="chart-data">View sample data <svg><use href="#i-arrow"/></svg></button></div></article>
+        <div class="lower-grid">
+          <article class="panel"><div class="panel-head"><div><h2>Your connections</h2><p>Balanced automatically · Combine all</p></div><svg class="muted"><use href="#i-network"/></svg></div><div class="connection"><span class="icon-tile blue"><svg><use href="#i-cable"/></svg></span><div class="connection-name"><h3>Ethernet</h3><p>Main connection <span>·</span> Always</p></div><div class="connection-rate"><b>84.2 <small>Mbps</small></b><span>Healthy · 12 ms</span></div></div><div class="contribution"><span style="width:67%"></span></div><div class="connection"><span class="icon-tile teal"><svg><use href="#i-wifi"/></svg></span><div class="connection-name"><h3>Wi-Fi</h3><p>Home wireless <span>·</span> Always</p></div><div class="connection-rate"><b>42.2 <small>Mbps</small></b><span>Healthy · 24 ms</span></div></div><div class="contribution teal"><span style="width:33%"></span></div><div class="panel-foot"><svg><use href="#i-shield"/></svg> Call protection is ready when you need it.</div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Recent activity</h2><p>The important changes</p></div></div><ol class="timeline"><li><span class="event-icon"><svg><use href="#i-check"/></svg></span><div><h3>Wi-Fi is healthy again</h3><p>Back to sharing your traffic.</p><small>2 minutes ago</small></div></li><li><span class="event-icon"><svg><use href="#i-network"/></svg></span><div><h3>Two connections merged</h3><p>Traffic is balanced automatically.</p><small>2 hours ago</small></div></li></ol></article>
+        </div>
+        <div class="download-summary"><span class="icon-tile"><svg><use href="#i-download"/></svg></span><div><h3>Two downloads in progress</h3><p>Making the most of your connections.</p></div><button class="secondary" data-view="downloads">View downloads <svg><use href="#i-arrow"/></svg></button></div>
+      </section>
+      <section id="downloads" class="view" hidden>
+        <div class="page-heading"><div><p class="eyebrow">LESS WAITING. MORE DOING.</p><h1 tabindex="-1">Downloads</h1><p>Everything you're bringing in, in one place.</p></div><button class="primary" id="add"><svg><use href="#i-plus"/></svg> Add download</button></div>
+        <div class="local-tabs" aria-label="Planned Downloads sections"><b>Transfers</b><span>Queues</span><span>Browser</span><span>Settings</span></div>
+        <div class="transfer-summary"><div><span class="icon-tile"><svg><use href="#i-download"/></svg></span><div><b>15.8 <small>MB/s</small></b><p>Combined download speed</p></div></div><div><b>2</b><p>Downloading</p></div><div><b>1</b><p>Paused</p></div><div><b>1</b><p>Finished</p></div><span class="badge">Both connections in use</span></div>
+        <div class="panel transfer-panel"><div class="filters"><div class="filter-group" role="group" aria-label="Filter sample downloads"><button class="selected" data-filter="all">All <span>4</span></button><button data-filter="active">In progress <span>3</span></button><button data-filter="done">Finished <span>1</span></button></div><label class="search-label"><span class="sr-only">Search sample downloads</span><input id="search" type="search" placeholder="Search downloads"></label></div><div class="table-heading"><span>FILE</span><span>PROGRESS</span><span>SPEED</span><span>DETAILS</span></div><div id="transfer-rows"></div><p id="empty-search" hidden>No sample downloads match. Clear the search or choose All.</p><div class="panel-foot">Sample transfer data · Connection contributions appear in details.</div></div>
+        <div class="two-notes"><article><span class="icon-tile"><svg><use href="#i-apps"/></svg></span><div><h3>Your browser, connected</h3><p>Large downloads can go straight to NetMerge. Browser setup has its own dedicated tab.</p></div></article><article><span class="icon-tile"><svg><use href="#i-clock"/></svg></span><div><h3>On your schedule</h3><p>Manage named queues and download windows without leaving your transfer workspace.</p></div></article></div>
+      </section>
+      <section id="settings" class="view" hidden>
+        <div class="page-heading"><div><p class="eyebrow">MAKE IT FEEL LIKE YOURS</p><h1 tabindex="-1">Settings</h1><p>A considered default. Room to make it your own.</p></div></div>
+        <div class="local-tabs"><span>General</span><b>Appearance</b><span>Updates & backup</span><span>Advanced</span></div>
+        <article class="panel appearance"><div class="panel-head"><div><h2>Appearance</h2><p>Choose a comfortable workspace. Theme buttons work in this preview.</p></div></div><div class="theme-options"><button data-theme-choice="light" class="theme-option" aria-pressed="true"><span class="mini-app light"><i></i><span><b></b><em></em><em></em></span></span><strong>Light</strong><small>Clear and focused</small></button><button data-theme-choice="dark" class="theme-option" aria-pressed="false"><span class="mini-app dark"><i></i><span><b></b><em></em><em></em></span></span><strong>Dark</strong><small>Easy on the evening</small></button><button data-theme-choice="auto" class="theme-option" aria-pressed="false"><span class="mini-app auto"><i></i><span><b></b><em></em><em></em></span></span><strong>System</strong><small>Follow your device</small></button></div><div class="panel-foot">Readable contrast, quiet surfaces, and the same familiar layout in every theme.</div></article>
+        <article class="panel comfort"><div class="panel-head"><div><h2>Designed for everyday use</h2><p>Built-in behavior specified for the redesign</p></div></div><div class="setting-row"><div><h3>Respect reduced motion</h3><p>Transitions follow your device's accessibility preference.</p></div><span class="badge">Automatic</span></div><div class="setting-row"><div><h3>Keep live information steady</h3><p>Updates preserve your place, selected rows, and work in progress.</p></div><svg class="success"><use href="#i-check"/></svg></div><div class="setting-row"><div><h3>Everything available from the keyboard</h3><p>Visible focus, named controls, and predictable dialogs.</p></div><svg class="success"><use href="#i-check"/></svg></div></article>
+      </section>
+      <footer>NetMerge redesign <span>Overview, Downloads & Settings are interactive visual references. Other screens are specified in the plan.</span></footer>
+    </main>
+  </div>
+</div>
+<dialog id="dialog"><form method="dialog"><div class="dialog-head"><h2 id="dialog-title">Design preview</h2><button aria-label="Close dialog" class="close">×</button></div><div id="dialog-body"></div><div class="dialog-footer"><button class="primary">Close preview</button></div></form></dialog>
+<script src="preview.js"></script>
+</body></html>

@@ -1,0 +1,120 @@
+{
+  "environment": "Unmodified Go source compiled locally; Linux development adapters; temporary data; merging off; no production Windows operations tested",
+  "report": [
+    {
+      "page": "overview",
+      "title": "Overview",
+      "horizontalOverflow": false,
+      "headings": [
+        "Connections",
+        "Which internet to use",
+        "Last 24 hours download speed per connection, one point per minute",
+        "Recent activity See all"
+      ]
+    },
+    {
+      "page": "apps",
+      "title": "Apps",
+      "horizontalOverflow": false,
+      "headings": [
+        "Choose which connection an app uses",
+        "Using the internet now"
+      ]
+    },
+    {
+      "page": "test",
+      "title": "Speed test",
+      "horizontalOverflow": false,
+      "headings": [
+        "Speed test"
+      ]
+    },
+    {
+      "page": "usage",
+      "title": "Usage",
+      "horizontalOverflow": false,
+      "headings": [
+        "Monthly allowance",
+        "Daily usage · last 31 days, newest first · all values in GB"
+      ]
+    },
+    {
+      "page": "share",
+      "title": "Share",
+      "horizontalOverflow": false,
+      "headings": [
+        "Share with your phone",
+        "Use your merged internet on your phone"
+      ]
+    },
+    {
+      "page": "rules",
+      "title": "Protection",
+      "horizontalOverflow": false,
+      "headings": [
+        "Skip NetMerge for these addresses Only if needed",
+        "Keep these websites on one line Only if needed",
+        "Line used by your VPN Only if you use a VPN"
+      ]
+    },
+    {
+      "page": "block",
+      "title": "Blocking",
+      "horizontalOverflow": false,
+      "headings": [
+        "Block ads & trackers",
+        "Block lists",
+        "Most blocked today",
+        "Blocked today",
+        "My block list",
+        "My allow list"
+      ]
+    },
+    {
+      "page": "dns",
+      "title": "DNS",
+      "horizontalOverflow": false,
+      "headings": [
+        "Choose DNS servers",
+        "Find the best DNS for my connections"
+      ]
+    },
+    {
+      "page": "presets",
+      "title": "Presets",
+      "horizontalOverflow": false,
+      "headings": [
+        "Save your current settings as a preset",
+        "Schedule"
+      ]
+    },
+    {
+      "page": "settings",
+      "title": "Settings",
+      "horizontalOverflow": false,
+      "headings": []
+    },
+    {
+      "page": "history",
+      "title": "History",
+      "horizontalOverflow": false,
+      "headings": []
+    },
+    {
+      "page": "log",
+      "title": "Logs",
+      "horizontalOverflow": false,
+      "headings": []
+    },
+    {
+      "page": "overview-narrow",
+      "viewport": 390,
+      "documentWidth": 390,
+      "navigationWidth": {
+        "client": 390,
+        "scroll": 1678
+      }
+    }
+  ],
+  "errors": []
+}
