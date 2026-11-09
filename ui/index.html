@@ -711,7 +711,6 @@ function render(){
   if (pollFails >= 3) al.push(`<div class="note bad"><b>Lost contact with NetMerge.</b> It may have been closed. Open it again from the desktop shortcut.</div>`);
   if (S.conflict) al.push(`<div class="note bad"><span style="flex:1">${esc(S.conflict)}</span><button class="btn" id="fixConf">Close it for me</button></div>`);
   if (sn.error && !run && sn.error !== S.conflict) al.push(`<div class="note bad">${esc(sn.error)}</div>`);
-  if (run && act.length < 2 && !local.mode.startsWith('link:')) al.push(`<div class="note warn"><b>Only one connection is active.</b> Plug in or turn on a second connection to start merging.</div>`);
   setHTML($('#alerts'), al.join(''));
   renderBlockBadge();
   if (page === 'block') renderBlock();

@@ -223,6 +223,9 @@ func killProcessByName(name string) {
 func setAutoStart(on bool) error {
 	exe, _ := os.Executable()
 	if on {
+		if err := autoStartAllowed(exe, rootDir); err != nil {
+			return err
+		}
 		out, err := hiddenCmd("schtasks", "/Create", "/TN", "NetMerge", "/TR", `"`+exe+`" --background`,
 			"/SC", "ONLOGON", "/RL", "HIGHEST", "/F").CombinedOutput()
 		if err != nil {

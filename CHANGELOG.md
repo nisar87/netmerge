@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.11.12
+
+- "Start with Windows" can no longer be switched on from a copy of NetMerge that was started with its own data folder (`-root`, used for tests and development). The start-up task is one per computer, and such a copy would have replaced the real installation's task with one that starts the wrong folder.
+- Overview: the "Only one connection is active" message was shown twice (a banner and the status line). Only the status line is left.
+
 ## 3.11.11
 
 - NetMerge.exe now carries Windows file details (product name, version, description, licence), so the file's Properties window and some security tools show what it is. This is a step toward signing the program.
