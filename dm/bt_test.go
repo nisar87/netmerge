@@ -1181,3 +1181,52 @@ func TestBtResumeChaos(t *testing.T) {
 		}()
 	}
 }
+
+// A peer that sends three pieces that fail the hash check is banned (by address); a good peer on another address
+// still finishes the torrent, and the good peer is never banned.
+func TestBtBansAPeerAfterThreeBadPieces(t *testing.T) {
+	tt := makeTorrent("ban.bin", []tFile{{"", 3 * MiB}}, 64<<10)
+	bad := newSeeder(t, tt)
+	atomic.StoreInt32(&bad.corrupt, 100000) // every piece it sends is wrong
+	good := newSeederAt(t, tt, "127.0.0.2:0")
+	good.rate = 2 * MiB
+	meta, _ := btParseTorrent(tt.file)
+	root := filepath.Join(t.TempDir(), "ban.bin")
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	tk := newBtTask(btSpec{Meta: meta, NoDHT: true, Pick: func(string) (string, error) { return root, nil }}, env)
+	tk.addPeers([]string{bad.addr()})
+	ctx, cancel := ctxTimeout(40 * time.Second)
+	defer cancel()
+	go func() { time.Sleep(500 * time.Millisecond); tk.addPeers([]string{good.addr()}) }()
+	if err := tk.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	checkContent(t, tt, root)
+	tk.mu.Lock()
+	defer tk.mu.Unlock()
+	if !tk.banned["127.0.0.1"] {
+		t.Fatal("the peer that sent bad pieces was not banned")
+	}
+	if tk.banned["127.0.0.2"] {
+		t.Fatal("the good peer was banned")
+	}
+}
+
+func newSeederAt(t *testing.T, tt *tTorrent, addr string) *seeder {
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Skip("cannot listen on " + addr + ": " + err.Error())
+	}
+	s := &seeder{ln: l, tt: tt}
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go s.serve(c)
+		}
+	}()
+	t.Cleanup(func() { l.Close() })
+	return s
+}

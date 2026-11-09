@@ -655,6 +655,7 @@ func (t *btTask) finishPiece(pc *btPiece, from *btPeer) {
 				if q.strikes >= 3 {
 					if host, _, err := net.SplitHostPort(q.addr); err == nil {
 						t.banned[host] = true
+						hLog("torrent: banned %s after %d pieces that failed the hash check", host, q.strikes)
 					}
 					q.kill()
 				}
