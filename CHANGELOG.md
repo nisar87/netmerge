@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.11.8
+
+Fixes from running the download-manager test plan against 3.11.7:
+- Taking a file off a torrent that is running (or paused) now deletes that file and any folder it leaves empty. Before, a half-filled file of the full size stayed behind and looked finished.
+- A private torrent no longer offers peer exchange to the peers it talks to (it already ignored the peers they sent).
+- A link from the browser that leads into your own network is refused before the browser's download is cancelled. This includes an ordinary-looking name that resolves to an inside address: before, the browser download was cancelled first and NetMerge refused afterwards, so the file was lost.
+- The file preview of a `.torrent` is refused too when torrents are switched off in the download settings.
+- Torrents: a log line now records when a peer is banned for sending pieces that fail the hash check.
+- New tests: the upload limit holds, a peer that sends three bad pieces is banned, deselecting drops the file, a private torrent offers no peer exchange, local-network links are refused up front, a failed browser download is restarted, and a randomised stop-damage-resume stress test for torrents.
+
 ## 3.11.7
 
 - Testing in a virtual machine: the new start option `-allow-virtual` (same as the variable `NM_ALLOW_VIRTUAL=1`) now survives the automatic restart as administrator. Windows does not pass environment variables to a program started as administrator, so the variable alone was lost and the virtual adapter was ignored again ("No internet connection found"). Without the option nothing changes.
