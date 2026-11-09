@@ -1,12 +1,15 @@
 package dm
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -285,6 +288,11 @@ func (m *dlManager) addFromBrowser(link, referrer, cookie, ua, name string) (map
 	if ua != "" {
 		h["User-Agent"] = ua
 	}
+	// Refuse a local-network target now, while the browser still has its own download: the extension cancels that
+	// download as soon as we answer ok, and a link on an ordinary-looking name can resolve to an inside address.
+	if err := dlRefuseLocalTarget(link); err != nil {
+		return nil, err
+	}
 	a := dlAdd{URL: link, Header: h, Name: name, FromWeb: true}
 	it, err := m.add(a)
 	if errors.Is(err, errDlDuplicate) {
@@ -327,4 +335,42 @@ func (m *dlManager) restartDuplicate(link string) string {
 		}
 	}
 	return "running"
+}
+
+// dlLookupHost is the name lookup used to check a link from the browser (replaced in tests).
+var dlLookupHost = func(ctx context.Context, host string) ([]net.IP, error) {
+	as, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	var out []net.IP
+	for _, a := range as {
+		out = append(out, a.IP)
+	}
+	return out, err
+}
+
+// dlRefuseLocalTarget: an http(s) link from a web page must not lead into the local network, whether it names an inside
+// address or a name that resolves to one. A name that cannot be looked up is left to the download itself to report.
+func dlRefuseLocalTarget(link string) error {
+	u, err := url.Parse(link)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "ftp") || u.Hostname() == "" {
+		return nil
+	}
+	host := u.Hostname()
+	if dlLocalHost(host) {
+		return errors.New("the link leads to an address inside your own network")
+	}
+	if net.ParseIP(host) != nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	ips, err := dlLookupHost(ctx, host)
+	if err != nil {
+		return nil
+	}
+	for _, ip := range ips {
+		if dlPrivateIP(ip) {
+			return errors.New("the link leads to an address inside your own network")
+		}
+	}
+	return nil
 }

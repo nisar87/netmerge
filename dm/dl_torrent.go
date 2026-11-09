@@ -304,6 +304,7 @@ func (m *dlManager) setSelect(id string, sel []bool) error {
 	for _, s := range sel {
 		all = all && s
 	}
+	prev := append([]bool(nil), e.Select...)
 	if all {
 		e.Select = nil
 	} else {
@@ -311,7 +312,29 @@ func (m *dlManager) setSelect(id string, sel []bool) error {
 	}
 	m.dirty = true
 	running := e.running
+	root, files := e.Path, append([]dlTFile(nil), e.Files...)
 	m.mu.Unlock()
+	// a file that is no longer wanted must not stay behind: a half-filled file of the right size looks finished
+	dropUnwanted := func() {
+		for i, f := range files {
+			if sel[i] || (len(prev) == len(files) && !prev[i]) {
+				continue // still wanted, or it was not wanted before either
+			}
+			p := filepath.Join(root, filepath.FromSlash(f.Name))
+			if rel, err := filepath.Rel(root, p); err != nil || strings.HasPrefix(rel, "..") {
+				continue
+			}
+			_ = os.Remove(p)
+			for d := filepath.Dir(p); d != filepath.Clean(root) && strings.HasPrefix(d, filepath.Clean(root)); d = filepath.Dir(d) {
+				if os.Remove(d) != nil { // stays when something else is inside
+					break
+				}
+			}
+		}
+	}
+	if !running {
+		dropUnwanted()
+	}
 	if running {
 		if err := m.pause(id); err != nil {
 			return err
@@ -330,6 +353,7 @@ func (m *dlManager) setSelect(id string, sel []bool) error {
 			case <-time.After(5 * time.Second):
 			}
 		}
+		dropUnwanted()
 		return m.resume(id)
 	}
 	return nil
@@ -337,6 +361,12 @@ func (m *dlManager) setSelect(id string, sel []bool) error {
 
 // torrentPreview reads a .torrent file the page is about to add, so the person can choose files and a folder first.
 func (m *dlManager) torrentPreview(b64 string) (map[string]any, error) {
+	m.mu.Lock()
+	off := m.cfg.NoTorrents
+	m.mu.Unlock()
+	if off {
+		return nil, errors.New("Torrents are switched off in the download settings.")
+	}
 	b, err := base64.StdEncoding.DecodeString(strings.TrimSpace(b64))
 	if err != nil || len(b) == 0 || len(b) > 16<<20 {
 		return nil, errors.New("that is not a usable .torrent file")

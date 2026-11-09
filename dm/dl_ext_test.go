@@ -3,6 +3,7 @@ package dm
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -168,21 +169,22 @@ func TestExtAddRefusesLocalNetworkAndBadLinks(t *testing.T) {
 			t.Errorf("accepted %q", bad)
 		}
 	}
+	// the simulated server is on the loopback: the link is refused up front (the browser keeps its own download),
+	// no row is left behind and no byte reaches the server
 	st, out := e.call("POST", "/ext/add", extO, tok, map[string]string{"url": s.URL + "/file.bin", "cookie": "a=b", "referrer": "https://site/"})
-	if st != 200 || out["id"] == nil {
-		t.Fatalf("add: %d %v", st, out)
+	if st != 400 || !strings.Contains(fmt.Sprint(out["error"]), "inside your own network") {
+		t.Fatalf("a link into the local network was not refused: %d %v", st, out)
 	}
-	v := waitState(t, e.m, out["id"].(string), "error", 15*time.Second)
-	if !strings.Contains(v.Err, "inside your own network") || s.bytesFrom("127.0.0.1") != 0 {
-		t.Fatalf("a browser link reached the local network: %q", v.Err)
+	if s.bytesFrom("127.0.0.1") != 0 {
+		t.Fatal("a browser link reached the local network")
 	}
-	// the same link again is reported, not added twice
-	st, out = e.call("POST", "/ext/add", extO, tok, map[string]string{"url": s.URL + "/file.bin"})
-	if st != 200 || out["duplicate"] != true {
-		t.Fatalf("duplicate: %d %v", st, out)
+	e.m.mu.Lock()
+	n := len(e.m.items)
+	e.m.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("the refused link left %d rows behind", n)
 	}
 }
-
 func TestExtRevoke(t *testing.T) {
 	e := newExtEnv(t)
 	tok := e.pairNow()

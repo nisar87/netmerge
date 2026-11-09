@@ -2,10 +2,12 @@ package dm
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"io"
 	mrand "math/rand"
 	"net"
@@ -35,6 +37,8 @@ type tTorrent struct {
 	files   []tFile
 }
 
+var tPrivate bool // makeTorrent marks the torrent private
+
 func makeTorrent(name string, files []tFile, pieceLen int, trackers ...string) *tTorrent {
 	var content []byte
 	for _, f := range files {
@@ -49,6 +53,9 @@ func makeTorrent(name string, files []tFile, pieceLen int, trackers ...string) *
 		hashes = append(hashes, h[:]...)
 	}
 	info := map[string]any{"name": name, "piece length": pieceLen, "pieces": string(hashes)}
+	if tPrivate {
+		info["private"] = 1
+	}
 	if len(files) == 1 && files[0].name == "" {
 		info["length"] = len(content)
 	} else {
@@ -1246,4 +1253,263 @@ func newSeederAt(t *testing.T, tt *tTorrent, addr string) *seeder {
 	}()
 	t.Cleanup(func() { l.Close() })
 	return s
+}
+
+// T16: the upload limit really limits. A leecher asks for every block of the half of the file that is on the disk;
+// with a limit of 200 KiB/s it must receive about that much per second, not the whole megabyte at once.
+func TestBtUploadLimitHolds(t *testing.T) {
+	const limit = 200 << 10
+	tt := makeTorrent("lim.bin", []tFile{{"", 4 * MiB}}, 64<<10)
+	root := filepath.Join(t.TempDir(), "lim.bin")
+	data := make([]byte, 4*MiB)
+	copy(data, tt.content[:2*MiB])
+	os.WriteFile(root, data, 0o644)
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer l.Close()
+	type res struct {
+		bytes int
+		secs  float64
+	}
+	out := make(chan res, 1)
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			out <- res{}
+			return
+		}
+		defer c.Close()
+		hs := make([]byte, 68)
+		io.ReadFull(c, hs)
+		my := make([]byte, 68)
+		my[0] = 19
+		copy(my[1:], "BitTorrent protocol")
+		copy(my[28:], tt.meta.InfoHash[:])
+		copy(my[48:], "-LEECHER12345678901-")
+		c.Write(my)
+		c.Write(btFrame(2))
+		c.SetReadDeadline(time.Now().Add(6 * time.Second))
+		readFrame := func() []byte {
+			hdr := make([]byte, 4)
+			if _, err := io.ReadFull(c, hdr); err != nil {
+				return nil
+			}
+			b := make([]byte, binary.BigEndian.Uint32(hdr))
+			io.ReadFull(c, b)
+			return b
+		}
+		for {
+			b := readFrame()
+			if b == nil {
+				out <- res{}
+				return
+			}
+			if len(b) > 0 && b[0] == 1 {
+				break
+			}
+		}
+		for blk := 0; blk < 96; blk++ { // the first 1.5 MiB, one 16 KiB block at a time, all asked for at once
+			c.Write(btFrame(6, be32(blk*16384/(64<<10)), be32(blk*16384%(64<<10)), be32(16384)))
+		}
+		start := time.Now()
+		got := 0
+		c.SetReadDeadline(time.Now().Add(2500 * time.Millisecond))
+		for {
+			b := readFrame()
+			if b == nil {
+				break
+			}
+			if len(b) > 9 && b[0] == 7 {
+				got += len(b) - 9
+			}
+		}
+		out <- res{got, time.Since(start).Seconds()}
+	}()
+	meta, _ := btParseTorrent(tt.file)
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+	tk := newBtTask(btSpec{Meta: meta, NoDHT: true, UploadRate: limit, Pick: func(string) (string, error) { return root, nil }}, env)
+	tk.addPeers([]string{l.Addr().String()})
+	ctx, cancel := ctxTimeout(12 * time.Second)
+	done := make(chan struct{})
+	go func() { tk.Run(ctx); close(done) }()
+	r := <-out
+	cancel()
+	<-done
+	allowed := int(float64(limit)*r.secs*1.5) + 96<<10 // a little room for the first burst
+	if r.bytes == 0 {
+		t.Fatal("nothing was uploaded")
+	}
+	if r.bytes > allowed {
+		t.Fatalf("uploaded %d bytes in %.1fs with a limit of %d bytes/s (at most about %d expected)", r.bytes, r.secs, limit, allowed)
+	}
+	if r.bytes < int(float64(limit)*r.secs*0.3) {
+		t.Fatalf("uploaded only %d bytes in %.1fs; the limit %d starves the peer", r.bytes, r.secs, limit)
+	}
+}
+
+// T19: take a file off a torrent that is running. The file must be gone from the disk (not left half filled at its full
+// size), the folder it was in goes with it when it is empty, and the rest finishes with the right content.
+func TestBtDeselectingARunningTorrentDropsTheFile(t *testing.T) {
+	tt := makeTorrent("Drop", []tFile{{"keep.bin", 600000}, {"sub/skip.bin", 600000}, {"last.bin", 600000}}, 64<<10)
+	sd := newSeeder(t, tt)
+	sd.rate = 600 << 10
+	tr, _ := httpTracker(t, tt.meta.InfoHash, sd.addr())
+	tt = makeTorrent("Drop", []tFile{{"keep.bin", 600000}, {"sub/skip.bin", 600000}, {"last.bin", 600000}}, 64<<10, tr.URL+"/a")
+	sd.tt = tt
+	tr, _ = httpTracker(t, tt.meta.InfoHash, sd.addr())
+	tt = makeTorrent("Drop", []tFile{{"keep.bin", 600000}, {"sub/skip.bin", 600000}, {"last.bin", 600000}}, 64<<10, tr.URL+"/a")
+	sd.tt = tt
+	m := newTestMgr(t, newSimEnv(newSimLine("A", "127.0.0.1", 0)))
+	out, err := m.handle(dlReq{Action: "add", dlAdd: dlAdd{Torrent: b64(tt.file)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := out["added"].([]*dlItem)[0].ID
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		v := m.find(id)
+		m.mu.Lock()
+		d := v.Done
+		m.mu.Unlock()
+		if d > 300000 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err := m.setSelect(id, []bool{true, false, true}); err != nil {
+		t.Fatal(err)
+	}
+	v := waitState(t, m, id, "done", 40*time.Second)
+	if _, err := os.Stat(filepath.Join(v.Path, "sub", "skip.bin")); err == nil {
+		t.Fatal("the file that was taken off is still on the disk")
+	}
+	if _, err := os.Stat(filepath.Join(v.Path, "sub")); err == nil {
+		t.Fatal("the empty folder was left behind")
+	}
+	for _, f := range []struct {
+		name string
+		off  int
+	}{{"keep.bin", 0}, {"last.bin", 1200000}} {
+		got, err := os.ReadFile(filepath.Join(v.Path, f.name))
+		if err != nil || !bytes.Equal(got, tt.content[f.off:f.off+600000]) {
+			t.Fatalf("%s is wrong (%v)", f.name, err)
+		}
+	}
+}
+
+// T17: with torrents switched off every way in is closed, the file preview included; ordinary links still work.
+func TestBtSwitchedOffClosesEveryWayIn(t *testing.T) {
+	tt := makeTorrent("Off", []tFile{{"a.bin", 100000}}, 32<<10)
+	m := newTestMgr(t, newSimEnv(newSimLine("A", "127.0.0.1", 0)))
+	c := m.config()
+	c.NoTorrents = true
+	if err := m.setConfig(c); err != nil {
+		t.Fatal(err)
+	}
+	const msg = "Torrents are switched off in the download settings."
+	for name, req := range map[string]dlReq{
+		"add .torrent": {Action: "add", dlAdd: dlAdd{Torrent: b64(tt.file)}},
+		"preview":      {Action: "torrentInfo", dlAdd: dlAdd{Torrent: b64(tt.file)}},
+		"add magnet":   {Action: "add", dlAdd: dlAdd{URL: "magnet:?xt=urn:btih:" + strings.Repeat("a", 40)}},
+	} {
+		if _, err := m.handle(req); err == nil || err.Error() != msg {
+			t.Errorf("%s: got %v", name, err)
+		}
+	}
+}
+
+// T20: a private torrent never offers peer exchange to a peer, and ignores the peers one sends; an ordinary torrent does offer it.
+func TestBtPrivateTorrentOffersNoPeerExchange(t *testing.T) {
+	offers := func(private bool) bool {
+		tPrivate = private
+		tt := makeTorrent("p.bin", []tFile{{"", 1 * MiB}}, 64<<10)
+		tPrivate = false
+		l, _ := net.Listen("tcp", "127.0.0.1:0")
+		defer l.Close()
+		res := make(chan bool, 1)
+		go func() {
+			c, err := l.Accept()
+			if err != nil {
+				res <- false
+				return
+			}
+			defer c.Close()
+			hs := make([]byte, 68)
+			io.ReadFull(c, hs)
+			my := make([]byte, 68)
+			my[0] = 19
+			copy(my[1:], "BitTorrent protocol")
+			my[25] = 0x10
+			copy(my[28:], tt.meta.InfoHash[:])
+			copy(my[48:], "-PEXCHECK1234567890-")
+			c.Write(my)
+			c.SetReadDeadline(time.Now().Add(4 * time.Second))
+			for {
+				hdr := make([]byte, 4)
+				if _, err := io.ReadFull(c, hdr); err != nil {
+					res <- false
+					return
+				}
+				b := make([]byte, binary.BigEndian.Uint32(hdr))
+				io.ReadFull(c, b)
+				if len(b) > 2 && b[0] == 20 && b[1] == 0 {
+					res <- bytes.Contains(b, []byte("ut_pex"))
+					return
+				}
+			}
+		}()
+		meta, _ := btParseTorrent(tt.file)
+		env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+		root := filepath.Join(t.TempDir(), "p.bin")
+		tk := newBtTask(btSpec{Meta: meta, NoDHT: true, Pick: func(string) (string, error) { return root, nil }}, env)
+		tk.addPeers([]string{l.Addr().String()})
+		ctx, cancel := ctxTimeout(6 * time.Second)
+		done := make(chan struct{})
+		go func() { tk.Run(ctx); close(done) }()
+		r := <-res
+		cancel()
+		<-done
+		return r
+	}
+	if !offers(false) {
+		t.Fatal("an ordinary torrent should offer peer exchange")
+	}
+	if offers(true) {
+		t.Fatal("a private torrent offered peer exchange")
+	}
+}
+
+// E2: a link from the browser that leads into the local network is refused before the browser's own download is
+// cancelled: by address, by a local-looking name, and by an ordinary name that resolves to an inside address.
+func TestBrowserLinkIntoTheLocalNetworkIsRefusedUpFront(t *testing.T) {
+	old := dlLookupHost
+	defer func() { dlLookupHost = old }()
+	dlLookupHost = func(ctx context.Context, host string) ([]net.IP, error) {
+		switch host {
+		case "files.corp.example":
+			return []net.IP{net.ParseIP("10.1.2.3")}, nil
+		case "mixed.example":
+			return []net.IP{net.ParseIP("93.184.216.34"), net.ParseIP("192.168.0.9")}, nil
+		case "cdn.example":
+			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+		}
+		return nil, errors.New("no such host")
+	}
+	m := newTestMgr(t, newSimEnv(newSimLine("A", "127.0.0.1", 0)))
+	for _, bad := range []string{"http://192.168.1.5/a.zip", "http://127.0.0.1/a.zip", "http://nas/a.zip", "http://printer.local/a.zip",
+		"http://files.corp.example/a.zip", "http://mixed.example/a.zip"} {
+		if _, err := m.addFromBrowser(bad, "", "", "", ""); err == nil || !strings.Contains(err.Error(), "inside your own network") {
+			t.Errorf("%s was not refused up front: %v", bad, err)
+		}
+	}
+	m.mu.Lock()
+	n := len(m.items)
+	m.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("a refused link left %d rows behind", n)
+	}
+	for _, ok := range []string{"http://cdn.example/a.zip", "http://unknown.example/a.zip"} {
+		if _, err := m.addFromBrowser(ok, "", "", "", ""); err != nil {
+			t.Errorf("%s was refused: %v", ok, err)
+		}
+	}
 }
