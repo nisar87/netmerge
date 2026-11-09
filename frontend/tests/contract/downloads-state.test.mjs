@@ -6,7 +6,7 @@ import {readFileSync} from 'node:fs';
 // Run the shipped classic scripts; only the browser and transport boundary are replaced.
 function runtime(api = async () => ({items:[], config:{}, lines:[]}), hash='#/downloads/transfers') {
   const document = {addEventListener(){}, querySelector(){return null;}, querySelectorAll(){return [];}, hidden:false};
-  const context = vm.createContext({document, api, console, URL, AbortController,
+  const context = vm.createContext({document, api, console, URL, AbortController, structuredClone,
     location:{hash}, setTimeout(){}, clearTimeout(){}, setInterval(){}, clearInterval(){},
     $:()=>null, $$:()=>[], esc:s=>String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
     bytes:n=>`${n} B`, toast(){}, colorOf:()=>'', labelOf:n=>n, page:'downloads', DM_ON:true, S:{}, local:{}, go(){}, setHTML(){}});
@@ -56,6 +56,21 @@ test('config writes serialize fresh reads, preserve unrelated changes and invers
   assert.equal(current.noUpload,false);
   assert.equal(current.external,42);
   assert.deepEqual(current.queues,[{id:'q',name:'Night'}]);
+});
+
+test('duplicate queue-dialog submissions pending behind an inline edit create one queue', async () => {
+  let current={maxActive:3,queues:[]},nextID=0;
+  const {run}=runtime(async(_path,body)=>{
+    if(body) current={...plain(body.config),queues:body.config.queues.map(q=>({...q,id:q.id||String(++nextID)}))};
+    return {items:[],config:plain(current),lines:[]};
+  });
+  run('DL={items:[],config:{maxActive:3,queues:[]},lines:[]}');
+  await run(`Promise.all([
+    dlConfigEdit({maxActive:4}),
+    dlAct({action:'config',config:{...DL.config,queues:[{name:'New queue'}]}},null,DL.config),
+    dlAct({action:'config',config:{...DL.config,queues:[{name:'New queue'}]}},null,DL.config)
+  ])`);
+  assert.deepEqual(current,{maxActive:4,queues:[{name:'New queue',id:'1'}]});
 });
 
 test('polling deduplicates slow reads, normalizes null lists and tolerates manager off',async()=>{
@@ -136,6 +151,6 @@ test('concurrent browser preferences preserve the latest untouched preference',a
     return {items:[],config:{},lines:[],ext:plain(ext)};
   });
   run('DL={items:[],config:{},lines:[],ext:{enabled:true,minMB:5,browsers:[]}}');
-  await run("Promise.all([dlAct({action:'extConfig',extMinMB:10,extOff:false}),dlAct({action:'extConfig',extMinMB:5,extOff:true})])");
+  await run("Promise.all([dlAct({action:'extConfig',extMinMB:10}),dlAct({action:'extConfig',extOff:true})])");
   assert.equal(ext.minMB,10);assert.equal(ext.enabled,false);
 });

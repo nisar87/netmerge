@@ -33,6 +33,17 @@ function dlMergeConfig(base, desired, fresh, key = '') {
   }
   return dlCopy(desired);
 }
+// Inline controls send only explicitly edited fields, even when reverting a pending save.
+// Undefined deletes a map entry; dialogs still use the three-way merge above.
+function dlMergePatch(fresh, patch) {
+  const result={...(fresh||{})};
+  for (const [key,value] of Object.entries(patch)) {
+    if (value===undefined) delete result[key];
+    else result[key]=dlObject(value) ? dlMergePatch(result[key],value) : dlCopy(value);
+  }
+  return result;
+}
+const dlConfigEdit=(config,okMsg)=>dlAct({action:'config',config},okMsg,null);
 function dlNormalize(r) {
   return {...r, items:r.items||[], lines:r.lines||[], config:{...(r.config||{}),queues:r.config?.queues||[],window:r.config?.window||{}}, ext:r.ext ? {...r.ext,browsers:r.ext.browsers||[]} : null};
 }
@@ -62,13 +73,14 @@ function dlNotice(message, bad = false) {
   } else { if (bad) { dlError=message; paintDL(); } toast(message,bad); }
 }
 async function dlAct(body, okMsg, configBase = DL?.config) {
-  const key = JSON.stringify(body);
+  const isConfig=body.action==='config', isExt=body.action==='extConfig';
+  // Inline reversals are distinct choices; repeated dialog submissions still deduplicate.
+  const key = (isConfig&&configBase===null)||isExt ? Symbol() : JSON.stringify(body);
   if (dlPending.has(key)) return dlPending.get(key);
-  const base = body.action === 'config' ? dlCopy(configBase) : null;
-  const desired = body.action === 'config' ? dlCopy(body.config) : null;
-  const extBase = body.action === 'extConfig' ? dlCopy(DL.ext) : null;
+  const base = isConfig ? dlCopy(configBase) : null;
+  const desired = isConfig ? structuredClone(body.config) : null;
   const opener = document.activeElement;
-  const changed = base ? Object.keys(desired).filter(k=>!dlEqual(base[k],desired[k])) : [];
+  const changed = isConfig ? Object.keys(desired).filter(k=>!base||!dlEqual(base[k],desired[k])) : [];
   const fieldKeys={dlDir:'dir',dlAfterCmd:'afterCmd',dlWinFrom:'window',dlWinTo:'window',dlMax:'maxActive',dlPer:'maxPerLine'};
   const fields = new Map($$('#dlBody [data-dirty]').filter(el=>changed.includes(fieldKeys[el.id]||el.dataset.cfg)).map(el=>[el,el.value]));
   const perform = async()=>{
@@ -77,24 +89,26 @@ async function dlAct(body, okMsg, configBase = DL?.config) {
     if (opener?.tagName==='BUTTON') { opener.disabled=true; opener.setAttribute('aria-busy','true'); }
     try {
       let request=body;
-      if (base) {
+      if (isConfig) {
         const latest=await dlRequest(undefined,undefined,true);
         if (latest.enabled === false || !latest.config) throw new Error('Downloads are off. Enable them before saving.');
-        request={action:'config',config:dlMergeConfig(base,desired,latest.config)};
+        request={action:'config',config:base ? dlMergeConfig(base,desired,latest.config) : dlMergePatch(latest.config,desired)};
       }
-      if (extBase) {
+      if (isExt) {
         const latest=await dlRequest(undefined,undefined,true);
         if (!latest.ext || latest.enabled===false) throw new Error('Browser preferences are unavailable. Refresh and try again.');
-        request={action:'extConfig',extMinMB:body.extMinMB===extBase.minMB?latest.ext.minMB:body.extMinMB,extOff:body.extOff===!extBase.enabled?!latest.ext.enabled:body.extOff};
+        request={action:'extConfig',extMinMB:body.extMinMB??latest.ext.minMB,extOff:body.extOff??!latest.ext.enabled};
       }
       dlRevision++;
       const r=await dlRequest(request);
       if (r?.items) { DL=dlNormalize(r); dlLastGood=Date.now(); }
       // A read started before this action cannot replace its authoritative result.
       if (dlRead) await dlRead;
+      // Drain in-flight reads before resetting: a poll during the move may carry old order.
+      if (body.action==='move') dlOrder=[];
       await loadDL(true);
-      if (base) for (const [el,value] of fields) if (el.value===value) delete el.dataset.dirty;
-      if (extBase && $('#dlExtMin')?.value===String(body.extMinMB)) delete $('#dlExtMin').dataset.dirty;
+      if (isConfig) for (const [el,value] of fields) if (el.value===value) delete el.dataset.dirty;
+      if (isExt && $('#dlExtMin')?.value===String(body.extMinMB)) delete $('#dlExtMin').dataset.dirty;
       paintDL();
       if (okMsg) dlNotice(okMsg);
       return r;
@@ -102,13 +116,14 @@ async function dlAct(body, okMsg, configBase = DL?.config) {
       dlNotice(e.message||'Could not complete this action.',true);
       // POST may have applied: reconcile, but never replay it.
       if (dlRead) await dlRead;
+      if (body.action==='move') dlOrder=[];
       await loadDL(true);
       dlNotice(e.message||'Could not confirm this change. Refresh and try again.',true);
       return null;
     } finally { if(dialog)dialog.dlPending--;if (opener?.tagName==='BUTTON') { opener.disabled=wasDisabled; opener.removeAttribute('aria-busy'); } }
   };
-  const promise=base||extBase ? dlConfigTail.then(perform,perform) : perform();
-  if (base||extBase) dlConfigTail=promise.then(()=>{});
+  const promise=isConfig||isExt ? dlConfigTail.then(perform,perform) : perform();
+  if (isConfig||isExt) dlConfigTail=promise.then(()=>{});
   dlPending.set(key,promise);
   try { return await promise; } finally { dlPending.delete(key); }
 }
@@ -191,7 +206,7 @@ function dlPageItems() {
   const key=[dlFilter,dlCat,dlQ,dlQf,dlSort].join('\0');
   if (key!==dlOrderKey) {dlOrderKey=key;dlPage=0;dlOrder=[];}
   dlSortItems(items);
-  // Keep the established order through telemetry ticks. Explicit filter/sort changes reset it.
+  // Keep the established order through telemetry ticks. Explicit moves/filters/sorts reset it.
   const rank=new Map(dlOrder.map((id,i)=>[id,i]));
   items.sort((a,b)=>(rank.get(a.id)??Infinity)-(rank.get(b.id)??Infinity));
   dlOrder=items.map(v=>v.id);
@@ -510,15 +525,15 @@ document.addEventListener('click', async e => {
   if (t.id === 'dlTorBtn') { const f = $('#dlTorFile'); if (f) f.click(); return; }
   if (t.id === 'dlPaste') { try { const s = await navigator.clipboard.readText(); if (s) { $('#dlUrl').value = s.trim(); $('#dlUrl').focus(); } } catch(err){ dlNotice('Press Ctrl+V in the Links field instead.', true); $('#dlUrl')?.focus(); } return; }
   if (t.dataset.f && page === 'downloads') { dlFilter = t.dataset.f; return paintDL(); }
-  if (t.id === 'dlDirSave') return void dlAct({action:'config', config: {...DL.config, dir: $('#dlDir').value.trim()}}, 'Folder saved');
-  if (t.id === 'dlCatTog') return void dlAct({action:'config', config: {...DL.config, useCategories: !DL.config.useCategories}});
-  if (t.id === 'dlWinTog') return void dlAct({action:'config', config: {...DL.config, window: {...DL.config.window, enabled: !DL.config.window.enabled}}});
-  if (t.dataset.ex !== undefined) { const ex = new Set(DL.config.excludeLines||[]); ex.has(t.dataset.ex) ? ex.delete(t.dataset.ex) : ex.add(t.dataset.ex); return void dlAct({action:'config', config: {...DL.config, excludeLines: [...ex]}}); }
+  if (t.id === 'dlDirSave') return void dlConfigEdit({dir: $('#dlDir').value.trim()}, 'Folder saved');
+  if (t.id === 'dlCatTog') return void dlConfigEdit({useCategories: !DL.config.useCategories});
+  if (t.id === 'dlWinTog') return void dlConfigEdit({window: {enabled: !DL.config.window.enabled}});
+  if (t.dataset.ex !== undefined) { const ex = new Set(DL.config.excludeLines||[]); ex.has(t.dataset.ex) ? ex.delete(t.dataset.ex) : ex.add(t.dataset.ex); return void dlConfigEdit({excludeLines: [...ex]}); }
   if (t.id === 'dlForget') return void dlAct({action:'forgetHosts'}, 'Forgotten');
   if (t.id === 'dlExtCode') return dlExtCode();
-  if (t.id === 'dlExtOn') return void dlAct({action:'extConfig', extMinMB: DL.ext.minMB, extOff: DL.ext.enabled});
+  if (t.id === 'dlExtOn') return void dlAct({action:'extConfig', extOff: DL.ext.enabled});
   if (t.dataset.extrm) { if (!await dlAsk('Disconnect this browser? Its extension stops sending downloads until you connect it again.')) return; return void dlAct({action:'extRevoke', id: t.dataset.extrm}, 'Disconnected'); }
-  if (t.id === 'dlMobTog') return void dlAct({action:'config', config: {...DL.config, allowMobile: !DL.config.allowMobile}});
+  if (t.id === 'dlMobTog') return void dlConfigEdit({allowMobile: !DL.config.allowMobile});
   const a = t.dataset.dl; if (!a) return;
   const id = t.dataset.id, v = DL && DL.items.find(x => x.id === id);
   if (a === 'delfile') { if (!await dlAsk('Delete "' + (v ? v.name : 'this file') + '" from your computer too? This cannot be undone.')) return; const r=await dlAct({action:'remove',id,deleteFiles:true},'File deleted');if(r)dlClose(true);return; }
@@ -570,19 +585,19 @@ document.addEventListener('change', async e => {
     return;
   }
   if (t.dataset && t.dataset.cfg) {
-    const k = t.dataset.cfg, c = {...DL.config};
+    const k = t.dataset.cfg, c = {};
     if (k === 'limitAll') c.limitAll = +t.value * 1048576;
     else if (k === 'uploadLimit') c.uploadLimit = +t.value * 1048576;
-    else if (k.startsWith('line:')) { c.limitLines = {...(c.limitLines||{})}; const n = k.slice(5); if (+t.value) c.limitLines[n] = +t.value * 1048576; else delete c.limitLines[n]; }
+    else if (k.startsWith('line:')) c.limitLines = {[k.slice(5)]: +t.value ? +t.value * 1048576 : undefined};
     else if (k === 'afterAll') { if (t.value === 'shutdown' && !await dlAsk('Shut the PC down when all downloads are finished? You get one minute to cancel.')) { t.value=DL.config.afterAll||'';delete t.dataset.dirty;paintDL();return; } c.afterAll = t.value; }
     else c[k] = t.value;
-    return void dlAct({action:'config', config: c});
+    return void dlConfigEdit(c);
   }
-  if (t.id === 'dlWinFrom' || t.id === 'dlWinTo') return void dlAct({action:'config', config: {...DL.config, window: {...DL.config.window, from: $('#dlWinFrom').value || '22:00', to: $('#dlWinTo').value || '07:00'}}});
-  if (t.id === 'dlExtMin') return void dlAct({action:'extConfig', extMinMB: +t.value, extOff: !DL.ext.enabled});
+  if (t.id === 'dlWinFrom' || t.id === 'dlWinTo') return void dlConfigEdit({window: t.id==='dlWinFrom' ? {from: t.value||'22:00'} : {to: t.value||'07:00'}});
+  if (t.id === 'dlExtMin') return void dlAct({action:'extConfig', extMinMB: +t.value});
   if (e.target.id === 'dlCat') { dlCat = e.target.value; paintDL(); }
-  if (e.target.id === 'dlMax') dlAct({action:'config', config: {...DL.config, maxActive: +e.target.value}});
-  if (e.target.id === 'dlPer') dlAct({action:'config', config: {...DL.config, maxPerLine: +e.target.value}});
+  if (e.target.id === 'dlMax') dlConfigEdit({maxActive: +e.target.value});
+  if (e.target.id === 'dlPer') dlConfigEdit({maxPerLine: +e.target.value});
 });
 document.addEventListener('input', e => { if (e.target.id === 'dlSearch') { dlQ = e.target.value; paintDL(); } });
 window.addEventListener('dragover', e => { if (page === 'downloads' && DM_ON && e.dataTransfer && [...(e.dataTransfer.types||[])].some(t => t === 'text/uri-list' || t === 'text/plain' || t === 'Files')) e.preventDefault(); });

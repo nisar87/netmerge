@@ -237,13 +237,13 @@ document.addEventListener('click', async e => {
   if (a === 'props') return dlProps(t.dataset.id);
   if (a === 'export') return dlExport();
   if (a === 'import') return dlImport();
-  if (a === 'torTog') return void dlAct({action:'config', config: {...DL.config, noTorrents: !DL.config.noTorrents}});
-  if (a === 'upTog') return void dlAct({action:'config', config: {...DL.config, noUpload: !DL.config.noUpload}});
-  if (a === 'notifyTog') return void dlAct({action:'config', config: {...DL.config, noNotify: !DL.config.noNotify}});
+  if (a === 'torTog') return void dlConfigEdit({noTorrents: !DL.config.noTorrents});
+  if (a === 'upTog') return void dlConfigEdit({noUpload: !DL.config.noUpload});
+  if (a === 'notifyTog') return void dlConfigEdit({noNotify: !DL.config.noNotify});
   if (a === 'afterSave') {
     const v = $('#dlAfterCmd').value.trim();
     if (v && !await dlAsk('Run this after every finished download?\n\n' + v + '\n\nOnly use a program you trust.')) return;
-    return void dlAct({action:'config', config: {...DL.config, afterCmd: v}}, v ? 'Saved' : 'Cleared');
+    return void dlConfigEdit({afterCmd: v}, v ? 'Saved' : 'Cleared');
   }
 });
 document.addEventListener('change', e => {

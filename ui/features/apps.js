@@ -17,11 +17,21 @@ function renderApps(){
   setHTML($('#seenApps'), (local.seenApps||[]).map(a => `<option value="${esc(a)}">`).join(''));
   const rt = $('#rulesTbl');
   if (!(document.activeElement && rt.contains(document.activeElement))){
-    setHTML(rt, '<tr><th>App</th><th>Uses</th><th style="width:44px"></th></tr>' + (local.appRules.length ? local.appRules.map((r,i) => `
-      <tr><td class="proc">${esc(r.process)}</td><td><select class="sel" data-i="${i}" aria-label="Rule for ${esc(r.process)}">${targetOptions(r.target, false)}</select></td><td><button class="x" data-del="${i}" title="Remove rule" aria-label="Remove rule">✕</button></td></tr>`).join('')
+    setHTML(rt, '<tr><th>App</th><th>Uses</th><th style="width:44px"></th></tr>' + (local.appRules.length ? local.appRules.map(r => `
+      <tr><td class="proc">${esc(r.process)}</td><td><select class="sel" data-process="${esc(r.process)}" aria-label="Rule for ${esc(r.process)}">${targetOptions(r.target, false)}</select></td><td><button class="x" data-del="${esc(r.process)}" title="Remove rule" aria-label="Remove rule">✕</button></td></tr>`).join('')
       : '<tr><td colspan="3" class="empty">No rules yet — apps follow the Overview setting.</td></tr>'));
-    rt.querySelectorAll('select').forEach(s => s.onchange = () => { local.appRules[s.dataset.i].target = s.value; saveSoon('Rule updated'); s.blur(); });
-    rt.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { local.appRules.splice(b.dataset.del,1); rt.dataset.h=''; renderApps(); saveSoon('Rule removed'); });
+    // Focus preserves this DOM through polling; resolve the process in the latest rules.
+    rt.querySelectorAll('select').forEach(s => s.onchange = () => {
+      const rule=local.appRules.find(r=>r.process===s.dataset.process);
+      if (rule) { rule.target=s.value; saveSoon('Rule updated'); }
+      else toast('This app rule was removed in another window.',true);
+      s.blur(); renderApps();
+    });
+    rt.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+      const index=local.appRules.findIndex(r=>r.process===b.dataset.del);
+      if (index>=0) { local.appRules.splice(index,1); saveSoon('Rule removed'); }
+      b.blur(); renderApps();
+    });
   }
   const tb = $('#appsTbl'), apps = S.snap.apps || [], P = pal();
   if (document.activeElement && tb.contains(document.activeElement)) return;
