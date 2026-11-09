@@ -84,6 +84,16 @@ The window (HTML, CSS, JavaScript) is embedded from `ui/`. You can run the app o
 - The proxy-sharing port is opened to the local network only, needs a password, and refuses addresses outside private ranges.
 - Updates are verified by SHA-256 published in the same release, over HTTPS from github.com only. This protects against corrupted downloads. Protect your GitHub account with two-factor authentication, because whoever can publish a release can publish an update.
 
+## Code signing policy
+
+NetMerge.exe is currently **not signed**, so Windows and browsers may warn that it is not commonly downloaded.
+The project has applied to the [SignPath Foundation](https://signpath.org/) for free code signing for open source projects;
+the application is pending and **no release is signed yet**. If it is accepted, this section will say so and name the
+signing team. Read the draft policy (roles, privacy, system changes) in
+[docs/CODE_SIGNING_POLICY.md](docs/CODE_SIGNING_POLICY.md).
+
+Until releases are signed, check the SHA-256 published next to each download (`NetMerge.exe.sha256`) against the file you got.
+
 ## Files
 
 | Path | Purpose |

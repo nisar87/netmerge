@@ -1,7 +1,7 @@
 # Code signing policy (DRAFT)
 
-> Draft prepared for a SignPath Foundation application. Do not link it from the README or the download page,
-> and do not claim that releases are signed, until SignPath has accepted the project and the first signed release exists.
+> Draft. NetMerge has applied to the SignPath Foundation for free code signing; the application is pending and
+> no release is signed yet. This page will be updated when that changes.
 
 NetMerge.exe is built from the source in this repository by the GitHub Actions workflow `.github/workflows/release.yml`.
 Once the project is accepted, the release workflow will send that build to SignPath for signing.
