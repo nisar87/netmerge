@@ -51,7 +51,7 @@ Target WCAG 2.2 AA: normal text 4.5:1, large text 3:1, meaningful control/graphi
 
 Charts include a title, time window, unit, direct legend, current textual summary and “View data” table. Series differ by line style/marker as well as color. Pointer hover and keyboard sample selection expose equivalent values. Keep missing intervals as gaps; no interpolated uptime or zero-filled unknown samples. Show sample time and “No reading” where appropriate. History is already Mbps, whereas live counters are bytes/s; test the different conversions.
 
-Render numeric percentage only from known totals. Network rates use Mbps (`bytesPerSecond × 8 / 1e6`); existing download size/rate helpers use 1024-based scaling with MB labels. For parity, preserve existing formatting initially and document it; a future SI/IEC label change must update every label, selector and conversion test together. All API limits remain bytes/s and existing 1048576-based selector values. Percentages and speed limits must not silently change units during redesign.
+Render numeric percentage only from known totals. Network rates use Mbps (`bytesPerSecond × 8 / 1e6`); the existing shared size/rate helper uses decimal KB/MB/GB scaling. Download bandwidth selectors retain their existing 1048576-based values with MB/s labels. Preserve this existing distinction for parity; a future SI/IEC label change must update every label, selector and conversion test together. All API limits remain bytes/s. Percentages and speed limits must not silently change units during redesign. (The helper scaling was verified and corrected during implementation.)
 
 ## Responsive and content stress
 

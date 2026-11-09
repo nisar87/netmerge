@@ -1,17 +1,17 @@
 # NetMerge frontend redesign
 
-Planning package · 9 November 2026 · source baseline `39987fa` (3.11.4)
+Design and implementation package · 9 November 2026 · source baseline `39987fa` (3.11.4)
 
 **Direction selected by the user:** calm control center with light and dark themes. Crisp typography, slate surfaces, restrained blue accents, readable connection health, and purposeful motion.
 
-**Branch:** `design/frontend-redesign-plan`. **Scope of this delivery:** observation, design, and implementation planning. The existing application and backend are unchanged. The visual preview uses illustrative data and makes no API requests.
+**Branch:** `design/frontend-redesign-plan`. **Implementation:** the redesigned application is in `ui/`, with the browser popup in `extension/src/popup.*`. The backend, extension interception logic and release configuration are unchanged. The original design preview remains a separate reference with illustrative data.
 
 ## Start here
 
 1. Open [the visual preview](preview/index.html) in a browser. Switch between Overview, Downloads, and Settings and between light/dark themes. This is a design reference, not the implemented application.
 2. Read [the current application audit](01-current-application-audit.md) and [the design brief and navigation](02-design-brief-and-navigation.md).
 3. Use [the design system](design-system/MASTER.md), [screen specifications](03-screen-specifications.md), and [interaction specification](04-interaction-motion-accessibility.md) together.
-4. Implement only after design review, following [the frontend contract and architecture](05-frontend-architecture-and-contracts.md), [the implementation plan](06-implementation-plan.md), and [validation and rollout](07-validation-and-rollout.md).
+4. Read [the implementation ledger](IMPLEMENTATION.md) for actual architecture decisions and [the implementation verification](evidence/implementation-verification.md) for executed checks and limitations. Run the real frontend with [the development guide](../frontend/README.md). The numbered implementation plan remains the original design proposal; the ledger records how it was executed.
 
 ## Package map
 
@@ -29,16 +29,19 @@ Planning package · 9 November 2026 · source baseline `39987fa` (3.11.4)
 | `evidence/current/` | 18 screenshots and machine-readable inspection results |
 | `preview/` | Self-contained, responsive visual design reference |
 | `evidence/verification.md` | Checks actually run on this planning delivery |
+| `IMPLEMENTATION.md` | Completed implementation ledger and architecture decisions |
+| `evidence/implementation-verification.md` | Executed implementation checks, review resolutions and platform limits |
+| `evidence/implemented/` | Actual frontend screenshots, 276-case audit, browser suite and embedded-app smoke results |
 
 ## Boundaries and decisions
 
 - Preserve all existing features, request bodies, backend defaults, state meanings, and safety confirmations.
-- The future implementation changes `ui/` and the extension popup presentation only. Go files, `dm/`, extension interception logic, manifests, release files, and backend tests are frozen.
+- The implementation changes `ui/` and the extension popup presentation only. Go files, `dm/`, extension interception logic, manifests, release files, and backend tests are frozen.
 - Keep vanilla JavaScript, semantic HTML, and CSS. Use the current Go embedding and existing same-origin API. No framework migration, runtime CDN, server route, or API work is required.
 - Use locally vendored Lucide SVG icons, system fonts, CSS transitions, existing chart data, and the existing QR encoder. Do not add a motion library solely for these transitions.
-- Add frontend development/test tooling in its own `frontend/` folder when implementation starts; it is not installed into the repository by this planning delivery.
-- The full design and task plan are proposals for review. The user's selected direction is recorded above; implementation approval has not been inferred from that selection.
-- Windows engine integration, real network operations, live downloads, QR pairing, and extension interception must be validated during implementation on a disposable Windows test installation. Linux screenshot inspection cannot establish their correctness.
+- Frontend development/test tooling lives in `frontend/`; it is excluded from the embedded runtime.
+- The user explicitly authorized full implementation after selecting the design direction.
+- Windows engine integration, real network operations, live downloads, QR pairing, and extension interception require a final smoke test on a disposable Windows test installation. Linux screenshot inspection cannot establish their correctness.
 
 ## Definition of the intended result
 

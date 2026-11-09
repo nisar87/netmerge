@@ -1,197 +1,376 @@
-// NetMerge download manager page (loaded only when the manager is turned on).
-// It uses the helpers of the main page ($, api, esc, bytes, toast, setHTML, go ...).
-/* ---------- downloads ---------- */
-let DL = null, dlFilter = 'all', dlCat = '', dlQ = '', dlBusy = false, dlPrev = {};
+// Classic entry point shared with downloads-more.js. The parent owns enablement and routing.
+let DL = null, dlFilter = 'all', dlCat = '', dlQ = '', dlPrev = {};
+let dlTab = (location.hash.match(/^#\/downloads\/(transfers|queues|browser|settings)$/)||[])[1] || 'transfers';
+let dlPage = 0, dlRead = null, dlRevision = 0, dlConfigTail = Promise.resolve(), dlLastGood = 0, dlError = '';
+let dlOrderKey = '', dlOrder = [], dlStopPolling = null;
+const dlPending = new Map(), dlSel = new Set(); let dlVisIds = [];
 const DL_CATS = ['Programs','Archives','Videos','Music','Documents','Images','Torrents','Other'];
 const DL_RISKY = /\.(exe|msi|bat|cmd|ps1|vbs|js|jar|scr|com|lnk|msix|appx|reg|hta)$/i;
-async function loadDL(force){
-  if (dlBusy && !force) return;
-  try { DL = await api('downloads'); } catch(e){ return; }
-  for (const v of DL.items) { if (dlPrev[v.id] && dlPrev[v.id] !== 'done' && v.state === 'done') toast('Finished: ' + v.name); dlPrev[v.id] = v.state; }
-  paintDL();
+const dlCopy = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
+const dlEqual = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+const dlObject = x => x && typeof x === 'object' && !Array.isArray(x);
+const dlRequest = (body, signal, fresh=false) => window.NM && NM.request ? NM.request('downloads', {body,signal,fresh}) : api('downloads', body);
+
+// Three-way merge: apply the user's changes to a just-read full config. Queue identity is stable.
+function dlMergeConfig(base, desired, fresh, key = '') {
+  if (dlEqual(base, desired)) return dlCopy(fresh);
+  if (key === 'queues' && Array.isArray(base) && Array.isArray(desired)) {
+    const before = new Map(base.filter(q=>q.id).map(q=>[q.id,q]));
+    const after = new Map(desired.filter(q=>q.id).map(q=>[q.id,q]));
+    const result = (fresh||[]).filter(q=>!before.has(q.id)||after.has(q.id)).map(q=>after.has(q.id) ? dlMergeConfig(before.get(q.id)||{},after.get(q.id),q) : dlCopy(q));
+    for (const q of desired) if (!q.id || (!before.has(q.id) && !result.some(x=>x.id===q.id))) result.push(dlCopy(q));
+    return result;
+  }
+  if ((!base || dlObject(base)) && dlObject(desired)) {
+    base=base||{};
+    const result = {...(fresh||{})};
+    for (const k of new Set([...Object.keys(base),...Object.keys(desired)])) {
+      if (dlEqual(base[k],desired[k])) continue;
+      if (!Object.hasOwn(desired,k)) delete result[k];
+      else result[k] = dlMergeConfig(base[k],desired[k],result[k],k);
+    }
+    return result;
+  }
+  return dlCopy(desired);
 }
-async function dlAct(body, okMsg){
-  try { const r = await api('downloads', body); if (r && r.items) DL = r; await loadDL(true); if (okMsg) toast(okMsg); return r; }
-  catch(e){ toast(e.message || 'Failed', true); return null; }
+function dlNormalize(r) {
+  return {...r, items:r.items||[], lines:r.lines||[], config:{...(r.config||{}),queues:r.config?.queues||[],window:r.config?.window||{}}, ext:r.ext ? {...r.ext,browsers:r.ext.browsers||[]} : null};
 }
-const dlStateText = v => v.state === 'downloading' ? 'Downloading' : v.state === 'queued' ? (v.retryAt > Date.now()/1000 ? 'Trying again soon' : 'Waiting') : v.state === 'paused' ? 'Paused' : v.state === 'done' ? 'Finished' : 'Needs attention';
+async function loadDL(force) {
+  if (typeof DM_ON !== 'undefined' && !DM_ON) return;
+  dlStartPolling();
+  if (dlRead) return dlRead;
+  const revision = dlRevision;
+  dlRead = (async()=>{
+    try {
+      const result = await dlRequest();
+      if (revision !== dlRevision) return;
+      DL = dlNormalize(result); dlLastGood = Date.now(); dlError = '';
+      const next = {};
+      for (const v of DL.items) { if (dlPrev[v.id] && dlPrev[v.id] !== 'done' && v.state === 'done') toast('Finished: '+v.name); next[v.id]=v.state; }
+      dlPrev=next; paintDL();
+    } catch(e) { if (e.name !== 'AbortError') { dlError=e.message||'Could not refresh downloads.'; paintDL(); } }
+  })().finally(()=>{dlRead=null;});
+  return dlRead;
+}
+function dlNotice(message, bad = false) {
+  const d = $('#dlDlg');
+  if (d) {
+    let el=d.querySelector('.dl-notice');
+    if (!el) { el=document.createElement('div'); el.className='dl-notice'; d.querySelector('.card').prepend(el); }
+    el.setAttribute('role',bad?'alert':'status'); el.textContent=message; el.classList.toggle('bad',bad);
+  } else { if (bad) { dlError=message; paintDL(); } toast(message,bad); }
+}
+async function dlAct(body, okMsg, configBase = DL?.config) {
+  const key = JSON.stringify(body);
+  if (dlPending.has(key)) return dlPending.get(key);
+  const base = body.action === 'config' ? dlCopy(configBase) : null;
+  const desired = body.action === 'config' ? dlCopy(body.config) : null;
+  const extBase = body.action === 'extConfig' ? dlCopy(DL.ext) : null;
+  const opener = document.activeElement;
+  const changed = base ? Object.keys(desired).filter(k=>!dlEqual(base[k],desired[k])) : [];
+  const fieldKeys={dlDir:'dir',dlAfterCmd:'afterCmd',dlWinFrom:'window',dlWinTo:'window',dlMax:'maxActive',dlPer:'maxPerLine'};
+  const fields = new Map($$('#dlBody [data-dirty]').filter(el=>changed.includes(fieldKeys[el.id]||el.dataset.cfg)).map(el=>[el,el.value]));
+  const perform = async()=>{
+    const wasDisabled=opener?.disabled, dialog=$('#dlDlg');
+    if(dialog)dialog.dlPending=(dialog.dlPending||0)+1;
+    if (opener?.tagName==='BUTTON') { opener.disabled=true; opener.setAttribute('aria-busy','true'); }
+    try {
+      let request=body;
+      if (base) {
+        const latest=await dlRequest(undefined,undefined,true);
+        if (latest.enabled === false || !latest.config) throw new Error('Downloads are off. Enable them before saving.');
+        request={action:'config',config:dlMergeConfig(base,desired,latest.config)};
+      }
+      if (extBase) {
+        const latest=await dlRequest(undefined,undefined,true);
+        if (!latest.ext || latest.enabled===false) throw new Error('Browser preferences are unavailable. Refresh and try again.');
+        request={action:'extConfig',extMinMB:body.extMinMB===extBase.minMB?latest.ext.minMB:body.extMinMB,extOff:body.extOff===!extBase.enabled?!latest.ext.enabled:body.extOff};
+      }
+      dlRevision++;
+      const r=await dlRequest(request);
+      if (r?.items) { DL=dlNormalize(r); dlLastGood=Date.now(); }
+      // A read started before this action cannot replace its authoritative result.
+      if (dlRead) await dlRead;
+      await loadDL(true);
+      if (base) for (const [el,value] of fields) if (el.value===value) delete el.dataset.dirty;
+      if (extBase && $('#dlExtMin')?.value===String(body.extMinMB)) delete $('#dlExtMin').dataset.dirty;
+      paintDL();
+      if (okMsg) dlNotice(okMsg);
+      return r;
+    } catch(e) {
+      dlNotice(e.message||'Could not complete this action.',true);
+      // POST may have applied: reconcile, but never replay it.
+      if (dlRead) await dlRead;
+      await loadDL(true);
+      dlNotice(e.message||'Could not confirm this change. Refresh and try again.',true);
+      return null;
+    } finally { if(dialog)dialog.dlPending--;if (opener?.tagName==='BUTTON') { opener.disabled=wasDisabled; opener.removeAttribute('aria-busy'); } }
+  };
+  const promise=base||extBase ? dlConfigTail.then(perform,perform) : perform();
+  if (base||extBase) dlConfigTail=promise.then(()=>{});
+  dlPending.set(key,promise);
+  try { return await promise; } finally { dlPending.delete(key); }
+}
+async function dlAsk(message, title='Confirm action', danger=true, confirmLabel='Continue') {
+  // Avoid nested dialogs when confirming an edit inside the native top-layer dialog.
+  const d=$('#dlDlg');
+  if (!d) return window.NM?.confirm ? NM.confirm({title,message,confirmLabel,danger}) : window.confirm(message);
+  if (d.querySelector('.dl-confirm')) return false;
+  return new Promise(resolve=>{
+    const box=document.createElement('section'); box.className='dl-confirm'; box.setAttribute('role','alertdialog'); box.setAttribute('aria-label',title);
+    box.innerHTML=`<h3>${esc(title)}</h3><p>${esc(message)}</p><div class="row"><button class="btn" data-answer="no">Go back</button><button class="btn ${danger?'danger':'pri'}" data-answer="yes">${esc(confirmLabel)}</button></div>`;
+    const content=d.querySelector('.card'), oldFocus=document.activeElement;
+    content.inert=true; content.hidden=true; d.append(box);
+    const done=value=>{box.remove();content.inert=false;content.hidden=false;d.dlCancelConfirm=null;oldFocus?.focus();resolve(value);};
+    d.dlCancelConfirm=()=>done(false);
+    box.querySelector('[data-answer=no]').onclick=()=>done(false);
+    box.querySelector('[data-answer=yes]').onclick=()=>done(true);
+    box.querySelector('button').focus();
+  });
+}
+const dlStateText = v => v.state === 'downloading' ? 'Downloading' : v.state === 'queued' ? (v.retryAt > Date.now()/1000 ? 'Trying again soon' : v.startAt > Date.now()/1000 ? 'Scheduled' : 'Waiting') : v.state === 'paused' ? 'Paused' : v.state === 'done' ? 'Finished' : 'Needs attention';
 function dlLineShare(v){
-  const tot = {}; (v.bytes ? Object.entries(v.bytes) : []).forEach(([k,b]) => tot[k] = (tot[k]||0) + b);
-  (v.lineStats||[]).forEach(l => tot[l.name] = (tot[l.name]||0) + l.bytes);
-  const sum = Object.values(tot).reduce((a,b) => a+b, 0);
-  return {tot, sum};
+  const tot={...(v.bytes||{})};
+  (v.lineStats||[]).forEach(l=>tot[l.name]=(tot[l.name]||0)+(l.bytes||0));
+  return {tot,sum:Object.values(tot).reduce((a,b)=>a+b,0)};
 }
-const dlSel = new Set(); let dlVisIds = [];
-const dlSpeedHist = []; let dlSpeedAt = 0;
-function dlSpark(){
-  if (dlSpeedHist.length < 3) return '';
-  const mx = Math.max(...dlSpeedHist, 1), w = 120, h = 26, n = dlSpeedHist.length;
-  const pts = dlSpeedHist.map((v,i) => `${(i/(n-1)*w).toFixed(1)},${(h-1-v/mx*(h-3)).toFixed(1)}`).join(' ');
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Speed over the last minute" style="vertical-align:middle;margin-left:8px"><polyline points="${pts}" fill="none" stroke="var(--good,#2a9d5c)" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="hint2"> peak ${bytes(mx)}/s</span>`;
+function dlIcon(name) {
+  if (window.NM?.icon) return NM.icon(name);
+  // Small local fallback for the existing shell; the new shell supplies its icon subset.
+  const paths={Download:'M12 3v12m-5-5 5 5 5-5M4 18v3h16v-3',Plus:'M12 5v14M5 12h14',Pause:'M8 5v14M16 5v14',Play:'m8 4 12 8-12 8Z',RotateCcw:'M4 10a8 8 0 1 1 1 8M4 4v6h6',FolderOpen:'M3 8V4h6l3 4h9l-3 12H3Z',File:'M6 3h8l4 4v14H6ZM14 3v5h4',MoreHorizontal:'M4 12h1m6 0h1m6 0h1',CircleCheck:'m8 12 3 3 5-6',CircleAlert:'M12 7v6m0 4h.01',Clock3:'M12 6v6l4 2',Globe:'M3 12h18M12 3a18 18 0 0 0 0 18 18 18 0 0 0 0-18Z',X:'m6 6 12 12M6 18 18 6',ArrowUp:'M12 20V4m-6 6 6-6 6 6',ArrowDown:'M12 4v16m-6-6 6 6 6-6'};
+  const circle=['CircleCheck','CircleAlert','Clock3','Globe'].includes(name)?'<circle cx="12" cy="12" r="9"/>':'';
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${circle}<path d="${paths[name]||paths.File}"/></svg>`;
 }
-function dlBulkBar(){
-  if (!dlSel.size) return '';
-  return `<div class="note" style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><b>${dlSel.size} selected</b><button class="btn" data-bulk="pause">Pause</button><button class="btn" data-bulk="resume">Resume</button><button class="btn" data-bulk="remove">Remove</button><select class="sel" id="dlBulkQ" style="min-width:0" aria-label="Move to queue"><option value="\u0000">Move to queue…</option>${dlQueueOpts('')}</select><span style="flex:1"></span><button class="btn" data-bulk="all">Select all shown</button><button class="btn" data-bulk="none">Clear selection</button></div>`;
+const dlDuration = s => s<60 ? Math.ceil(s)+'s' : s<3600 ? Math.ceil(s/60)+'m' : Math.ceil(s/3600)+'h';
+function dlPageItems() {
+  const q=dlQ.toLowerCase();
+  const items=(DL?.items||[]).filter(v=>(dlFilter==='all'||(dlFilter==='active'&&['downloading','queued','paused'].includes(v.state))||(dlFilter==='done'&&v.state==='done')||(dlFilter==='bad'&&v.state==='error')) && (!dlCat||v.category===dlCat) && dlQueueMatch(v) && (!q||`${v.name||''} ${v.url||''}`.toLowerCase().includes(q)));
+  const key=[dlFilter,dlCat,dlQ,dlQf,dlSort].join('\0');
+  if (key!==dlOrderKey) {dlOrderKey=key;dlPage=0;dlOrder=[];}
+  dlSortItems(items);
+  // Keep the established order through telemetry ticks. Explicit filter/sort changes reset it.
+  const rank=new Map(dlOrder.map((id,i)=>[id,i]));
+  items.sort((a,b)=>(rank.get(a.id)??Infinity)-(rank.get(b.id)??Infinity));
+  dlOrder=items.map(v=>v.id);
+  const total=items.length, pages=Math.max(1,Math.ceil(total/100));
+  dlPage=Math.max(0,Math.min(dlPage,pages-1));
+  return {items:items.slice(dlPage*100,(dlPage+1)*100),total,pages};
 }
-function dlRow(v){
-  const pct = v.size > 0 ? Math.min(100, v.done / v.size * 100) : (v.state === 'done' ? 100 : 0);
-  const sh = dlLineShare(v);
-  const strip = sh.sum > 0 && Object.keys(sh.tot).length > 0 ? `<div class="dlstrip" title="How much each connection carried">${Object.entries(sh.tot).filter(([,b]) => b>0).map(([k,b]) => `<i style="width:${b/sh.sum*100}%;background:${colorOf(k)}" title="${esc(labelOf(k))}: ${Math.round(b/sh.sum*100)}%"></i>`).join('')}</div>` : '';
-  let meta = [];
-  if (v.state === 'downloading') {
-    meta.push(`${bytes(v.done)}${v.size>0?' of '+bytes(v.size):''}`, `<b>${bytes(v.speed)}/s</b>`);
-    if (v.kind === 'torrent') meta.push(`${v.peers||0} peer${v.peers===1?'':'s'}` + (v.seeds ? `, ${v.seeds} seed${v.seeds===1?'':'s'}` : '') + (v.swarmSeeds > (v.seeds||0) ? ` (${v.swarmSeeds} in the swarm)` : ''));
-    if (v.kind === 'torrent' && v.up > 0) meta.push('↑ ' + bytes(v.up));
-    if (v.size > 0 && v.speed > 0) meta.push(dur(Math.ceil((v.size - v.done)/v.speed)) + ' left');
-    const act = (v.lineStats||[]).filter(l => l.status === 'active');
-    if (act.length) meta.push(act.map(l => `<span style="color:${colorOf(l.name)}">●</span> ${esc(labelOf(l.name))} ${bytes(l.speed)}/s`).join(' &nbsp; '));
-  } else if (v.state === 'done') {
-    meta.push(`<span class="good">Finished</span> · ${bytes(v.size)}`);
-    if (v.verify === 'ok') meta.push('<span class="good">✓ Checksum matches</span>');
-    else if (v.verify === 'bad') meta.push('<span class="bad"><b>✗ Checksum does NOT match.</b> Do not open this file: it is damaged or not what you expected.</span>');
-    else if (v.verify === 'checking') meta.push('Checking the checksum…');
-    if (sh.sum > 0 && Object.keys(sh.tot).length > 1) meta.push(Object.entries(sh.tot).filter(([,b]) => b>0).map(([k,b]) => `${esc(labelOf(k))} ${Math.round(b/sh.sum*100)}%`).join(' · '));
-  } else if (v.state === 'error') meta.push(`<span class="bad" title="${esc(v.detail||'')}">${esc(v.err || 'Something went wrong')}</span>`);
-  else { meta.push(v.note && v.state === 'queued' ? esc(v.note) : dlStateText(v)); if (v.size > 0) meta.push(`${bytes(v.done)} of ${bytes(v.size)}`); if (v.err) meta.push(`<span title="${esc(v.detail||'')}">${esc(v.err)}</span>`); }
-  if (v.note && v.state === 'downloading') meta.push(esc(v.note));
-  if (v.queue && typeof dlQueueName === 'function') meta.push(`<span title="Queue">▤ ${esc(dlQueueName(v.queue))}</span>`);
-  const btn = (a, t, extra) => `<button class="btn" data-dl="${a}" data-id="${esc(v.id)}"${extra||''}>${t}</button>`;
-  const mv = v.state === 'queued' || v.state === 'paused' ? btn('move','▲',' data-mv="up" title="Move up" aria-label="Move up"') + btn('move','▼',' data-mv="down" title="Move down" aria-label="Move down"') + btn('move','First',' data-mv="top" title="Download this first"') : '';
-  const LIMS = [[0,'No limit'],[0.5,'0.5 MB/s'],[1,'1 MB/s'],[2,'2 MB/s'],[5,'5 MB/s'],[10,'10 MB/s'],[20,'20 MB/s']];
-  const cur = LIMS.reduce((b, l) => Math.abs(l[0]*1048576 - (v.limit||0)) < Math.abs(b[0]*1048576 - (v.limit||0)) ? l : b, LIMS[0]);
-  const lim = v.state === 'done' ? '' : `<select class="sel" data-lim="${esc(v.id)}" aria-label="Speed limit for this download" style="min-width:0;padding:5px 8px;font-size:12.5px">${LIMS.map(l => `<option value="${l[0]}"${l[0]===cur[0]?' selected':''}>${l[1]}</option>`).join('')}</select>`;
-  const props = `<button class="btn" data-dm="props" data-id="${esc(v.id)}" title="Details, log, mirrors, queue, change link">Properties</button>`;
-  const acts = (v.state === 'downloading' || (v.state === 'queued') ? mv + lim + btn('pause','Pause') + btn('remove','Cancel')
-    : v.state === 'paused' ? mv + lim + btn('resume','Resume') + btn('remove','Cancel')
-    : v.state === 'error' ? btn('retry','Try again') + btn('remove','Remove')
-    : btn('open','Open') + btn('folder','Show in folder') + btn('remove','Remove from list') + btn('delfile','Delete file')) + props;
-  return `<div class="dlrow${dlSel.has(v.id)?' picked':''}"><input type="checkbox" class="dlck" data-id="${esc(v.id)}"${dlSel.has(v.id)?' checked':''} aria-label="Select ${esc(v.name || 'download')}" style="align-self:center;margin-right:8px"><div class="dlic" aria-hidden="true">${esc((v.category||'Other').slice(0,3).toUpperCase())}</div>
-    <div style="min-width:0"><b class="dlname" title="${esc(v.url)}">${esc(v.name || v.url)}</b>
-      <div class="dlprog ${v.state==='paused'?'paused':v.state==='error'?'err':''}"><div style="width:${pct}%"></div></div>${v.state==='downloading' && typeof dlSegBar==='function' ? dlSegBar(v) : ''}${strip}
-      <div class="dlmeta">${meta.join(' · ')}</div></div>
-    <div class="dlact">${acts}</div></div>`;
+function dlRow(v) {
+  const known=v.size>0, pct=known?Math.max(0,Math.min(100,(v.done||0)/v.size*100)):null;
+  let host=''; try {host=new URL(v.url).hostname;} catch(_) {}
+  const name=v.name||v.url||'Download', state=dlStateText(v);
+  const icon=v.state==='downloading'?'Download':v.state==='done'?'CircleCheck':v.state==='error'?'CircleAlert':v.state==='paused'?'Pause':'Clock3';
+  const action=v.state==='done'?'open':v.state==='paused'?'resume':v.state==='error'?'retry':'pause';
+  const actionLabel={open:'Open',resume:'Resume',retry:'Retry',pause:'Pause'}[action];
+  const button=(a,label,svg,extra='')=>`<button class="btn dl-icon-button" data-dl="${a}" data-id="${esc(v.id)}" aria-label="${esc(label+' '+name)}" title="${esc(label+' '+name)}" ${extra}>${dlIcon(svg)}</button>`;
+  return `<tr class="dlrow${dlSel.has(v.id)?' picked':''}" data-key="${esc(v.id)}">
+    <td><input type="checkbox" class="dlck" data-id="${esc(v.id)}" ${dlSel.has(v.id)?'checked':''} aria-label="Select ${esc(name)}"></td>
+    <td class="dl-file"><span class="dlic">${dlIcon(v.kind==='torrent'?'Globe':'File')}</span><div><button class="dl-name" data-dm="props" data-id="${esc(v.id)}">${esc(name)}</button><span class="dl-meta">${esc(host|| (v.kind==='torrent'?'Torrent':v.category||'Download'))}${v.queue?' · '+esc(dlQueueName(v.queue)):''}</span></div></td>
+    <td class="dl-progress-cell"><div class="dl-status ${v.state==='error'||v.verify==='bad'?'bad':v.state==='done'?'good':''}">${dlIcon(icon)}<span>${esc(state)}</span><span class="dl-percent">${known?Math.floor(pct)+'%':''}</span></div>
+      ${known?`<div class="dlprog" role="progressbar" aria-label="Progress for ${esc(name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.floor(pct)}"><div style="width:${pct}%"></div></div>`:'<span class="dl-meta">Size unknown</span>'}
+      <span class="dl-meta dl-detail">${esc(v.verify==='bad'?'Checksum does not match. Do not open this file.':v.verify==='checking'?'Checking checksum…':v.verify==='ok'?'Checksum matches':v.note||v.err||'')}</span></td>
+    <td class="dl-size">${bytes(v.done||0)}<span class="dl-meta">${known?'of '+bytes(v.size):'total unknown'}</span></td>
+    <td class="dl-speed">${v.state==='downloading'&&Number.isFinite(v.speed)?bytes(v.speed)+'/s':'—'}<span class="dl-meta">${v.state==='downloading'&&known&&v.speed>0?dlDuration(Math.max(0,(v.size-(v.done||0))/v.speed))+' left':'—'}</span></td>
+    <td><div class="dl-actions">${button(action,actionLabel,{open:'Play',resume:'Play',retry:'RotateCcw',pause:'Pause'}[action])}<button class="btn dl-icon-button" data-dm="props" data-id="${esc(v.id)}" aria-label="Details and actions for ${esc(name)}" title="Details and actions for ${esc(name)}">${dlIcon('MoreHorizontal')}</button></div></td></tr>`;
 }
-const LIM_OPTS = [0,0.5,1,2,5,10,20,50];
-function limSel(key, cur){
-  const near = LIM_OPTS.reduce((b, x) => Math.abs(x*1048576 - cur) < Math.abs(b*1048576 - cur) ? x : b, 0);
-  return `<select class="sel" data-cfg="${esc(key)}" data-lim2="1" style="min-width:0" aria-label="Speed limit">${LIM_OPTS.map(x => `<option value="${x}"${x===near?' selected':''}>${x ? x + ' MB/s' : 'No limit'}</option>`).join('')}</select>`;
+const LIM_OPTS=[0,0.5,1,2,5,10,20,50];
+function limSel(key, cur=0) {
+  const value=cur/1048576, opts=[...new Set([...LIM_OPTS,value])].sort((a,b)=>a-b);
+  return `<select class="sel" data-cfg="${esc(key)}" aria-label="${esc(key.startsWith('line:')?'Speed limit for '+labelOf(key.slice(5)):key==='uploadLimit'?'Torrent upload speed limit':'Overall download speed limit')}">${opts.map(n=>`<option value="${n}"${n===value?' selected':''}>${n?n+' MB/s':'No limit'}</option>`).join('')}</select>`;
 }
-function paintDL(){
-  const box = $('#dlBody'); if (!box || !DL) return;
-  if (box.contains(document.activeElement) && document.activeElement.tagName === 'INPUT' && document.activeElement.id !== 'dlSearch') { /* typing in settings: keep */ }
-  const items = DL.items, cfg = DL.config;
-  const act = items.filter(v => v.state === 'downloading').length, que = items.filter(v => v.state === 'queued').length;
-  const fin = items.filter(v => v.state === 'done').length, bad = items.filter(v => v.state === 'error').length;
-  const q = dlQ.toLowerCase();
-  const vis = items.filter(v => (dlFilter === 'all' || (dlFilter === 'active' && (v.state === 'downloading' || v.state === 'queued' || v.state === 'paused')) || (dlFilter === 'done' && v.state === 'done') || (dlFilter === 'bad' && v.state === 'error'))
-    && (!dlCat || v.category === dlCat) && dlQueueMatch(v) && (!q || (v.name||'').toLowerCase().includes(q) || v.url.toLowerCase().includes(q)));
-  dlSortItems(vis);
-  dlVisIds = vis.map(v => v.id);
-  for (const id of [...dlSel]) if (!items.some(v => v.id === id)) dlSel.delete(id);
-  if (Date.now() - dlSpeedAt >= 1000) { dlSpeedAt = Date.now(); dlSpeedHist.push(DL.speed || 0); if (dlSpeedHist.length > 60) dlSpeedHist.shift(); }
-  const chip = (id, t, n) => `<button data-f="${id}" class="${dlFilter===id?'sel':''}">${t}${n!==undefined?' '+n:''}</button>`;
-  const num = (id, vals, cur) => `<select class="sel" id="${id}" style="min-width:0">${vals.map(x => `<option${x==cur?' selected':''}>${x}</option>`).join('')}</select>`;
-  const list = vis.length ? vis.map(dlRow).join('') : `<div class="dlempty">${items.length ? 'Nothing matches this filter.' : '<b>No downloads yet.</b><br>Paste a link above (http, https, ftp or a magnet link), or add a .torrent file. NetMerge splits the file and downloads it over all your connections at once.'}</div>`;
-  const holdBanner = DL.hold ? `<div class="note warn" style="margin-bottom:12px"><b>Downloads are waiting.</b> ${esc(DL.hold.replace(/^Waiting: /,''))}.</div>` : '';
-  const powerBanner = DL.powerAt && (Date.now()/1000 - DL.powerAt) < 70 ? `<div class="note bad" style="margin-bottom:12px"><span style="flex:1"><b>The PC is about to shut down</b> because your downloads finished.</span><button class="btn" data-dl="cancelPower">Cancel shutdown</button></div>` : '';
-  const noLines = DL.lines.length === 0 ? '<div class="note warn" style="margin-bottom:12px"><b>No internet connection found.</b> Downloads will start when a connection is available.</div>' : '';
-  const html = `${powerBanner}${holdBanner}${noLines}
-  <div class="card"><div class="dlbox"><textarea class="inp" id="dlUrl" rows="1" placeholder="Paste a link or magnet link here (one per line to add several)" aria-label="Download link"></textarea>
-    <button class="btn pri" id="dlAddBtn">Add</button><button class="btn" id="dlPaste" title="Paste the link you copied">Paste</button><button class="btn" id="dlTorBtn" title="Add a torrent from a .torrent file on this computer">Torrent file…</button><input type="file" id="dlTorFile" accept=".torrent,application/x-bittorrent" hidden></div>
-    <div class="hint2" style="margin-top:8px">${DL.speed > 0 ? `Downloading at <b>${bytes(DL.speed)}/s</b> in total.${dlSpark()} ` : ''}You can also drag a link onto this window.</div>${dlToolsRow()}</div>
-  <div class="dlbar2"><div class="chips">${chip('all','All',items.length)}${chip('active','In progress',act+que+items.filter(v=>v.state==='paused').length)}${chip('done','Finished',fin)}${chip('bad','Needs attention',bad)}</div>
-    <select class="sel" id="dlCat" style="min-width:0" aria-label="Type"><option value="">All types</option>${DL_CATS.map(c => `<option${c===dlCat?' selected':''}>${c}</option>`).join('')}</select>
-    <input class="inp" id="dlSearch" placeholder="Search" value="${esc(dlQ)}" style="min-width:140px;width:180px" aria-label="Search downloads">${dlSortSelect()}
-    <div class="spacer" style="flex:1"></div>
-    <button class="btn" data-dl="pauseAll">Pause all</button><button class="btn" data-dl="resumeAll">Resume all</button><button class="btn" data-dl="clear"${fin?'':' disabled'}>Clear finished</button></div>
-  ${dlBulkBar()}<div class="card" style="padding:6px 16px">${list}</div>
-  <details class="card" style="margin-top:16px"${dlBusy?' open':''} id="dlSet"><summary style="cursor:pointer;font-weight:650">Download settings</summary>
-    <div style="margin-top:14px">
-    <div class="dnsrow"><div><b>Save downloads in</b><div class="d">The main folder. New downloads go into a folder for their type (Videos, Programs, ...) when that is on.</div></div><div class="row" style="gap:8px"><input class="inp" id="dlDir" value="${esc(cfg.dir)}" style="min-width:260px" aria-label="Download folder"><button class="btn" id="dlDirSave">Save</button></div></div>
-    <div class="dnsrow"><div><b>Sort into folders by type</b><div class="d">Videos, Programs, Documents and so on. Turn off to keep everything in one folder.</div></div><button class="tog${cfg.useCategories?' on':''}" id="dlCatTog" role="switch" aria-checked="${cfg.useCategories}" aria-label="Sort into folders"></button></div>
-    <div class="dnsrow"><div><b>Downloads at the same time</b><div class="d">More than 3 can slow each one down. Recommended: 3.</div></div>${num('dlMax',[1,2,3,4,5,6,8,10],cfg.maxActive)}</div>
-    <div class="dnsrow"><div><b>Connections per line</b><div class="d">How many parallel connections one file uses on each line. Some websites refuse many; NetMerge lowers it by itself. Recommended: 8.</div></div>${num('dlPer',[2,4,6,8,12,16],cfg.maxPerLine)}</div>
-    <div class="dnsrow"><div><b>Speed limit for all downloads</b><div class="d">Keeps some speed free for everything else. "No limit" uses everything the lines can give.</div></div>${limSel('limitAll', cfg.limitAll)}</div>
-    ${DL.lines.map(l => `<div class="dnsrow"><div><b>${esc(labelOf(l.name))}: use for downloads</b><div class="d">Turn off to keep this line free of downloads. You can also limit its speed:</div></div><div class="row" style="gap:8px">${limSel('line:' + l.name, (cfg.limitLines||{})[l.name]||0)}<button class="tog${(cfg.excludeLines||[]).includes(l.name)?'':' on'}" data-ex="${esc(l.name)}" role="switch" aria-checked="${!(cfg.excludeLines||[]).includes(l.name)}" aria-label="Use ${esc(labelOf(l.name))} for downloads"></button></div></div>`).join('')}
-    <div class="dnsrow"><div><b>During a call</b><div class="d">"Keep the call's line free" lets downloads use your other lines while a meeting runs. Needs merging to be on. Recommended.</div></div><select class="sel" data-cfg="callMode" style="min-width:210px" aria-label="During a call">${[['avoid','Keep the call\'s line free'],['pause','Pause all downloads'],['off','Do nothing']].map(o => `<option value="${o[0]}"${cfg.callMode===o[0]?' selected':''}>${o[1]}</option>`).join('')}</select></div>
-    <div class="dnsrow"><div><b>Only download at certain hours</b><div class="d">For example at night, when nobody needs the internet. Downloads outside these hours wait.</div></div><div class="row" style="gap:8px"><input type="time" class="inp" id="dlWinFrom" value="${esc(cfg.window.from)}" style="min-width:0" aria-label="From"><input type="time" class="inp" id="dlWinTo" value="${esc(cfg.window.to)}" style="min-width:0" aria-label="To"><button class="tog${cfg.window.enabled?' on':''}" id="dlWinTog" role="switch" aria-checked="${cfg.window.enabled}" aria-label="Download hours"></button></div></div>
-    <div class="dnsrow"><div><b>When everything is finished</b><div class="d">Do this once, after the last download, then switch back to "Nothing". A shutdown gives you one minute to cancel.</div></div><select class="sel" data-cfg="afterAll" style="min-width:210px" aria-label="When everything is finished">${[['','Nothing'],['sleep','Put the PC to sleep'],['shutdown','Shut the PC down']].map(o => `<option value="${o[0]}"${(cfg.afterAll||'')===o[0]?' selected':''}>${o[1]}</option>`).join('')}</select></div>
-    ${dlMoreSettings(cfg)}
-    <div class="dnsrow"><div><b>What NetMerge learned about websites</b><div class="d">Some websites only accept a file from one address. NetMerge remembers that for a few days so it does not waste time. ${DL.knownSites ? DL.knownSites + ' site' + (DL.knownSites===1?'':'s') + ' remembered.' : 'Nothing remembered.'}</div></div><button class="btn" id="dlForget"${DL.knownSites?'':' disabled'}>Forget</button></div>
-    <div class="dnsrow"><div><b>Use the mobile line for downloads</b><div class="d">Off by default so big files do not use up your mobile data. If it is the only connection, it is used anyway.</div></div><button class="tog${cfg.allowMobile?' on':''}" id="dlMobTog" role="switch" aria-checked="${cfg.allowMobile}" aria-label="Use mobile line"></button></div>
-    <div class="dnsrow"><div><b>Browser extension</b><div class="d">Lets Chrome, Edge, Brave and Firefox hand big downloads to NetMerge. ${(DL.ext&&(DL.ext.browsers||[]).length) ? (DL.ext.browsers||[]).length + ' browser' + ((DL.ext.browsers||[]).length===1?'':'s') + ' connected.' : 'No browser connected yet.'}</div></div><button class="btn" id="dlExtCode">Connect a browser</button></div>
-    ${DL.ext ? `<div class="dnsrow"><div><b>Send downloads from the browser</b><div class="d">Turn off to let browsers download by themselves again.</div></div><button class="tog${DL.ext.enabled?' on':''}" id="dlExtOn" role="switch" aria-checked="${DL.ext.enabled}"><span></span></button></div>
-    <div class="dnsrow"><div><b>Only files bigger than</b><div class="d">Smaller files are quicker to leave with the browser.</div></div><select class="sel" id="dlExtMin" style="min-width:140px">${[0,1,5,10,25,50,100].map(n => `<option value="${n}"${DL.ext.minMB===n?' selected':''}>${n ? n + ' MB' : 'Everything'}</option>`).join('')}</select></div>
-    ${(DL.ext.browsers||[]).map(b => `<div class="dnsrow"><div><b>${esc(b.name)}</b><div class="d">Connected ${new Date(b.created*1000).toLocaleDateString()}${b.lastSeen ? ', last used ' + new Date(b.lastSeen*1000).toLocaleString() : ''}</div></div><button class="btn" data-extrm="${esc(b.id)}">Disconnect</button></div>`).join('')}` : ''}
-    </div></details>`;
-  const ta = $('#dlUrl'), keep = ta ? ta.value : '', hadFocus = document.activeElement && document.activeElement.id;
-  const search = document.activeElement && document.activeElement.id === 'dlSearch' ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
-  const open = $('#dlSet') ? $('#dlSet').open : false;
-  const dirTyped = $('#dlDir') && document.activeElement && document.activeElement.id === 'dlDir' ? $('#dlDir').value : null;
-  if (box.dataset.h !== html) {
-    box.dataset.h = html; box.innerHTML = html;
-    if ($('#dlUrl') && keep) $('#dlUrl').value = keep;
-    if (open) $('#dlSet').open = true;
-    if (dirTyped !== null) $('#dlDir').value = dirTyped;
-    if (hadFocus && $('#' + hadFocus)) { $('#' + hadFocus).focus(); if (search && hadFocus === 'dlSearch') $('#dlSearch').setSelectionRange(search[0], search[1]); }
+// Patch existing nodes, retaining focus, text selection, disclosures and unsaved form values.
+function dlMorph(root, html) {
+  const fresh=document.createElement(root.tagName); fresh.innerHTML=html;
+  function patch(old,next) {
+    if (old.nodeType!==next.nodeType||old.nodeName!==next.nodeName) {const replacement=next.cloneNode(true);old.replaceWith(replacement);return replacement;}
+    if (old.nodeType===3) {if(old.nodeValue!==next.nodeValue)old.nodeValue=next.nodeValue;return old;}
+    const protectedField=old===document.activeElement||old.hasAttribute('data-dirty');
+    const skip=name=>(protectedField&&['value','checked','selected','data-dirty'].includes(name))||(old.tagName==='DETAILS'&&name==='open');
+    for(const a of [...old.attributes]) if(!next.hasAttribute(a.name)&&!skip(a.name))old.removeAttribute(a.name);
+    for(const a of [...next.attributes]) if(!skip(a.name)&&old.getAttribute(a.name)!==a.value)old.setAttribute(a.name,a.value);
+    if(old.matches('input,textarea,select')&&protectedField){if(old.classList.contains('dlck'))old.checked=next.checked;return old;}
+    children(old,next);
+    if(old.matches('input,textarea,select')) {old.value=next.value;if(old.type==='checkbox')old.checked=next.checked;}
+    return old;
+  }
+  function children(old,next) {
+    const key=n=>n.nodeType===1?(n.getAttribute('data-key')||n.id):'';
+    const keyed=new Map([...old.childNodes].filter(key).map(n=>[key(n),n]));
+    let cursor=old.firstChild;
+    for(const n of [...next.childNodes]) {
+      let match=key(n)?keyed.get(key(n)):cursor;
+      if(match&&key(match)!==key(n))match=null;
+      if(!match){match=n.cloneNode(true);old.insertBefore(match,cursor);}
+      else {if(match!==cursor)old.insertBefore(match,cursor);match=patch(match,n);}
+      cursor=match.nextSibling;
+    }
+    while(cursor){const next=cursor.nextSibling;cursor.remove();cursor=next;}
+  }
+  children(root,fresh);
+}
+function dlShell() {
+  const box=$('#dlBody'); if (!box) return null;
+  box.classList.add('nm-downloads');
+  if (!box.querySelector('.dl-tabs')) box.innerHTML=`<nav class="dl-tabs" aria-label="Downloads sections">${['transfers','queues','browser','settings'].map(t=>`<a href="#/downloads/${t}" data-dl-tab="${t}">${t[0].toUpperCase()+t.slice(1)}</a>`).join('')}</nav><div id="dlBanners"></div>${['transfers','queues','browser','settings'].map(t=>`<section id="dlPanel-${t}" class="dl-panel" aria-label="${t}" hidden></section>`).join('')}`;
+  return box;
+}
+window.nmDownloadsTab=function(tab) {
+  dlTab=['transfers','queues','browser','settings'].includes(tab)?tab:'transfers';
+  paintDL();
+};
+function dlTransfers() {
+  const items=DL.items, result=dlPageItems(); dlVisIds=result.items.map(v=>v.id);
+  const available=new Set(items.map(v=>v.id));for(const id of dlSel)if(!available.has(id))dlSel.delete(id);
+  const count=state=>items.filter(v=>v.state===state).length;
+  const chip=(id,label,n)=>`<button class="btn ${dlFilter===id?'selected':''}" data-f="${id}" aria-pressed="${dlFilter===id}">${label} <span>${n}</span></button>`;
+  return `<div class="dl-heading"><div><h2>Transfers</h2><p><strong>${Number.isFinite(DL.speed)?bytes(DL.speed)+'/s':'—'}</strong> · ${count('downloading')} active · ${count('queued')} waiting</p></div><button class="btn pri" id="dlNew">${dlIcon('Plus')} Add download</button></div>
+    <div class="dl-toolbar"><label class="dl-search"><span class="dl-sr">Search downloads</span><input class="inp" id="dlSearch" type="search" placeholder="Search downloads" value="${esc(dlQ)}"></label><select class="sel" id="dlCat" aria-label="File type"><option value="">All types</option>${DL_CATS.map(c=>`<option${c===dlCat?' selected':''}>${c}</option>`).join('')}</select>${dlSortSelect()}<details class="dl-menu"><summary class="btn">${dlIcon('MoreHorizontal')} List actions</summary><div class="dl-menu-body"><button class="btn" data-dl="pauseAll">Pause all</button><button class="btn" data-dl="resumeAll">Resume all</button><button class="btn" data-dl="clear" ${count('done')?'':'disabled'}>Clear finished</button><button class="btn" data-dm="grab">Find links on a page</button><button class="btn" data-dm="export">Export list</button><button class="btn" data-dm="import">Import list</button></div></details></div>
+    <div class="dl-filters" aria-label="Transfer status">${chip('all','All',items.length)}${chip('active','In progress',count('downloading')+count('queued')+count('paused'))}${chip('done','Finished',count('done'))}${chip('bad','Needs attention',count('error'))}</div>
+    <div class="dl-bulk" ${dlSel.size?'':'hidden'}><strong>${dlSel.size} selected</strong><span>${result.items.length} visible</span><button class="btn" data-bulk="pause">Pause</button><button class="btn" data-bulk="resume">Resume</button><button class="btn danger" data-bulk="remove">Remove</button><select class="sel" id="dlBulkQ" aria-label="Move selection to queue"><option value="__choose__">Move to queue…</option>${dlQueueOpts('')}</select><button class="btn" data-bulk="all">Select this page</button><button class="btn" data-bulk="none">Clear selection</button></div>
+    <div class="dl-table-wrap"><table class="dl-table"><caption class="dl-sr">Downloads. Select a filename for details and all actions.</caption><thead><tr><th scope="col"><span class="dl-sr">Select</span></th><th scope="col">File</th><th scope="col">Progress</th><th scope="col">Size</th><th scope="col">Speed / ETA</th><th scope="col"><span class="dl-sr">Actions</span></th></tr></thead><tbody>${result.items.map(dlRow).join('')}</tbody></table><div class="dlempty" ${result.total?'hidden':''}>${dlIcon('Download')}<h3>${items.length?'No matching downloads':'Your downloads will appear here'}</h3><p>${items.length?'Try another search or clear your filters.':'Add a file link, magnet link or torrent to get started.'}</p><button class="btn" id="${items.length?'dlResetFilters':'dlEmptyAdd'}">${items.length?'Clear filters':'Add download'}</button></div></div>
+    <div class="dl-pagination"><span>${result.total?dlPage*100+1:0}–${Math.min((dlPage+1)*100,result.total)} of ${result.total} downloads</span><div><button class="btn" data-page="-1" ${dlPage?'':'disabled'}>Previous</button><span>Page ${dlPage+1} of ${result.pages}</span><button class="btn" data-page="1" ${dlPage+1<result.pages?'':'disabled'}>Next</button></div></div>`;
+}
+const dlSetting=(title,hint,control)=>`<div class="dnsrow"><div><b>${title}</b><div class="d">${hint}</div></div><div class="dl-control">${control}</div></div>`;
+const dlToggle=(id,on,label,extra='')=>`<button class="tog${on?' on':''}" ${id?`id="${id}"`:''} ${extra} role="switch" aria-checked="${!!on}" aria-label="${esc(label)}"><span></span></button>`;
+const dlNumber=(id,values,value,label)=>`<select class="sel" id="${id}" aria-label="${label}">${[...new Set([...values,value])].filter(x=>x!==undefined).map(x=>`<option ${x===value?'selected':''}>${x}</option>`).join('')}</select>`;
+function dlSettings() {
+  const c=DL.config;
+  const group=(id,title,html)=>`<section class="dl-settings-group" id="dlSettings-${id}" data-key="${id}"><h3>${title}</h3>${html}</section>`;
+  return `<div class="dl-heading"><div><h2>Download settings</h2><p>Folders, limits and automation for your downloads.</p></div></div><nav class="dl-jumps" aria-label="Settings groups">${[['files','Files & folders'],['speed','Speed & connections'],['schedule','Schedule & calls'],['torrent','Torrents & streams'],['automation','Automation'],['tools','Lists & tools']].map(([id,t])=>`<button class="btn" data-jump="${id}">${t}</button>`).join('')}</nav>
+  ${group('files','Files & folders',
+    dlSetting('Save downloads in','The default folder for new downloads.',`<input class="inp" id="dlDir" aria-label="Download folder" value="${esc(c.dir||'')}"><button class="btn" id="dlDirSave">Save</button>`)+
+    dlSetting('Sort into folders by type','Videos, Programs, Documents and other file types.',dlToggle('dlCatTog',c.useCategories,'Sort into folders'))+
+    dlSetting('Folders for types and websites','Choose a different destination for each type or website.','<button class="btn" data-dm="folders">Choose folders</button>')+
+    dlSetting('If a file already exists','Keep both, replace the old file, or skip the new download.',`<select class="sel" data-cfg="onExists" aria-label="If a file already exists">${[['rename','Keep both'],['overwrite','Replace the old file'],['skip','Skip the download']].map(([v,t])=>`<option value="${v}" ${(c.onExists||'rename')===v?'selected':''}>${t}</option>`).join('')}</select>`))}
+  ${group('speed','Speed & connections',
+    dlSetting('Downloads at the same time','Recommended: 3.',dlNumber('dlMax',[1,2,3,4,5,6,8,10],c.maxActive,'Simultaneous downloads'))+
+    dlSetting('Connections per line','Sites may reduce this automatically. Recommended: 8.',dlNumber('dlPer',[2,4,6,8,12,16],c.maxPerLine,'Connections per line'))+
+    dlSetting('Overall speed limit','Keep bandwidth available for other activities.',limSel('limitAll',c.limitAll))+
+    DL.lines.map(l=>dlSetting(esc(labelOf(l.name)),'Use this connection and optionally limit its speed.',limSel('line:'+l.name,c.limitLines?.[l.name]||0)+dlToggle('',!(c.excludeLines||[]).includes(l.name),'Use '+labelOf(l.name)+' for downloads',`data-ex="${esc(l.name)}"`))).join('')+
+    dlSetting('Use the mobile line','When off, mobile is still used if it is the only connection.',dlToggle('dlMobTog',c.allowMobile,'Use mobile line')))}
+  ${group('schedule','Schedule & calls',
+    dlSetting('Download hours','Outside these hours, downloads wait.',`<input type="time" class="inp" id="dlWinFrom" value="${esc(c.window.from||'22:00')}" aria-label="Download from"><input type="time" class="inp" id="dlWinTo" value="${esc(c.window.to||'07:00')}" aria-label="Download until">${dlToggle('dlWinTog',c.window.enabled,'Restrict download hours')}`)+
+    dlSetting('During a call','Keeping the call’s line free requires merging to be on.',`<select class="sel" data-cfg="callMode" aria-label="During a call">${[['avoid','Keep the call’s line free'],['pause','Pause all downloads'],['off','Do nothing']].map(([v,t])=>`<option value="${v}" ${c.callMode===v?'selected':''}>${t}</option>`).join('')}</select>`)+
+    dlSetting('When everything is finished','Runs once. Shutdown gives you one minute to cancel.',`<select class="sel" data-cfg="afterAll" aria-label="When everything is finished">${[['','Nothing'],['sleep','Put the PC to sleep'],['shutdown','Shut the PC down']].map(([v,t])=>`<option value="${v}" ${(c.afterAll||'')===v?'selected':''}>${t}</option>`).join('')}</select>`)+
+    dlSetting('Named queues','Set separate hours, days and concurrency.','<a class="btn" href="#/downloads/queues" data-dl-tab="queues">Open queues</a>'))}
+  ${group('torrent','Torrents & streams',
+    dlSetting('Torrents and magnet links','Allow .torrent files and magnet links.',dlToggle('',!c.noTorrents,'Allow torrents','data-dm="torTog"'))+
+    dlSetting('Share while downloading','Send downloaded pieces to peers. Never uses the mobile line.',dlToggle('',!c.noUpload,'Share while downloading','data-dm="upTog"'))+
+    dlSetting('Upload speed limit','For torrent uploads only.',limSel('uploadLimit',c.uploadLimit))+
+    dlSetting('ffmpeg',DL.ffmpeg?'Found. Separate video and audio tracks are joined into one file.':'Not found. Separate video and audio tracks are saved as two files. Place ffmpeg next to NetMerge or in its tools folder.',`<span class="dl-status">${dlIcon(DL.ffmpeg?'CircleCheck':'CircleAlert')}${DL.ffmpeg?'Ready':'Not installed'}</span>`))}
+  ${group('automation','Automation',
+    dlSetting('Notify when a download finishes','Show a notification from NetMerge.',dlToggle('',!c.noNotify,'Notification when finished','data-dm="notifyTog"'))+
+    dlSetting('Run a program after each download','Optional. Use <code>%f</code> for the file, for example <code>"C:\\Tools\\scan.exe" "%f"</code>.',`<input class="inp" id="dlAfterCmd" aria-label="Program to run after a download" value="${esc(c.afterCmd||'')}"><button class="btn" data-dm="afterSave">Save</button>`)+
+    dlSetting('Learned website limits',`${DL.knownSites||0} sites remembered. Some websites accept only one address per file.`,`<button class="btn" id="dlForget" ${DL.knownSites?'':'disabled'}>Forget</button>`))}
+  ${group('tools','Lists & tools',dlSetting('Download list','Import an exported list or a text file with one link per line.','<button class="btn" data-dm="export">Export list</button><button class="btn" data-dm="import">Import list</button>')+dlSetting('Find links on a web page','Filter by file type, then choose the links to download.','<button class="btn" data-dm="grab">Find links</button>')+'<p class="dl-help">Patterns: <code>photo[001-120].jpg</code>, <code>[a-f]</code>, or <code>[1-100:5]</code>. Up to 500 links per submission.</p>')}`;
+}
+function dlQueuesPanel() {
+  const c=DL.config, qs=[{id:'',name:'Main queue',maxActive:c.maxActive,window:c.window,days:[]},...c.queues];
+  return `<div class="dl-heading"><div><h2>Queues</h2><p>Organize downloads with their own hours and limits.</p></div><button class="btn pri" data-dm="queues">Manage queues</button></div><div class="dl-queue-list">${qs.map(q=>`<section class="dl-queue" data-key="${esc(q.id||'main')}"><div><h3>${esc(q.name)}</h3><p>${(q.window||{}).enabled?esc(q.window.from+'–'+q.window.to):'Any time'} · ${q.days?.length?q.days.map(d=>DL_DAYS[d]).join(', '):'Every day'}</p><span class="dl-meta">${DL.items.filter(v=>(v.queue||'')===q.id).length} downloads · ${q.maxActive?q.maxActive+' at once':'General concurrency limit'} · ${q.paused?'Paused':'Ready'}</span></div><div class="dl-actions"><button class="btn" data-start-queue="${esc(q.id)}">Start queue</button>${q.id?'<button class="btn" data-dm="queues">Edit</button>':'<a class="btn" href="#/downloads/settings" data-dl-tab="settings">Settings</a>'}</div></section>`).join('')}</div>`;
+}
+function dlBrowser() {
+  const ext=DL.ext;
+  return `<div class="dl-heading"><div><h2>Browser connection</h2><p>Send downloads from Chrome, Edge, Brave or Firefox.</p></div><button class="btn pri" id="dlExtCode">${dlIcon('Plus')} Connect a browser</button></div><section class="dl-settings-group"><h3>Download handoff</h3>${ext?dlSetting('Send downloads from the browser','Turn off to let browsers download by themselves.',dlToggle('dlExtOn',ext.enabled,'Send downloads from the browser'))+dlSetting('Minimum file size','Smaller downloads stay in the browser.',`<select class="sel" id="dlExtMin" aria-label="Minimum browser file size">${[...new Set([0,1,5,10,25,50,100,ext.minMB])].filter(n=>n!==undefined).map(n=>`<option value="${n}" ${ext.minMB===n?'selected':''}>${n?n+' MB':'Everything'}</option>`).join('')}</select>`):'<p>Browser connection information is unavailable. Refresh to try again.</p>'}</section><section class="dl-settings-group"><h3>Connected browsers</h3>${ext?.browsers.length?ext.browsers.map(b=>`<div class="dl-queue" data-key="${esc(b.id)}"><div><b>${esc(b.name)}</b><p>Connected ${new Date(b.created*1000).toLocaleDateString()}${b.lastSeen?' · Last used '+new Date(b.lastSeen*1000).toLocaleString():''}</p></div><button class="btn danger" data-extrm="${esc(b.id)}" aria-label="Disconnect ${esc(b.name)}">Disconnect</button></div>`).join(''):'<div class="dlempty">'+dlIcon('Globe')+'<h3>No browsers connected</h3><p>Connect a browser to send file links and detected media to NetMerge.</p></div>'}</section>`;
+}
+function paintDL() {
+  if ((typeof page!=='undefined'&&page!=='downloads') || !DM_ON) return;
+  const box=dlShell(); if(!box)return;
+  if(!DL) {
+    if(dlError)dlMorph($('#dlBanners'),`<div class="dl-banner bad"><span>${esc(dlError)}</span><button class="btn" id="dlRefresh">Retry refresh</button></div>`);
+    return;
+  }
+  if(DL.enabled===false)return;
+  const focused=box.contains(document.activeElement)?document.activeElement:null;
+  const stale=dlLastGood&&Date.now()-dlLastGood>5000;
+  dlMorph($('#dlBanners'),`${DL.powerAt&&Date.now()/1000-DL.powerAt<70?'<div class="dl-banner bad"><b>The PC is about to shut down because downloads finished.</b><button class="btn" data-dl="cancelPower">Cancel shutdown</button></div>':''}${dlError||stale?`<div class="dl-banner bad"><span>${esc(dlError||'Downloads may be out of date.')} Last updated ${dlLastGood?new Date(dlLastGood).toLocaleTimeString():'never'}.</span><button class="btn" id="dlRefresh">Retry refresh</button></div>`:''}${DL.hold?`<div class="dl-banner">${dlIcon('Clock3')}<span>${esc(DL.hold)}</span></div>`:!DL.lines.length?'<div class="dl-banner">'+dlIcon('CircleAlert')+'<span>No connection available. Downloads will start when a connection is available.</span></div>':''}`);
+  for(const link of box.querySelectorAll('.dl-tabs a')) {if(link.dataset.dlTab===dlTab)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');}
+  for(const tab of ['transfers','queues','browser','settings']) $('#dlPanel-'+tab).hidden=tab!==dlTab;
+  dlMorph($('#dlPanel-'+dlTab),({transfers:dlTransfers,queues:dlQueuesPanel,browser:dlBrowser,settings:dlSettings})[dlTab]());
+  if(focused&&!document.contains(focused))$('#dlSearch')?.focus();
+  const details=$('#dlDlg [data-details-id]'), current=details&&DL.items.find(v=>v.id===details.dataset.detailsId);
+  if(current){
+    details.querySelector('[data-detail-state]').textContent=dlStateText(current)+(current.note?' · '+current.note:'');
+    const control=details.querySelector('[data-dl=pause],[data-dl=resume],[data-dl=retry]');
+    if(control&&current.state!=='done'){const action=current.state==='paused'?'resume':current.state==='error'?'retry':'pause';control.dataset.dl=action;control.textContent={pause:'Pause',resume:'Resume',retry:'Retry'}[action];}
+    if($('#pRelink')){$('#pRelink').disabled=current.state==='downloading';$('#pRelinkNote').textContent='Keeps downloaded data.'+(current.state==='downloading'?' Pause the download before replacing its link.':'');}
   }
 }
-let dlOpener = null;
-function dlClose(){
-  const d = $('#dlDlg'); if (d) d.remove();
-  document.querySelectorAll('[data-dlinert]').forEach(el => { el.inert = false; el.removeAttribute('data-dlinert'); });
-  if (dlOpener && document.contains(dlOpener)) { try { dlOpener.focus(); } catch(e){} }
-  dlOpener = null;
+
+let dlOpener=null, dlDialogSerial=0;
+function dlFormValues(d) {
+  return [...d.querySelectorAll('input:not([type=file]),textarea,select')].map(el=>el.type==='checkbox'?el.checked:el.value);
 }
-function dlDialog(html){
-  let d = $('#dlDlg');
-  if (!d) {
-    dlOpener = document.activeElement;
-    d = document.createElement('div'); d.id = 'dlDlg'; d.className = 'wiz'; document.body.appendChild(d);
-    // the page behind a dialog must not take focus or clicks from the keyboard
-    [...document.body.children].forEach(el => { if (el !== d && el.tagName !== 'SCRIPT' && !el.inert && !/toast/i.test(el.id + el.className)) { el.inert = true; el.setAttribute('data-dlinert', ''); } });
+async function dlClose(force) {
+  const d=$('#dlDlg'); if(!d)return;
+  if(d.dlCancelConfirm){d.dlCancelConfirm();return;}
+  if(d.dlPending>0){dlNotice('Finishing your request. You can close this dialog when it completes.');return;}
+  if(force!==true && (d.dlDirty || !dlEqual(d.dlInitial,dlFormValues(d))) && !await dlAsk('Discard your unsaved changes?','Discard changes',true,'Discard'))return;
+  dlDialogSerial++;
+  d.close();d.remove();
+  const opener=dlOpener;dlOpener=null;
+  if(opener&&document.contains(opener))opener.focus();else $('#dlNew')?.focus();
+}
+function dlDialog(html) {
+  let d=$('#dlDlg');
+  if(!d) {
+    dlOpener=document.activeElement;d=document.createElement('dialog');d.id='dlDlg';d.className='nm-download-dialog';document.body.appendChild(d);
+    d.addEventListener('cancel',e=>{e.preventDefault();dlClose();});
+    d.addEventListener('input',()=>{d.dlDirty=true;});
+    d.addEventListener('change',()=>{d.dlDirty=true;});
   }
-  setHTML(d, html);
-  const card = d.querySelector('.card'); if (card) { card.setAttribute('tabindex', '-1'); const f = card.querySelector('input:not([type=hidden]),select,textarea,button'); (f || card).focus(); }
+  const hadDirty=d.dlDirty;
+  d.innerHTML=html;
+  const card=d.querySelector('.card');
+  if(card) {
+    d.setAttribute('aria-label',card.getAttribute('aria-label')||card.querySelector('h3')?.textContent||'Download');
+    card.removeAttribute('role');card.removeAttribute('aria-modal');card.setAttribute('tabindex','-1');
+    const close=document.createElement('button');close.className='btn dl-dialog-close';close.setAttribute('aria-label','Close dialog');close.innerHTML=dlIcon('X');close.onclick=()=>dlClose();card.prepend(close);
+  }
+  d.dlInitial=dlFormValues(d);d.dlDirty=hadDirty||false;
+  if(!d.open)d.showModal();
+  const first=d.querySelector('input:not([type=hidden]),textarea,select');(first||card)?.focus();
+  dlDialogSerial++;
 }
-document.addEventListener('keydown', e => {
-  const d = $('#dlDlg'); if (!d) return;
-  if (e.key === 'Escape') { e.preventDefault(); dlClose(); return; }
-  if (e.key !== 'Tab') return;
-  const f = [...d.querySelectorAll('input:not([type=hidden]):not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])')].filter(x => x.offsetParent !== null);
-  if (!f.length) return;
-  const first = f[0], last = f[f.length - 1];
-  if (e.shiftKey && (document.activeElement === first || !d.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
-  else if (!e.shiftKey && (document.activeElement === last || !d.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
-}, true);
-async function dlExtCode(){
-  let r; try { r = await api('downloads', {action:'extCode'}); } catch(e){ return toast(e.message, true); }
-  const base = r.repo ? `https://github.com/${r.repo}/releases/latest/download/` : '';
-  const dl = (file, label) => base ? `<a class="btn pri" href="${esc(base + file)}" target="_blank" rel="noopener">${label}</a>` : '';
-  dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Connect a browser" style="max-width:560px;max-height:92vh;overflow:auto"><h3 style="margin:0">Connect a browser</h3>
-    <div class="hint2" style="margin:6px 0 12px">The extension hands big downloads from your browser to NetMerge. It is not in the browser stores yet, so you add it by hand (about a minute).</div>
-    <ol class="hint2" style="margin:0 0 12px;padding-left:20px;display:grid;grid-template-columns:minmax(0,1fr);gap:10px">
-      <li><div style="display:block"><b>Download the extension file</b><div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap">${dl('NetMerge-extension-chrome-edge.zip','Chrome / Edge / Brave') + dl('NetMerge-extension-firefox.zip','Firefox') || 'Get <code>NetMerge-extension-chrome-edge.zip</code> (or the Firefox one) from the latest NetMerge release page.'}</div></div></li>
-      <li><div style="display:block"><b>Chrome, Edge, Brave:</b> unzip it into a folder you will keep. Open the address <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>) <button class="btn" id="dlCopyExt" style="padding:2px 8px;margin-left:4px">Copy address</button>, switch on <b>Developer mode</b>, click <b>Load unpacked</b> and choose that folder.<br><b>Firefox:</b> open <code>about:debugging#/runtime/this-firefox</code>, click <b>Load Temporary Add-on</b> and choose the zip file (Firefox forgets it when it closes).</div></li>
-      <li><div style="display:block"><b>Pin the NetMerge icon</b> (puzzle-piece menu in the toolbar), click it and type this code:</div></li>
-    </ol>
-    <div style="font:700 30px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.12em;text-align:center;padding:14px;border-radius:10px;background:var(--bg2,rgba(127,127,127,.12))" id="dlExtCodeBox">${esc(r.code)}</div>
-    <div class="hint2" style="margin-top:8px;text-align:center" id="dlExtLeft"></div>
-    <div class="hint2" style="margin-top:10px">After that, downloads of 5 MB or more are taken over by NetMerge. Right-click any link and choose <b>Download with NetMerge</b> for the rest. If NetMerge is not running, the browser downloads as usual.</div>
-    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn pri" id="dlCancel">Done</button></div></div>`);
-  const cp = $('#dlCopyExt'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText('chrome://extensions'); toast('Copied. Paste it in a new browser tab.'); } catch(e){ toast('Type chrome://extensions in a new tab', true); } };
-  $('#dlCancel').onclick = dlClose;
-  const tick = () => { const el = $('#dlExtLeft'); if (!el) return; const s = r.expires - Math.floor(Date.now()/1000); if (s <= 0) { el.textContent = 'The code has expired. Close this and click Connect a browser again.'; return; } el.textContent = 'Valid for ' + Math.floor(s/60) + ':' + String(s%60).padStart(2,'0') + ', one use only.'; setTimeout(tick, 1000); };
-  tick();
+function dlAddDialog(text='') {
+  dlDialog(`<div class="card" aria-label="Add download"><h3>Add download</h3><p class="hint2">Add a file link, magnet link, or torrent. Multiple links go on separate lines.</p><label class="dl-field">Links<textarea class="inp" id="dlUrl" rows="4" spellcheck="false" placeholder="https://example.com/file.zip">${esc(text)}</textarea></label><div class="row"><button class="btn" id="dlPaste">Paste</button><button class="btn" id="dlTorBtn">Choose torrent file</button><input type="file" id="dlTorFile" accept=".torrent,application/x-bittorrent" hidden><button class="btn" data-dm="options">More options</button></div><p class="hint2">Numbered series: <code>photo[001-120].jpg</code>. Up to 500 links per submission.</p><div class="dl-dialog-actions"><button class="btn" id="dlCancel">Cancel</button><button class="btn" id="dlAddLater">Add to queue</button><button class="btn pri" id="dlAddBtn">Continue</button></div></div>`);
+  $('#dlCancel').onclick=dlClose;
 }
-async function dlSubmit(){
-  const ta = $('#dlUrl'); const links = ta.value.split(/\s*\n\s*/).map(s => s.trim()).filter(Boolean);
-  if (!links.length) return toast('Paste a link first', true);
-  if (links.length === 1 && /^magnet:|\.torrent(\?|#|$)/i.test(links[0])) { const r = await dlAct({action:'add', url: links[0]}, 'Torrent added'); if (r) ta.value = ''; return; }
-  if (links.length > 1) { const r = await dlAct({action:'add', urls: links}); if (r) { ta.value = ''; toast(`${(r.added||[]).length} downloads added` + (r.restarted ? `, ${r.restarted} stopped ones restarted` : '') + (r.skipped ? `, ${r.skipped} already in your list` : '')); } return; }
-  dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Add download"><h3 style="margin:0">Checking the link…</h3><div class="hint2" style="margin-top:6px">${esc(links[0])}</div></div>`);
-  let p; try { p = await api('downloads', {action:'probe', url: links[0]}); } catch(e){ dlClose(); return toast(e.message, true); }
-  dlShowProbe(links[0], p);
+
+async function dlExtCode() {
+  const opener=document.activeElement; if(opener?.tagName==='BUTTON')opener.disabled=true;
+  let r;try{r=await dlRequest({action:'extCode'});}catch(e){dlNotice(e.message,true);return;}finally{if(opener?.tagName==='BUTTON')opener.disabled=false;}
+  const base=/^[\w.-]+\/[\w.-]+$/.test(r.repo||'')?`https://github.com/${r.repo}/releases/latest/download/`:'';
+  const file=(name,label)=>base?`<a class="btn" href="${esc(base+name)}" target="_blank" rel="noopener noreferrer">${label}</a>`:'';
+  dlDialog(`<div class="card" aria-label="Connect a browser"><h3>Connect a browser</h3><p class="hint2">Install the extension, then enter this one-use code. The extension is installed manually.</p><ol class="dl-pair-steps"><li><b>Download the extension</b><div class="row" style="margin-top:8px">${file('NetMerge-extension-chrome-edge.zip','Chrome / Edge / Brave')+file('NetMerge-extension-firefox.zip','Firefox')||'Get NetMerge-extension-chrome-edge.zip or NetMerge-extension-firefox.zip from the NetMerge release page.'}</div></li><li><b>Chrome, Edge, Brave</b><p>Unzip it into a folder you will keep. Open <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>), switch on Developer mode, choose Load unpacked and select the folder.</p><button class="btn" id="dlCopyExt">Copy Chrome extensions address</button><p><b>Firefox:</b> open <code>about:debugging#/runtime/this-firefox</code>, choose Load Temporary Add-on and select the ZIP. Firefox forgets this temporary installation when it closes.</p></li><li><b>Enter the code</b><p>Pin NetMerge using the puzzle-piece menu, open the extension and enter:</p></li></ol><div class="dl-pair-code" id="dlExtCodeBox">${esc(r.code)}</div><p class="hint2" id="dlExtLeft"></p><div class="row"><button class="btn" id="dlCopyCode">Copy code</button><button class="btn" id="dlNewCode" hidden>Generate new code</button></div><p class="hint2">The Browser tab controls which file sizes are handed off. Right-click a link and choose Download with NetMerge to send it manually. When NetMerge is closed, your browser downloads as usual.</p><div class="dl-dialog-actions"><button class="btn pri" id="dlCancel">Done</button></div></div>`);
+  $('#dlCancel').onclick=dlClose;
+  $('#dlCopyExt').onclick=async()=>{try{await navigator.clipboard.writeText('chrome://extensions');dlNotice('Address copied. Paste it into a new browser tab.');}catch(_){dlNotice('Copy chrome://extensions from the instructions above.',true);}};
+  $('#dlCopyCode').onclick=async()=>{try{await navigator.clipboard.writeText(r.code);dlNotice('Pairing code copied.');}catch(_){dlNotice('Copy the pairing code shown above, then paste it into the extension.',true);}};
+  $('#dlNewCode').onclick=dlExtCode;
+  const token=dlDialogSerial;
+  const tick=()=>{if(token!==dlDialogSerial||!$('#dlExtLeft'))return;const seconds=r.expires-Math.floor(Date.now()/1000);if(seconds<=0){$('#dlExtLeft').textContent='This code has expired. Generate a new code to connect.';$('#dlCopyCode').disabled=true;$('#dlNewCode').hidden=false;return;}$('#dlExtLeft').textContent=`Valid for ${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}, one use only.`;setTimeout(tick,1000);};tick();
+}
+
+function dlAddResult(r, requested) {
+  if (r.duplicate) return 'Already in your list. No second copy was added.';
+  const added=(r.added||[]).length, skipped=r.skipped||0;
+  const rejected=requested==null?null:Math.max(0,requested-added-skipped);
+  return `${added} downloads added${skipped?`, ${skipped} already in your list`:''}${rejected?`, ${rejected} could not be added`:''}`;
+}
+async function dlSubmit(start=true) {
+  const ta=$('#dlUrl'); if(!ta)return;
+  const links=dlRowsOf(ta.value);
+  if(!links.length){dlNotice('Paste a link first.',true);ta.focus();return;}
+  if(links.length>1||/^magnet:|\.torrent(\?|#|$)/i.test(links[0])) {
+    const r=await dlAct({action:'add',urls:links,start});
+    if(r){const msg=dlAddResult(r,links.some(s=>/\[/.test(s))?null:links.length);await dlClose(true);toast(msg,!!r.duplicate);}
+    return;
+  }
+  const token=dlDialogSerial;const button=$('#dlAddBtn');button.disabled=true;button.textContent='Checking…';
+  try {const p=await dlRequest({action:'probe',url:links[0]});if(token===dlDialogSerial){dlShowProbe(links[0],p);if(!start)$('#dlLater').focus();}}
+  catch(e){if(token===dlDialogSerial)dlNotice(e.message||'Could not check this link. Try More options to add it directly.',true);}
+  finally{if(button.isConnected){button.disabled=false;button.textContent='Continue';}}
 }
 function dlShowProbe(link, p){
   const info = p.info || {};
@@ -208,16 +387,26 @@ function dlShowProbe(link, p){
     <details class="hint2"><summary style="cursor:pointer">More options</summary><div style="display:grid;gap:10px;margin-top:10px">
       <label>Start at (leave empty to start now)<input type="time" class="inp" id="dlTime" style="width:100%;margin-top:4px"></label>
       <label>Checksum, to check the file is not damaged (SHA-256, SHA-1 or MD5 from the website)<input class="inp" id="dlHash" placeholder="Optional" style="width:100%;margin-top:4px"></label>
+      ${dlExtraAddFields('dl')}
       ${(p.lineNames||[]).length > 1 ? `<div>Use these connections<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">${p.lineNames.map(n => `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="dlLn" value="${esc(n)}" checked> ${esc(labelOf(n))}</label>`).join('')}</div></div>` : ''}
     </div></details></div>
     ${p.duplicate ? (dlDupStopped(p) ? '<div class="note warn" style="margin:0 0 10px"><b>This link is already in your list but stopped.</b> Downloading it now restarts that copy (with its name and folder).</div>' : '<div class="note warn" style="margin:0 0 10px"><b>This link is already in your list.</b> Adding it again makes a second copy.</div>') : ''}
     ${fine ? `<div class="hint2" style="margin-bottom:6px">${hls ? '<b>Video stream</b> · about ' + (p.hls.seconds < 90 ? Math.round(p.hls.seconds) + ' sec' : Math.round(p.hls.seconds/60) + ' min') + (p.hls.quality ? ' · ' + esc(p.hls.quality) : '') + ' · ' : (info.size > 0 ? '<b>' + bytes(info.size) + '</b> · ' : '')}${hls ? '' : esc(info.type || 'unknown type')}</div>${hls && (p.hls.heights||[]).length > 1 ? `<label class="hint2" style="display:block;margin:6px 0">Picture quality <select class="sel" id="dlQual" style="min-width:0;margin-left:6px"><option value="0"${!p.height?' selected':''}>Best (${p.hls.heights[0]}p)</option>${p.hls.heights.slice(1).map(h => `<option value="${h}"${p.height===h?' selected':''}>${h}p</option>`).join('')}</select></label>` : ''}<div class="hint2" style="${can?'color:var(--good)':''}">${esc(why + audioNote)}</div>` : ''}
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn" id="dlCancel">Cancel</button><button class="btn" id="dlLater">Add, start later</button><button class="btn pri" id="dlGo">Download now</button></div></div>`);
-  if ($('#dlQual')) $('#dlQual').onchange = async e => { const h = +e.target.value; try { const q = await api('downloads', {action:'probe', url: link, height: h}); q.height = h; dlShowProbe(link, q); } catch(err){ toast(err.message, true); } };
+  if ($('#dlQual')) $('#dlQual').onchange = async e => {
+    const h=+e.target.value, token=dlDialogSerial;
+    const saved=[...$('#dlDlg').querySelectorAll('input,textarea,select')].filter(el=>el.id!=='dlQual').map(el=>({id:el.id,cls:el.className,value:el.value,checked:el.checked}));
+    const open=[...$('#dlDlg').querySelectorAll('details')].map(el=>el.open);
+    e.target.disabled=true;
+    try { const q=await dlRequest({action:'probe',url:link,height:h,header:dlReadHeaders('dlHeader')});if(token!==dlDialogSerial)return;q.height=h;dlShowProbe(link,q);
+      for(const savedEl of saved){const el=savedEl.id?document.getElementById(savedEl.id):[...$('#dlDlg').querySelectorAll('input')].find(x=>x.className===savedEl.cls&&x.value===savedEl.value);if(el){el.value=savedEl.value;el.checked=savedEl.checked;}}
+      [...$('#dlDlg').querySelectorAll('details')].forEach((el,i)=>el.open=open[i]);$('#dlQual').focus();
+    } catch(err){if(token===dlDialogSerial){e.target.disabled=false;dlNotice(err.message,true);}}
+  };
   $('#dlGo').onclick = () => dlConfirm(link, p, true);
   $('#dlLater').onclick = () => dlConfirm(link, p, false);
   $('#dlCancel').onclick = dlClose;
-  setTimeout(() => $('#dlGo') && $('#dlGo').focus(), 30);
+
 }
 function dlDupStopped(p){ return p.dupState === 'error' || p.dupState === 'paused'; }
 async function dlConfirm(link, p, start){
@@ -230,23 +419,24 @@ async function dlConfirm(link, p, start){
   const tm = $('#dlTime') && $('#dlTime').value;
   if (tm) { const [h, mi] = tm.split(':').map(Number); const d = new Date(); d.setHours(h, mi, 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); body.startAt = Math.floor(d.getTime()/1000); }
   const hs = $('#dlHash') && $('#dlHash').value.trim(); if (hs) body.hash = hs;
-  const boxes = $$('.dlLn'); if (boxes.length) { const on = boxes.filter(b => b.checked).map(b => b.value); if (!on.length) return toast('Choose at least one connection', true); if (on.length < boxes.length) body.lines = on; }
-  const r = await dlAct(body, start ? 'Download started' : 'Added');
-  if (r) { dlClose(); const ta = $('#dlUrl'); if (ta) ta.value = ''; }
+  const boxes = $$('.dlLn'); if (boxes.length) { const on = boxes.filter(b => b.checked).map(b => b.value); if (!on.length) return dlNotice('Choose at least one connection', true); if (on.length < boxes.length) body.lines = on; }
+  try {dlReadExtraAdd(body,'dl');} catch(e){return dlNotice(e.message,true);}
+  const r = await dlAct(body);
+  if (r) { dlClose(true); toast(dlAddResult(r,1),!!r.duplicate); }
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#dlDlg')) dlClose(); if (e.key === 'Enter' && !e.shiftKey && e.target.id === 'dlUrl') { e.preventDefault(); dlSubmit(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey||e.metaKey) && e.target.id === 'dlUrl') { e.preventDefault(); dlSubmit(); } });
 document.addEventListener('change', async e => {
   const t = e.target;
   if (t.classList && t.classList.contains('dlck')) { t.checked ? dlSel.add(t.dataset.id) : dlSel.delete(t.dataset.id); return paintDL(); }
-  if (t.id === 'dlBulkQ' && t.value !== '\u0000') { const q = t.value, ids = [...dlSel]; for (const id of ids) await dlAct({action:'setQueue', id, queue: q}); toast(`${ids.length} moved`); }
+  if (t.id === 'dlBulkQ' && t.value !== '__choose__') { const q=t.value,ids=[...dlSel];let bad=0;t.disabled=true;for(const id of ids)if(await dlAct({action:'setQueue',id,queue:q})===null)bad++;t.disabled=false;t.value='__choose__';toast(`${ids.length-bad} moved${bad?`, ${bad} could not be changed`:''}`,!!bad); }
 });
 async function dlBulk(a){
   if (a === 'all') { dlVisIds.forEach(id => dlSel.add(id)); return paintDL(); }
   if (a === 'none') { dlSel.clear(); return paintDL(); }
   const ids = [...dlSel]; if (!ids.length) return;
   if (a === 'remove') {
-    const loose = ids.filter(id => { const v = DL.items.find(x => x.id === id); return v && v.state !== 'done' && v.state !== 'error' && v.done > 0; }).length;
-    if (!confirm(`Remove ${ids.length} download${ids.length===1?'':'s'} from the list?` + (loose ? `\n\n${loose} of them are not finished: what was downloaded so far will be deleted. Finished files stay on your disk.` : '\n\nFinished files stay on your disk.'))) return;
+    const loose = ids.filter(id => { const v = DL.items.find(x => x.id === id); return v && v.state !== 'done'; }).length;
+    if (!await dlAsk(`Remove ${ids.length} download${ids.length===1?'':'s'} from the list?` + (loose ? `\n\n${loose} of them are not finished: what was downloaded so far will be deleted. Finished files stay on your disk.` : '\n\nFinished files stay on your disk.'))) return;
   }
   let bad = 0;
   for (const id of ids) { const r = await dlAct({action: a, id}); if (r === null) bad++; }
@@ -254,25 +444,28 @@ async function dlBulk(a){
   toast(bad ? `${ids.length - bad} done, ${bad} could not be changed` : `${ids.length} ${a === 'remove' ? 'removed' : a === 'pause' ? 'paused' : 'resumed'}`, !!bad);
 }
 document.addEventListener('keydown', e => {
-  if (typeof page === 'undefined' || page !== 'downloads' || $('#dlDlg')) return;
-  const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+  if (typeof page === 'undefined' || page !== 'downloads' || $('dialog[open]')) return;
+  const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable || dlTab !== 'transfers') return;
+  const menu=$('.dl-menu[open]');
+  if(e.key==='Escape'&&menu){e.preventDefault();menu.open=false;menu.querySelector('summary').focus();return;}
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); dlVisIds.forEach(id => dlSel.add(id)); paintDL(); }
   else if (e.key === 'Delete' && dlSel.size) { e.preventDefault(); dlBulk('remove'); }
   else if (e.key === 'Escape' && dlSel.size) { dlSel.clear(); paintDL(); }
 });
 document.addEventListener('paste', e => {
-  if (typeof page === 'undefined' || page !== 'downloads' || $('#dlDlg')) return;
-  const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea') return;
+  if (typeof page === 'undefined' || page !== 'downloads' || $('dialog[open]')) return;
+  const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable || !DM_ON) return;
   const txt = ((e.clipboardData && e.clipboardData.getData('text')) || '').trim();
   if (!/^(https?:|ftp:|magnet:)/i.test(txt) || txt.length > 20000) return;
-  e.preventDefault(); const ta = $('#dlUrl'); if (ta) { ta.value = txt; ta.focus(); toast('Link pasted: press Add'); }
+  e.preventDefault(); dlAddDialog(txt);
 });
 document.addEventListener('click', async e => {
   const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.bulk) return dlBulk(t.dataset.bulk);
-  if (t.id === 'dlAddBtn') return dlSubmit();
+  if (t.id === 'dlAddBtn') return dlSubmit(true);
+  if (t.id === 'dlAddLater') return dlSubmit(false);
   if (t.id === 'dlTorBtn') { const f = $('#dlTorFile'); if (f) f.click(); return; }
-  if (t.id === 'dlPaste') { try { const s = await navigator.clipboard.readText(); if (s) $('#dlUrl').value = s.trim(); } catch(err){ toast('Press Ctrl+V in the box instead', true); } return; }
+  if (t.id === 'dlPaste') { try { const s = await navigator.clipboard.readText(); if (s) { $('#dlUrl').value = s.trim(); $('#dlUrl').focus(); } } catch(err){ dlNotice('Press Ctrl+V in the Links field instead.', true); $('#dlUrl')?.focus(); } return; }
   if (t.dataset.f && page === 'downloads') { dlFilter = t.dataset.f; return paintDL(); }
   if (t.id === 'dlDirSave') return void dlAct({action:'config', config: {...DL.config, dir: $('#dlDir').value.trim()}}, 'Folder saved');
   if (t.id === 'dlCatTog') return void dlAct({action:'config', config: {...DL.config, useCategories: !DL.config.useCategories}});
@@ -281,23 +474,25 @@ document.addEventListener('click', async e => {
   if (t.id === 'dlForget') return void dlAct({action:'forgetHosts'}, 'Forgotten');
   if (t.id === 'dlExtCode') return dlExtCode();
   if (t.id === 'dlExtOn') return void dlAct({action:'extConfig', extMinMB: DL.ext.minMB, extOff: DL.ext.enabled});
-  if (t.dataset.extrm) { if (!confirm('Disconnect this browser? Its extension stops sending downloads until you connect it again.')) return; return void dlAct({action:'extRevoke', id: t.dataset.extrm}, 'Disconnected'); }
+  if (t.dataset.extrm) { if (!await dlAsk('Disconnect this browser? Its extension stops sending downloads until you connect it again.')) return; return void dlAct({action:'extRevoke', id: t.dataset.extrm}, 'Disconnected'); }
   if (t.id === 'dlMobTog') return void dlAct({action:'config', config: {...DL.config, allowMobile: !DL.config.allowMobile}});
   const a = t.dataset.dl; if (!a) return;
   const id = t.dataset.id, v = DL && DL.items.find(x => x.id === id);
-  if (a === 'delfile') { if (!confirm('Delete "' + (v ? v.name : 'this file') + '" from your computer too? This cannot be undone.')) return; return void dlAct({action:'remove', id, deleteFiles:true}, 'File deleted'); }
-  if (a === 'open' && v && DL_RISKY.test(v.name) && !confirm('"' + v.name + '" is a program. Only open it if you trust where it came from. Open it?')) return;
-  if (a === 'remove' && v && v.state !== 'done' && v.state !== 'error' && v.done > 0 && !confirm('Cancel this download? What was downloaded so far will be deleted.')) return;
+  if (a === 'delfile') { if (!await dlAsk('Delete "' + (v ? v.name : 'this file') + '" from your computer too? This cannot be undone.')) return; const r=await dlAct({action:'remove',id,deleteFiles:true},'File deleted');if(r)dlClose(true);return; }
+  if (a === 'open' && v && DL_RISKY.test(v.name) && !await dlAsk('"' + v.name + '" is a program. Only open it if you trust where it came from. Open it?')) return;
+  if (a === 'remove' && !await dlAsk(v && v.state !== 'done' ? 'Remove this unfinished download? Its partial file will be deleted.' : 'Remove this download from the list? The finished file stays on your computer.', 'Remove download', true, 'Remove')) return;
+  if (a === 'clear' && !await dlAsk('Clear finished downloads from the list? Finished files stay on your computer.', 'Clear finished', false, 'Clear')) return;
   if (a === 'move') return void dlAct({action:'move', id, move: t.dataset.mv});
   if (a === 'cancelPower') return void dlAct({action:'cancelPower'}, 'Shutdown cancelled');
-  dlAct({action: a, id});
+  const result=await dlAct({action:a,id});if(result&&a==='remove')dlClose(true);
 });
 async function dlAddTorrentFile(f){
   if (!f) return;
-  if (f.size > 16e6) return toast('That file is too big to be a torrent', true);
-  const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 32768) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 32768));
+  if (f.size > 16e6) return dlNotice('That file is too big to be a torrent', true);
+  let buf;try{buf=new Uint8Array(await f.arrayBuffer());}catch(e){return dlNotice('Could not read the torrent file. Choose it again.',true);}let bin = ''; for (let i = 0; i < buf.length; i += 32768) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 32768));
   const torrent = btoa(bin);
-  let p; try { p = await api('downloads', {action:'torrentInfo', torrent}); } catch(e){ return toast(e.message, true); }
+  const token=dlDialogSerial;let p; try { p = await dlRequest({action:'torrentInfo', torrent}); } catch(e){ return dlNotice(e.message, true); }
+  if(token!==dlDialogSerial)return;
   const fl = p.files || [];
   dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Add torrent" style="max-width:640px;max-height:92vh;overflow:auto"><h3 style="margin:0;word-break:break-all">${esc(p.name)}</h3>
     <div class="hint2" style="margin:4px 0 10px">${bytes(p.size)} · ${fl.length} file${fl.length===1?'':'s'}${p.private ? ' · private torrent (only its own tracker is used)' : ''}</div>
@@ -311,25 +506,32 @@ async function dlAddTorrentFile(f){
   $$('.tpSel').forEach(b => b.onchange = sum);
   if ($('#tpAll')) $('#tpAll').onchange = e => { $$('.tpSel').forEach(b => b.checked = e.target.checked); sum(); };
   const go = async start => {
-    const sel = $$('.tpSel').map(b => b.checked); if (!sel.some(Boolean)) return toast('Choose at least one file', true);
+    const sel = $$('.tpSel').map(b => b.checked); if (!sel.some(Boolean)) return dlNotice('Choose at least one file', true);
     const body = {action:'add', torrent, start, force: !!p.duplicate};
     if (!sel.every(Boolean)) body.select = sel;
     const dir = $('#tpDir').value.trim(); if (dir && dir !== p.dir) body.dir = dir;
-    const r = await dlAct(body, start ? 'Torrent added' : 'Added'); if (r) dlClose();
+    const r = await dlAct(body, start ? 'Torrent added' : 'Added'); if (r) dlClose(true);
   };
   $('#tpGo').onclick = () => go(true); $('#tpLater').onclick = () => go(false); $('#dlCancel').onclick = dlClose;
 }
-document.addEventListener('change', e => {
+document.addEventListener('change', async e => {
   if (!DL) return;
   const t = e.target;
   if (t.id === 'dlTorFile') { const f = t.files && t.files[0]; t.value = ''; return void dlAddTorrentFile(f); }
-  if (t.dataset && t.dataset.lim) return void dlAct({action:'limit', id: t.dataset.lim, limitBytes: +t.value * 1048576});
+  if(t.dataset&&t.dataset.lim){
+    const dialog=t.closest('#dlDlg'),value=t.value;
+    const index=dialog?[...dialog.querySelectorAll('input:not([type=file]),textarea,select')].indexOf(t):-1;
+    if(await dlAct({action:'limit',id:t.dataset.lim,limitBytes:+value*1048576})!==null&&dialog&&index>=0){
+      dialog.dlInitial[index]=value;dialog.dlDirty=!dlEqual(dialog.dlInitial,dlFormValues(dialog));
+    }
+    return;
+  }
   if (t.dataset && t.dataset.cfg) {
     const k = t.dataset.cfg, c = {...DL.config};
     if (k === 'limitAll') c.limitAll = +t.value * 1048576;
     else if (k === 'uploadLimit') c.uploadLimit = +t.value * 1048576;
     else if (k.startsWith('line:')) { c.limitLines = {...(c.limitLines||{})}; const n = k.slice(5); if (+t.value) c.limitLines[n] = +t.value * 1048576; else delete c.limitLines[n]; }
-    else if (k === 'afterAll') { if (t.value === 'shutdown' && !confirm('Shut the PC down when all downloads are finished? You get one minute to cancel.')) { paintDL(); return; } c.afterAll = t.value; }
+    else if (k === 'afterAll') { if (t.value === 'shutdown' && !await dlAsk('Shut the PC down when all downloads are finished? You get one minute to cancel.')) { t.value=DL.config.afterAll||'';delete t.dataset.dirty;paintDL();return; } c.afterAll = t.value; }
     else c[k] = t.value;
     return void dlAct({action:'config', config: c});
   }
@@ -340,17 +542,18 @@ document.addEventListener('change', e => {
   if (e.target.id === 'dlPer') dlAct({action:'config', config: {...DL.config, maxPerLine: +e.target.value}});
 });
 document.addEventListener('input', e => { if (e.target.id === 'dlSearch') { dlQ = e.target.value; paintDL(); } });
-window.addEventListener('dragover', e => { if (e.dataTransfer && [...(e.dataTransfer.types||[])].some(t => t === 'text/uri-list' || t === 'text/plain' || t === 'Files')) e.preventDefault(); });
+window.addEventListener('dragover', e => { if (page === 'downloads' && DM_ON && e.dataTransfer && [...(e.dataTransfer.types||[])].some(t => t === 'text/uri-list' || t === 'text/plain' || t === 'Files')) e.preventDefault(); });
 window.addEventListener('drop', async e => {
-  const dt = e.dataTransfer; if (!dt) return; e.preventDefault();
+  const dt = e.dataTransfer; if (!dt || page !== 'downloads' || !DM_ON) return; e.preventDefault();
+  if ($('dialog[open]')) return;
   let text = dt.getData('text/uri-list') || dt.getData('text/plain');
   if (dt.files && dt.files[0] && /\.torrent$/i.test(dt.files[0].name)) { go('downloads'); await loadDL(true); return void dlAddTorrentFile(dt.files[0]); }
   if (!text && dt.files && dt.files[0] && /\.(txt|csv|lst|m3u8?)$/i.test(dt.files[0].name) && dt.files[0].size < 1e6) text = await dt.files[0].text();
   const links = (text||'').split(/\s*\n\s*/).map(s => s.trim()).filter(s => /^(https?|ftp):\/\/|^magnet:/i.test(s));
   if (!links.length) return;
-  go('downloads'); await loadDL(true); const ta = $('#dlUrl'); if (ta) ta.value = links.join('\n');
+  await loadDL(true); dlAddDialog(links.join('\n'));
 });
-setInterval(() => { if (page === 'downloads' && !document.hidden && !$('#dlDlg')) loadDL(false); }, 1000);
+
 function renderDlCard(){
   const c = $('#dlCard'), d = S && S.downloads; if (!c) return;
   if (!d || (!d.active && !d.queued)) { c.hidden = true; return; }
@@ -361,3 +564,30 @@ function renderDlCard(){
   $('#dlOpen').onclick = () => go('downloads');
 }
 
+
+// Local routes are links: normal browser Back/Forward and modified clicks remain available.
+document.addEventListener('click', async e=>{
+  for(const menu of $$('.dl-menu[open]'))if(!menu.contains(e.target)||e.target.closest('button'))menu.open=false;
+  const link=e.target.closest('[data-dl-tab]');
+  if(link&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey) {e.preventDefault();location.hash='#/downloads/'+link.dataset.dlTab;nmDownloadsTab(link.dataset.dlTab);return;}
+  const t=e.target.closest('button');if(!t||!DL)return;
+  if(t.id==='dlNew'||t.id==='dlEmptyAdd')return dlAddDialog();
+  if(t.id==='dlRefresh')return loadDL(true);
+  if(t.dataset.page) {dlPage+=+t.dataset.page;paintDL();$('#dlSearch')?.focus();return;}
+  if(t.id==='dlResetFilters') {dlFilter='all';dlCat='';dlQ='';dlQf='';dlPage=0;paintDL();return;}
+  if(t.dataset.jump) {const target=$('#dlSettings-'+t.dataset.jump);target.setAttribute('tabindex','-1');target.focus();target.scrollIntoView({block:'start'});return;}
+  if(t.dataset.startQueue!==undefined)return dlAct({action:'startQueue',queue:t.dataset.startQueue},'Queue started');
+});
+document.addEventListener('input',e=>{if(e.target.closest('#dlBody')&&e.target.matches('input:not([type=checkbox]),textarea,select')&&e.target.id!=='dlSearch')e.target.dataset.dirty='true';});
+window.addEventListener('hashchange',()=>{if(/^#\/downloads(?:\/|$)/.test(location.hash)){nmDownloadsTab(location.hash.split('/')[2]);loadDL(true);}});
+function dlStartPolling() {
+  if(dlStopPolling)return;
+  const visible=()=>typeof page!=='undefined'&&page==='downloads'&&DM_ON&&!document.hidden;
+  if(window.NM?.schedule)dlStopPolling=NM.schedule('downloads',()=>loadDL(false),1000,visible);
+  else {let stopped=false,timer;const tick=async()=>{if(stopped)return;if(visible())await loadDL(false);if(!stopped)timer=setTimeout(tick,1000);};timer=setTimeout(tick,1000);dlStopPolling=()=>{stopped=true;clearTimeout(timer);};}
+}
+window.nmDownloadsDispose=()=>{dlStopPolling?.();dlStopPolling=null;dlRevision++;};
+window.addEventListener('pagehide',()=>nmDownloadsDispose());
+window.addEventListener('pageshow',()=>dlStartPolling());
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&page==='downloads'&&DM_ON)loadDL(true);});
+dlStartPolling();
