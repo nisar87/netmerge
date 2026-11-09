@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.13
+
+- Downloads: "Show in folder" now brings the Explorer window to the front. Before, the window opened behind the NetMerge window and only the taskbar button flashed.
+
 ## 3.11.12
 
 - "Start with Windows" can no longer be switched on from a copy of NetMerge that was started with its own data folder (`-root`, used for tests and development). The start-up task is one per computer, and such a copy would have replaced the real installation's task with one that starts the wrong folder.

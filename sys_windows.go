@@ -369,7 +369,59 @@ func revealInShell(path string) error {
 	if int32(hr) < 0 {
 		return fmt.Errorf("the shell could not show %s (0x%x)", path, uint32(hr))
 	}
+	// Explorer opens the window in its own process, which Windows does not let take the focus
+	// from the browser window we were clicked in: the taskbar button only flashes. Bring it up.
+	go raiseExplorer(filepath.Base(filepath.Dir(path)))
 	return nil
+}
+
+var (
+	raiseMu     sync.Mutex
+	raiseWant   string
+	raiseCb     = syscall.NewCallback(enumRaise)
+	raiseDone   bool
+	pKeybdEvent = user32.NewProc("keybd_event")
+)
+
+func enumRaise(hwnd, _ uintptr) uintptr {
+	if v, _, _ := pIsWindowVis.Call(hwnd); v == 0 {
+		return 1
+	}
+	cls := make([]uint16, 64)
+	pGetClassName.Call(hwnd, uintptr(unsafe.Pointer(&cls[0])), 64)
+	if syscall.UTF16ToString(cls) != "CabinetWClass" {
+		return 1
+	}
+	title := make([]uint16, 260)
+	pGetWindowText.Call(hwnd, uintptr(unsafe.Pointer(&title[0])), 260)
+	if !strings.EqualFold(syscall.UTF16ToString(title), raiseWant) {
+		return 1
+	}
+	if m, _, _ := pIsIconic.Call(hwnd); m != 0 {
+		pShowWindow.Call(hwnd, 9)
+	}
+	// a tap of the Alt key makes the system accept the focus change
+	pKeybdEvent.Call(0x12, 0, 0, 0)
+	pKeybdEvent.Call(0x12, 0, 2, 0)
+	pBringToTop.Call(hwnd)
+	pSetForeground.Call(hwnd)
+	raiseDone = true
+	return 0
+}
+
+// raiseExplorer waits (up to 3 seconds) for the Explorer window showing the folder and brings it to the front.
+func raiseExplorer(folder string) {
+	raiseMu.Lock()
+	defer raiseMu.Unlock()
+	raiseWant = folder
+	for i := 0; i < 15; i++ {
+		raiseDone = false
+		pEnumWindows.Call(raiseCb, 0)
+		if raiseDone {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 // dlPower sleeps or shuts the PC down after the downloads (a shutdown has a one minute warning that can be cancelled).
