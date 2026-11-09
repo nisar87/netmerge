@@ -136,12 +136,54 @@ function dlLineShare(v){
   return {tot,sum:Object.values(tot).reduce((a,b)=>a+b,0)};
 }
 function dlIcon(name) {
-  if (window.NM?.icon) return NM.icon(name);
+  if (window.NM?.icon) return NM.icon(name.replace(/([a-zA-Z])(\d)/g,'$1-$2'));
   // Small local fallback for the existing shell; the new shell supplies its icon subset.
   const paths={Download:'M12 3v12m-5-5 5 5 5-5M4 18v3h16v-3',Plus:'M12 5v14M5 12h14',Pause:'M8 5v14M16 5v14',Play:'m8 4 12 8-12 8Z',RotateCcw:'M4 10a8 8 0 1 1 1 8M4 4v6h6',FolderOpen:'M3 8V4h6l3 4h9l-3 12H3Z',File:'M6 3h8l4 4v14H6ZM14 3v5h4',MoreHorizontal:'M4 12h1m6 0h1m6 0h1',CircleCheck:'m8 12 3 3 5-6',CircleAlert:'M12 7v6m0 4h.01',Clock3:'M12 6v6l4 2',Globe:'M3 12h18M12 3a18 18 0 0 0 0 18 18 18 0 0 0 0-18Z',X:'m6 6 12 12M6 18 18 6',ArrowUp:'M12 20V4m-6 6 6-6 6 6',ArrowDown:'M12 4v16m-6-6 6 6 6-6'};
+  const extraIcons={"Trash2":"<path d=\"M10 11v6\" /> <path d=\"M14 11v6\" /> <path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\" /> <path d=\"M3 6h18\" /> <path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\" />","ListChecks":"<path d=\"M13 5h8\" /> <path d=\"M13 12h8\" /> <path d=\"M13 19h8\" /> <path d=\"m3 17 2 2 4-4\" /> <path d=\"m3 7 2 2 4-4\" />","ChevronLeft":"<path d=\"m15 18-6-6 6-6\" />","Pencil":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" /> <path d=\"m15 5 4 4\" />","ListPlus":"<path d=\"M16 5H3\" /> <path d=\"M11 12H3\" /> <path d=\"M16 19H3\" /> <path d=\"M18 9v6\" /> <path d=\"M21 12h-6\" />","ExternalLink":"<path d=\"M15 3h6v6\" /> <path d=\"M10 14 21 3\" /> <path d=\"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6\" />","ChevronRight":"<path d=\"m9 18 6-6-6-6\" />","Settings2":"<path d=\"M14 17H5\" /> <path d=\"M19 7h-9\" /> <circle cx=\"17\" cy=\"17\" r=\"3\" /> <circle cx=\"7\" cy=\"7\" r=\"3\" />","Search":"<path d=\"m21 21-4.34-4.34\" /> <circle cx=\"11\" cy=\"11\" r=\"8\" />","Link":"<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\" /> <path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\" />","Upload":"<path d=\"M12 3v12\" /> <path d=\"m17 8-5-5-5 5\" /> <path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\" />","Unplug":"<path d=\"m19 5 3-3\" /> <path d=\"m2 22 3-3\" /> <path d=\"M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z\" /> <path d=\"M7.5 13.5 10 11\" /> <path d=\"M10.5 16.5 13 14\" /> <path d=\"m12 6 6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0Z\" />","ArrowUpToLine":"<path d=\"M5 3h14\" /> <path d=\"m18 13-6-6-6 6\" /> <path d=\"M12 7v14\" />"};
+  if(extraIcons[name])return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${extraIcons[name]}</svg>`;
   const circle=['CircleCheck','CircleAlert','Clock3','Globe'].includes(name)?'<circle cx="12" cy="12" r="9"/>':'';
   return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${circle}<path d="${paths[name]||paths.File}"/></svg>`;
 }
+const DL_ACTIONS={pause:['Pause','warn'],resume:['Play','good'],retry:['RotateCcw','action'],open:['ExternalLink','action'],folder:['FolderOpen','action'],remove:['Trash2','bad'],delfile:['Trash2','bad']};
+function dlTool(icon,label,attrs='',tone='neutral',hint=label,tag='button'){
+  return `<${tag} class="btn dl-icon-button dl-tone-${tone}" aria-label="${esc(label)}" data-tooltip="${esc(hint)}" ${attrs}>${dlIcon(icon)}</${tag}>`;
+}
+// One hoverable hint for all compact controls, including controls in native dialogs.
+let dlHint=null,dlHintOwner=null,dlHintTimer=null;
+function dlHideHint(){
+  clearTimeout(dlHintTimer);dlHintOwner?.removeAttribute('aria-describedby');dlHintOwner=null;
+  if(dlHint)dlHint.hidden=true;
+}
+function dlPositionHint(){
+  if(!dlHintOwner?.isConnected||!dlHintOwner.getClientRects().length||dlHintOwner.disabled)return dlHideHint();
+  dlHint.textContent=dlHintOwner.dataset.tooltip;dlHintOwner.setAttribute('aria-describedby','dlActionHint');
+  const anchor=dlHintOwner.getBoundingClientRect(),hint=dlHint.getBoundingClientRect();
+  dlHint.style.left=Math.max(8,Math.min(innerWidth-hint.width-8,anchor.left+(anchor.width-hint.width)/2))+'px';
+  dlHint.style.top=(anchor.top>=hint.height+12?anchor.top-hint.height-8:Math.min(innerHeight-hint.height-8,anchor.bottom+8))+'px';
+}
+function dlShowHint(owner){
+  clearTimeout(dlHintTimer);if(owner.disabled)return;
+  if(dlHintOwner!==owner)dlHideHint();
+  if(!dlHint){
+    dlHint=document.createElement('div');dlHint.id='dlActionHint';dlHint.className='nm-download-tooltip';dlHint.setAttribute('role','tooltip');
+    dlHint.onpointerenter=()=>clearTimeout(dlHintTimer);
+    dlHint.onpointerleave=()=>{if(!dlHintOwner?.matches(':focus-visible'))dlHideHint();};
+  }
+  (owner.closest('dialog')||document.body).append(dlHint);
+  dlHintOwner=owner;dlHint.hidden=false;dlPositionHint();
+}
+document.addEventListener('pointerover',e=>{
+  const owner=e.target.closest?.('[data-tooltip]');if(owner&&e.pointerType!=='touch')dlShowHint(owner);
+});
+document.addEventListener('pointerout',e=>{
+  if(!dlHintOwner||dlHintOwner.contains(e.relatedTarget)||dlHint?.contains(e.relatedTarget)||dlHintOwner.matches(':focus-visible'))return;
+  if(dlHintOwner.contains(e.target))dlHintTimer=setTimeout(dlHideHint,120);
+});
+document.addEventListener('focusin',e=>{const owner=e.target.closest?.('[data-tooltip]');if(owner)dlShowHint(owner);else dlHideHint();});
+document.addEventListener('focusout',e=>{if(dlHintOwner?.contains(e.target))dlHideHint();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&dlHintOwner){e.preventDefault();e.stopImmediatePropagation();dlHideHint();}},true);
+document.addEventListener('click',dlHideHint,true);
+addEventListener('scroll',dlHideHint,true);addEventListener('resize',dlHideHint);
 const dlDuration = s => s<60 ? Math.ceil(s)+'s' : s<3600 ? Math.ceil(s/60)+'m' : Math.ceil(s/3600)+'h';
 function dlPageItems() {
   const q=dlQ.toLowerCase();
@@ -164,8 +206,8 @@ function dlRow(v) {
   const icon=v.state==='downloading'?'Download':v.state==='done'?'CircleCheck':v.state==='error'?'CircleAlert':v.state==='paused'?'Pause':'Clock3';
   const action=v.state==='done'?'open':v.state==='paused'?'resume':v.state==='error'?'retry':'pause';
   const actionLabel={open:'Open',resume:'Resume',retry:'Retry',pause:'Pause'}[action];
-  const button=(a,label,svg,extra='')=>`<button class="btn dl-icon-button" data-dl="${a}" data-id="${esc(v.id)}" aria-label="${esc(label+' '+name)}" title="${esc(label+' '+name)}" ${extra}>${dlIcon(svg)}</button>`;
-  return `<tr class="dlrow${dlSel.has(v.id)?' picked':''}" data-key="${esc(v.id)}">
+  const [actionIcon,tone]=DL_ACTIONS[action];
+  return `<tr class="dlrow${dlSel.has(v.id)?' picked':''}" data-key="${esc(v.id)}" data-state="${esc(v.state)}">
     <td><input type="checkbox" class="dlck" data-id="${esc(v.id)}" ${dlSel.has(v.id)?'checked':''} aria-label="Select ${esc(name)}"></td>
     <td class="dl-file"><span class="dlic">${dlIcon(v.kind==='torrent'?'Globe':'File')}</span><div><button class="dl-name" data-dm="props" data-id="${esc(v.id)}">${esc(name)}</button><span class="dl-meta">${esc(host|| (v.kind==='torrent'?'Torrent':v.category||'Download'))}${v.queue?' · '+esc(dlQueueName(v.queue)):''}</span></div></td>
     <td class="dl-progress-cell"><div class="dl-status ${v.state==='error'||v.verify==='bad'?'bad':v.state==='done'?'good':''}">${dlIcon(icon)}<span>${esc(state)}</span><span class="dl-percent">${known?Math.floor(pct)+'%':''}</span></div>
@@ -173,7 +215,7 @@ function dlRow(v) {
       <span class="dl-meta dl-detail">${esc(v.verify==='bad'?'Checksum does not match. Do not open this file.':v.verify==='checking'?'Checking checksum…':v.verify==='ok'?'Checksum matches':v.note||v.err||'')}</span></td>
     <td class="dl-size">${bytes(v.done||0)}<span class="dl-meta">${known?'of '+bytes(v.size):'total unknown'}</span></td>
     <td class="dl-speed">${v.state==='downloading'&&Number.isFinite(v.speed)?bytes(v.speed)+'/s':'—'}<span class="dl-meta">${v.state==='downloading'&&known&&v.speed>0?dlDuration(Math.max(0,(v.size-(v.done||0))/v.speed))+' left':'—'}</span></td>
-    <td><div class="dl-actions">${button(action,actionLabel,{open:'Play',resume:'Play',retry:'RotateCcw',pause:'Pause'}[action])}<button class="btn dl-icon-button" data-dm="props" data-id="${esc(v.id)}" aria-label="Details and actions for ${esc(name)}" title="Details and actions for ${esc(name)}">${dlIcon('MoreHorizontal')}</button></div></td></tr>`;
+    <td><div class="dl-actions">${dlTool(actionIcon,actionLabel+' '+name,`data-dl="${action}" data-id="${esc(v.id)}"`,tone,action==='open'?'Open file':actionLabel+' download')}${dlTool('MoreHorizontal','Details and actions for '+name,`data-dm="props" data-id="${esc(v.id)}"`,'neutral','Details and actions')}</div></td></tr>`;
 }
 const LIM_OPTS=[0,0.5,1,2,5,10,20,50];
 function limSel(key, cur=0) {
@@ -226,11 +268,11 @@ function dlTransfers() {
   const count=state=>items.filter(v=>v.state===state).length;
   const chip=(id,label,n)=>`<button class="btn ${dlFilter===id?'selected':''}" data-f="${id}" aria-pressed="${dlFilter===id}">${label} <span>${n}</span></button>`;
   return `<div class="dl-heading"><div><h2>Transfers</h2><p><strong>${Number.isFinite(DL.speed)?bytes(DL.speed)+'/s':'—'}</strong> · ${count('downloading')} active · ${count('queued')} waiting</p></div><button class="btn pri" id="dlNew">${dlIcon('Plus')} Add download</button></div>
-    <div class="dl-toolbar"><label class="dl-search"><span class="dl-sr">Search downloads</span><input class="inp" id="dlSearch" type="search" placeholder="Search downloads" value="${esc(dlQ)}"></label><select class="sel" id="dlCat" aria-label="File type"><option value="">All types</option>${DL_CATS.map(c=>`<option${c===dlCat?' selected':''}>${c}</option>`).join('')}</select>${dlSortSelect()}<details class="dl-menu"><summary class="btn">${dlIcon('MoreHorizontal')} List actions</summary><div class="dl-menu-body"><button class="btn" data-dl="pauseAll">Pause all</button><button class="btn" data-dl="resumeAll">Resume all</button><button class="btn" data-dl="clear" ${count('done')?'':'disabled'}>Clear finished</button><button class="btn" data-dm="grab">Find links on a page</button><button class="btn" data-dm="export">Export list</button><button class="btn" data-dm="import">Import list</button></div></details></div>
+    <div class="dl-toolbar"><label class="dl-search">${dlIcon('Search')}<span class="dl-sr">Search downloads</span><input class="inp" id="dlSearch" type="search" placeholder="Search downloads" value="${esc(dlQ)}"></label><select class="sel" id="dlCat" aria-label="File type"><option value="">All types</option>${DL_CATS.map(c=>`<option${c===dlCat?' selected':''}>${c}</option>`).join('')}</select>${dlSortSelect()}<details class="dl-menu">${dlTool('MoreHorizontal','List actions','','neutral','List actions','summary')}<div class="dl-menu-body"><button class="btn dl-tone-warn" data-dl="pauseAll">${dlIcon('Pause')} Pause all</button><button class="btn dl-tone-good" data-dl="resumeAll">${dlIcon('Play')} Resume all</button><button class="btn dl-tone-bad" data-dl="clear" ${count('done')?'':'disabled'}>${dlIcon('Trash2')} Clear finished</button><button class="btn dl-tone-action" data-dm="grab">${dlIcon('Link')} Find links on a page</button><button class="btn dl-tone-action" data-dm="export">${dlIcon('Download')} Export list</button><button class="btn dl-tone-action" data-dm="import">${dlIcon('Upload')} Import list</button></div></details></div>
     <div class="dl-filters" aria-label="Transfer status">${chip('all','All',items.length)}${chip('active','In progress',count('downloading')+count('queued')+count('paused'))}${chip('done','Finished',count('done'))}${chip('bad','Needs attention',count('error'))}</div>
-    <div class="dl-bulk" ${dlSel.size?'':'hidden'}><strong>${dlSel.size} selected</strong><span>${result.items.length} visible</span><button class="btn" data-bulk="pause">Pause</button><button class="btn" data-bulk="resume">Resume</button><button class="btn danger" data-bulk="remove">Remove</button><select class="sel" id="dlBulkQ" aria-label="Move selection to queue"><option value="__choose__">Move to queue…</option>${dlQueueOpts('')}</select><button class="btn" data-bulk="all">Select this page</button><button class="btn" data-bulk="none">Clear selection</button></div>
+    <div class="dl-bulk" role="group" aria-label="Selected downloads" ${dlSel.size?'':'hidden'}><div class="dl-selection-count"><strong>${dlSel.size} selected</strong><span>${result.items.length} visible</span></div><div class="dl-bulk-actions" role="group" aria-label="Transfer actions">${dlTool('Pause','Pause selected downloads','data-bulk="pause"','warn','Pause selected')}${dlTool('Play','Resume selected downloads','data-bulk="resume"','good','Resume selected')}${dlTool('Trash2','Remove selected downloads','data-bulk="remove"','bad','Remove selected')}</div><label class="dl-queue-picker">${dlIcon('ListPlus')}<span class="dl-sr">Move selection to queue</span><select class="sel" id="dlBulkQ"><option value="__choose__" selected>Move to queue…</option>${dlQueueOpts('__choose__')}</select></label><div class="dl-selection-actions">${dlTool('ListChecks','Select this page','data-bulk="all"','action')}${dlTool('X','Clear selection','data-bulk="none"')}</div></div>
     <div class="dl-table-wrap"><table class="dl-table"><caption class="dl-sr">Downloads. Select a filename for details and all actions.</caption><thead><tr><th scope="col"><span class="dl-sr">Select</span></th><th scope="col">File</th><th scope="col">Progress</th><th scope="col">Size</th><th scope="col">Speed / ETA</th><th scope="col"><span class="dl-sr">Actions</span></th></tr></thead><tbody>${result.items.map(dlRow).join('')}</tbody></table><div class="dlempty" ${result.total?'hidden':''}>${dlIcon('Download')}<h3>${items.length?'No matching downloads':'Your downloads will appear here'}</h3><p>${items.length?'Try another search or clear your filters.':'Add a file link, magnet link or torrent to get started.'}</p><button class="btn" id="${items.length?'dlResetFilters':'dlEmptyAdd'}">${items.length?'Clear filters':'Add download'}</button></div></div>
-    <div class="dl-pagination"><span>${result.total?dlPage*100+1:0}–${Math.min((dlPage+1)*100,result.total)} of ${result.total} downloads</span><div><button class="btn" data-page="-1" ${dlPage?'':'disabled'}>Previous</button><span>Page ${dlPage+1} of ${result.pages}</span><button class="btn" data-page="1" ${dlPage+1<result.pages?'':'disabled'}>Next</button></div></div>`;
+    <div class="dl-pagination"><span>${result.total?dlPage*100+1:0}–${Math.min((dlPage+1)*100,result.total)} of ${result.total} downloads</span><div>${dlTool('ChevronLeft','Previous page',`data-page="-1" ${dlPage?'':'disabled'}`)}<span>Page ${dlPage+1} of ${result.pages}</span>${dlTool('ChevronRight','Next page',`data-page="1" ${dlPage+1<result.pages?'':'disabled'}`)}</div></div>`;
 }
 const dlSetting=(title,hint,control)=>`<div class="dnsrow"><div><b>${title}</b><div class="d">${hint}</div></div><div class="dl-control">${control}</div></div>`;
 const dlToggle=(id,on,label,extra='')=>`<button class="tog${on?' on':''}" ${id?`id="${id}"`:''} ${extra} role="switch" aria-checked="${!!on}" aria-label="${esc(label)}"><span></span></button>`;
@@ -268,11 +310,11 @@ function dlSettings() {
 }
 function dlQueuesPanel() {
   const c=DL.config, qs=[{id:'',name:'Main queue',maxActive:c.maxActive,window:c.window,days:[]},...c.queues];
-  return `<div class="dl-heading"><div><h2>Queues</h2><p>Organize downloads with their own hours and limits.</p></div><button class="btn pri" data-dm="queues">Manage queues</button></div><div class="dl-queue-list">${qs.map(q=>`<section class="dl-queue" data-key="${esc(q.id||'main')}"><div><h3>${esc(q.name)}</h3><p>${(q.window||{}).enabled?esc(q.window.from+'–'+q.window.to):'Any time'} · ${q.days?.length?q.days.map(d=>DL_DAYS[d]).join(', '):'Every day'}</p><span class="dl-meta">${DL.items.filter(v=>(v.queue||'')===q.id).length} downloads · ${q.maxActive?q.maxActive+' at once':'General concurrency limit'} · ${q.paused?'Paused':'Ready'}</span></div><div class="dl-actions"><button class="btn" data-start-queue="${esc(q.id)}">Start queue</button>${q.id?'<button class="btn" data-dm="queues">Edit</button>':'<a class="btn" href="#/downloads/settings" data-dl-tab="settings">Settings</a>'}</div></section>`).join('')}</div>`;
+  return `<div class="dl-heading"><div><h2>Queues</h2><p>Organize downloads with their own hours and limits.</p></div><button class="btn pri" data-dm="queues">Manage queues</button></div><div class="dl-queue-list">${qs.map(q=>`<section class="dl-queue" data-key="${esc(q.id||'main')}"><div><h3>${esc(q.name)}</h3><p>${(q.window||{}).enabled?esc(q.window.from+'–'+q.window.to):'Any time'} · ${q.days?.length?q.days.map(d=>DL_DAYS[d]).join(', '):'Every day'}</p><span class="dl-meta">${DL.items.filter(v=>(v.queue||'')===q.id).length} downloads · ${q.maxActive?q.maxActive+' at once':'General concurrency limit'} · ${q.paused?'Paused':'Ready'}</span></div><div class="dl-actions">${dlTool('Play','Start '+q.name,`data-start-queue="${esc(q.id)}"`,'good','Start queue')}${q.id?dlTool('Pencil','Edit '+q.name,'data-dm="queues"','action','Edit queue'):dlTool('Settings2','Download settings','href="#/downloads/settings" data-dl-tab="settings"','neutral','Download settings','a')}</div></section>`).join('')}</div>`;
 }
 function dlBrowser() {
   const ext=DL.ext;
-  return `<div class="dl-heading"><div><h2>Browser connection</h2><p>Send downloads from Chrome, Edge, Brave or Firefox.</p></div><button class="btn pri" id="dlExtCode">${dlIcon('Plus')} Connect a browser</button></div><section class="dl-settings-group"><h3>Download handoff</h3>${ext?dlSetting('Send downloads from the browser','Turn off to let browsers download by themselves.',dlToggle('dlExtOn',ext.enabled,'Send downloads from the browser'))+dlSetting('Minimum file size','Smaller downloads stay in the browser.',`<select class="sel" id="dlExtMin" aria-label="Minimum browser file size">${[...new Set([0,1,5,10,25,50,100,ext.minMB])].filter(n=>n!==undefined).map(n=>`<option value="${n}" ${ext.minMB===n?'selected':''}>${n?n+' MB':'Everything'}</option>`).join('')}</select>`):'<p>Browser connection information is unavailable. Refresh to try again.</p>'}</section><section class="dl-settings-group"><h3>Connected browsers</h3>${ext?.browsers.length?ext.browsers.map(b=>`<div class="dl-queue" data-key="${esc(b.id)}"><div><b>${esc(b.name)}</b><p>Connected ${new Date(b.created*1000).toLocaleDateString()}${b.lastSeen?' · Last used '+new Date(b.lastSeen*1000).toLocaleString():''}</p></div><button class="btn danger" data-extrm="${esc(b.id)}" aria-label="Disconnect ${esc(b.name)}">Disconnect</button></div>`).join(''):'<div class="dlempty">'+dlIcon('Globe')+'<h3>No browsers connected</h3><p>Connect a browser to send file links and detected media to NetMerge.</p></div>'}</section>`;
+  return `<div class="dl-heading"><div><h2>Browser connection</h2><p>Send downloads from Chrome, Edge, Brave or Firefox.</p></div><button class="btn pri" id="dlExtCode">${dlIcon('Plus')} Connect a browser</button></div><section class="dl-settings-group"><h3>Download handoff</h3>${ext?dlSetting('Send downloads from the browser','Turn off to let browsers download by themselves.',dlToggle('dlExtOn',ext.enabled,'Send downloads from the browser'))+dlSetting('Minimum file size','Smaller downloads stay in the browser.',`<select class="sel" id="dlExtMin" aria-label="Minimum browser file size">${[...new Set([0,1,5,10,25,50,100,ext.minMB])].filter(n=>n!==undefined).map(n=>`<option value="${n}" ${ext.minMB===n?'selected':''}>${n?n+' MB':'Everything'}</option>`).join('')}</select>`):'<p>Browser connection information is unavailable. Refresh to try again.</p>'}</section><section class="dl-settings-group"><h3>Connected browsers</h3>${ext?.browsers.length?ext.browsers.map(b=>`<div class="dl-queue" data-key="${esc(b.id)}"><div><b>${esc(b.name)}</b><p>Connected ${new Date(b.created*1000).toLocaleDateString()}${b.lastSeen?' · Last used '+new Date(b.lastSeen*1000).toLocaleString():''}</p></div>${dlTool('Unplug','Disconnect '+b.name,`data-extrm="${esc(b.id)}"`,'bad','Disconnect browser')}</div>`).join(''):'<div class="dlempty">'+dlIcon('Globe')+'<h3>No browsers connected</h3><p>Connect a browser to send file links and detected media to NetMerge.</p></div>'}</section>`;
 }
 function paintDL() {
   if ((typeof page!=='undefined'&&page!=='downloads') || !DM_ON) return;
@@ -293,9 +335,10 @@ function paintDL() {
   if(current){
     details.querySelector('[data-detail-state]').textContent=dlStateText(current)+(current.note?' · '+current.note:'');
     const control=details.querySelector('[data-dl=pause],[data-dl=resume],[data-dl=retry]');
-    if(control&&current.state!=='done'){const action=current.state==='paused'?'resume':current.state==='error'?'retry':'pause';control.dataset.dl=action;control.textContent={pause:'Pause',resume:'Resume',retry:'Retry'}[action];}
+    if(control&&current.state!=='done'){const action=current.state==='paused'?'resume':current.state==='error'?'retry':'pause';if(control.dataset.dl!==action){control.dataset.dl=action;control.className='btn dl-tone-'+DL_ACTIONS[action][1];control.innerHTML=dlIcon(DL_ACTIONS[action][0])+'<span>'+({pause:'Pause',resume:'Resume',retry:'Retry'}[action])+'</span>';}}
     if($('#pRelink')){$('#pRelink').disabled=current.state==='downloading';$('#pRelinkNote').textContent='Keeps downloaded data.'+(current.state==='downloading'?' Pause the download before replacing its link.':'');}
   }
+  if(dlHintOwner)dlPositionHint();
 }
 
 let dlOpener=null, dlDialogSerial=0;

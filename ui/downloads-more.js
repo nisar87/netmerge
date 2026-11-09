@@ -118,7 +118,12 @@ async function dlProps(id) {
   let v=initial;
   if(v.kind==='torrent'&&v.nFiles){const r=await dlAct({action:'files',id});if(r?.files)v={...v,files:r.files,select:r.select,trackers:r.trackers,priv:r.private,pieceLen:r.pieceLen};}
   const edit=v.state!=='done',name=v.name||'Download',sh=dlLineShare(v);
-  const action=(a,label,extra='')=>`<button class="btn" data-dl="${a}" data-id="${esc(id)}" ${extra}>${label}</button>`;
+  const action=(a,label,extra='')=>{
+    const attrs=`data-dl="${a}" data-id="${esc(id)}" ${extra}`;
+    if(a==='move')return dlTool(extra.includes('top')?'ArrowUpToLine':extra.includes('down')?'ArrowDown':'ArrowUp',label,attrs,'action');
+    const [icon,tone]=DL_ACTIONS[a];
+    return `<button class="btn dl-tone-${tone}" ${attrs}>${dlIcon(icon)}<span>${label}</span></button>`;
+  };
   const limit=(v.limit||0)/1048576;
   dlDialog(`<div class="card dl-properties" data-details-id="${esc(id)}" aria-label="Download details"><h3>${esc(name)}</h3><p class="dl-path">${esc(v.url||'')}</p>
     <div class="dl-properties-actions">${v.state==='done'?action('open','Open file')+action('folder','Show in folder'):action(v.state==='paused'?'resume':v.state==='error'?'retry':'pause',v.state==='paused'?'Resume':v.state==='error'?'Retry':'Pause')}${action('remove','Remove from list')}${v.state==='done'?action('delfile','Delete file from computer'):''}</div>
