@@ -376,11 +376,15 @@ func revealInShell(path string) error {
 }
 
 var (
-	raiseMu     sync.Mutex
-	raiseWant   string
-	raiseCb     = syscall.NewCallback(enumRaise)
-	raiseDone   bool
-	pKeybdEvent = user32.NewProc("keybd_event")
+	raiseMu        sync.Mutex
+	raiseWant      string
+	raiseCb        = syscall.NewCallback(enumRaise)
+	raiseDone      bool
+	pKeybdEvent    = user32.NewProc("keybd_event")
+	pGetForeground = user32.NewProc("GetForegroundWindow")
+	pWinThread     = user32.NewProc("GetWindowThreadProcessId")
+	pAttachInput   = user32.NewProc("AttachThreadInput")
+	pCurThread     = syscall.NewLazyDLL("kernel32.dll").NewProc("GetCurrentThreadId")
 )
 
 func enumRaise(hwnd, _ uintptr) uintptr {
@@ -400,11 +404,26 @@ func enumRaise(hwnd, _ uintptr) uintptr {
 	if m, _, _ := pIsIconic.Call(hwnd); m != 0 {
 		pShowWindow.Call(hwnd, 9)
 	}
-	// a tap of the Alt key makes the system accept the focus change
+	// Windows only lets the program that has the focus change it. Join the input of the window that
+	// has it for a moment (and tap Alt, which also unlocks the switch), then take the focus.
+	fg, _, _ := pGetForeground.Call()
+	var fgThread uintptr
+	if fg != 0 {
+		fgThread, _, _ = pWinThread.Call(fg, 0)
+	}
+	me, _, _ := pCurThread.Call()
+	attached := false
+	if fgThread != 0 && fgThread != me {
+		r, _, _ := pAttachInput.Call(me, fgThread, 1)
+		attached = r != 0
+	}
 	pKeybdEvent.Call(0x12, 0, 0, 0)
 	pKeybdEvent.Call(0x12, 0, 2, 0)
 	pBringToTop.Call(hwnd)
 	pSetForeground.Call(hwnd)
+	if attached {
+		pAttachInput.Call(me, fgThread, 0)
+	}
 	raiseDone = true
 	return 0
 }
@@ -413,6 +432,8 @@ func enumRaise(hwnd, _ uintptr) uintptr {
 func raiseExplorer(folder string) {
 	raiseMu.Lock()
 	defer raiseMu.Unlock()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	raiseWant = folder
 	for i := 0; i < 15; i++ {
 		raiseDone = false

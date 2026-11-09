@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.14
+
+- "Show in folder": the first fix was not enough, because Windows does not let a background program take the focus. NetMerge now joins the input of the window that has the focus for a moment, so the folder comes to the front.
+
 ## 3.11.13
 
 - Downloads: "Show in folder" now brings the Explorer window to the front. Before, the window opened behind the NetMerge window and only the taskbar button flashed.
