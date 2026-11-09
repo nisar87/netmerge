@@ -7,3 +7,6 @@
 *.old
 .DS_Store
 /extension/dist/
+/netmerge
+*.syso
+versioninfo.json

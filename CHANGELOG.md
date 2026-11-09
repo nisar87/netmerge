@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.11.11
+
+- NetMerge.exe now carries Windows file details (product name, version, description, licence), so the file's Properties window and some security tools show what it is. This is a step toward signing the program.
+- Housekeeping: a stray Linux build file that had been committed to the repository by mistake was removed, and a draft code signing policy was added under `docs/`.
+
 ## 3.11.10
 
 From the Windows retest of 3.11.9:

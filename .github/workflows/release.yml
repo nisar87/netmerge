@@ -31,6 +31,34 @@ jobs:
           grep -q "appVersion = \"${{ steps.v.outputs.ver }}\"" update.go || { echo "update.go appVersion must equal VERSION"; exit 1; }
           go vet ./... && go test ./...
           node --test extension/core.test.js
+      - name: Windows file details (product name and version)
+        if: steps.v.outputs.exists == 'false'
+        continue-on-error: true   # the exe is still built without the details if this step fails
+        env:
+          VER: ${{ steps.v.outputs.ver }}
+        run: |
+          go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@v1.4.1
+          MA="${VER%%.*}"; REST="${VER#*.}"; MI="${REST%%.*}"; PA="${REST#*.}"
+          cat > versioninfo.json <<EOF
+          {
+            "FixedFileInfo": {
+              "FileVersion": {"Major": ${MA}, "Minor": ${MI}, "Patch": ${PA}, "Build": 0},
+              "ProductVersion": {"Major": ${MA}, "Minor": ${MI}, "Patch": ${PA}, "Build": 0}
+            },
+            "StringFileInfo": {
+              "CompanyName": "NetMerge contributors",
+              "FileDescription": "NetMerge - combine your internet connections",
+              "FileVersion": "${VER}",
+              "InternalName": "NetMerge",
+              "LegalCopyright": "MIT License",
+              "OriginalFilename": "NetMerge.exe",
+              "ProductName": "NetMerge",
+              "ProductVersion": "${VER}"
+            }
+          }
+          EOF
+          "$(go env GOPATH)/bin/goversioninfo" -64 -o resource_windows_amd64.syso versioninfo.json
+          ls -l resource_windows_amd64.syso
       - name: Build
         if: steps.v.outputs.exists == 'false'
         run: |
