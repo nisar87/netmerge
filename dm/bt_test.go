@@ -1055,3 +1055,42 @@ func TestBrowserDuplicateLeavesAWorkingDownload(t *testing.T) {
 		t.Fatalf("a finished copy must give a new download: %v %v", r, err)
 	}
 }
+
+// Damage in the middle of a torrent while it is closed: a changed byte, and a file that was deleted. The saved list
+// of finished pieces must not be trusted for those; every damaged piece has to be fetched again.
+func TestBtResumeRepairsMiddleDamageAndDeletedFile(t *testing.T) {
+	for trial := 0; trial < 6; trial++ {
+		tt := makeTorrent("mid", []tFile{{"one.bin", 2 * MiB}, {"sub/two.bin", 300000}, {"three.bin", 2 * MiB}}, 16<<10)
+		sd := newSeeder(t, tt)
+		sd.rate = 3 * MiB
+		meta, _ := btParseTorrent(tt.file)
+		root := filepath.Join(t.TempDir(), "mid")
+		env := newSimEnv(newSimLine("A", "127.0.0.1", 0))
+		mk := func() *btTask {
+			tk := newBtTask(btSpec{Meta: meta, NoDHT: true, Pick: func(string) (string, error) { return root, nil }}, env)
+			tk.addPeers([]string{sd.addr()})
+			return tk
+		}
+		tk := mk()
+		ctx, cancel := ctxTimeout(30 * time.Second)
+		go func() {
+			for tk.Progress().Done < 3*MiB {
+				time.Sleep(20 * time.Millisecond)
+			}
+			cancel()
+		}()
+		tk.Run(ctx)
+		f, _ := os.OpenFile(filepath.Join(root, "one.bin"), os.O_RDWR, 0)
+		f.WriteAt([]byte{0x55}, 1*MiB+12345)
+		f.Close()
+		os.Remove(filepath.Join(root, "sub", "two.bin"))
+		tk2 := mk()
+		ctx2, cancel2 := ctxTimeout(40 * time.Second)
+		err := tk2.Run(ctx2)
+		cancel2()
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkContent(t, tt, root)
+	}
+}

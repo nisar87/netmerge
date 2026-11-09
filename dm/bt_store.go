@@ -138,38 +138,65 @@ func (s *btStore) check(i int, buf []byte) bool {
 }
 
 type btState struct {
-	V    int    `json:"v"`
-	Hash string `json:"hash"`
-	Have string `json:"have"`
+	V      int       `json:"v"`
+	Hash   string    `json:"hash"`
+	Have   string    `json:"have"`
+	Stamps []btStamp `json:"files,omitempty"` // size and modification time of every file when the list was saved
 }
 
-func btSaveState(root string, m *btMeta, have []bool) {
+// btStamp lets a resume notice that a file was edited, replaced or deleted while NetMerge was not looking.
+type btStamp struct {
+	Size int64 `json:"s"`
+	Mod  int64 `json:"m"`
+}
+
+// btStamps reads the stamp of every chosen file (a file that is not chosen or is missing has the stamp -1).
+func btStamps(s *btStore) []btStamp {
+	out := make([]btStamp, len(s.meta.Files))
+	for i := range out {
+		out[i] = btStamp{Size: -1}
+		if s.skip != nil && s.skip[i] {
+			continue
+		}
+		if fi, err := os.Stat(s.pathOf(i)); err == nil {
+			out[i] = btStamp{Size: fi.Size(), Mod: fi.ModTime().UnixNano()}
+		}
+	}
+	return out
+}
+
+func btSaveState(root string, m *btMeta, have []bool, stamps []btStamp) {
 	bits := make([]byte, (len(have)+7)/8)
 	for i, h := range have {
 		if h {
 			bits[i/8] |= 0x80 >> (i % 8)
 		}
 	}
-	b, _ := json.Marshal(btState{V: 1, Hash: fmt.Sprintf("%x", m.InfoHash), Have: base64.StdEncoding.EncodeToString(bits)})
+	b, _ := json.Marshal(btState{V: 2, Hash: fmt.Sprintf("%x", m.InfoHash), Have: base64.StdEncoding.EncodeToString(bits), Stamps: stamps})
 	_ = dlWriteFileAtomicMode(btStatePath(root), b, 0o600)
 }
 
-func btLoadState(root string, m *btMeta) []bool {
+// btLoadState returns the saved list of finished pieces and the file stamps it was saved with (nil stamps: an old
+// state file, so every file counts as changed).
+func btLoadState(root string, m *btMeta) ([]bool, []btStamp) {
 	b, err := os.ReadFile(btStatePath(root))
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	var st btState
-	if json.Unmarshal(b, &st) != nil || st.V != 1 || st.Hash != fmt.Sprintf("%x", m.InfoHash) {
-		return nil
+	if json.Unmarshal(b, &st) != nil || (st.V != 1 && st.V != 2) || st.Hash != fmt.Sprintf("%x", m.InfoHash) {
+		return nil, nil
 	}
 	bits, err := base64.StdEncoding.DecodeString(st.Have)
 	if err != nil || len(bits) != (m.pieces()+7)/8 {
-		return nil
+		return nil, nil
 	}
 	have := make([]bool, m.pieces())
 	for i := range have {
 		have[i] = bits[i/8]&(0x80>>(i%8)) != 0
 	}
-	return have
+	if st.V == 2 && len(st.Stamps) != len(m.Files) {
+		return have, nil
+	}
+	return have, st.Stamps
 }

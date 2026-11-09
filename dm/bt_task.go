@@ -375,7 +375,7 @@ func (t *btTask) Run(ctx context.Context) error {
 			st.sync()
 			st.close()
 			if t.fatal == nil && !t.completeNow() && m != nil && len(have) == m.pieces() {
-				btSaveState(root, m, have)
+				btSaveState(root, m, have, btStamps(st))
 			}
 		}
 	}()
@@ -490,7 +490,13 @@ func (t *btTask) initStorage(ctx context.Context) error {
 	if err := st.prepare(); err != nil {
 		return err
 	}
-	have := btLoadState(root, m)
+	have, saved := btLoadState(root, m)
+	if have != nil {
+		if err := t.repairFromState(ctx, st, have, saved); err != nil {
+			st.close()
+			return err
+		}
+	}
 	if have != nil && !t.sampleOK(st, have) {
 		have = nil
 		existed = true
@@ -528,6 +534,51 @@ func (t *btTask) initStorage(ctx context.Context) error {
 	t.mu.Unlock()
 	if complete {
 		t.once2()
+	}
+	return nil
+}
+
+// repairFromState: the saved list says which pieces were finished, but files can change while NetMerge is closed.
+// Every file whose size or time differs from what was saved (or that was deleted and made again) has all of its
+// finished pieces hashed again; the ones that do not match are dropped from the list and fetched again.
+func (t *btTask) repairFromState(ctx context.Context, st *btStore, have []bool, saved []btStamp) error {
+	m := st.meta
+	now := btStamps(st)
+	need := make([]bool, len(have))
+	any := false
+	for i, f := range m.Files {
+		if f.Length == 0 || (st.skip != nil && st.skip[i]) {
+			continue
+		}
+		if saved != nil && saved[i] == now[i] {
+			continue
+		}
+		first, last := int(f.off/m.PieceLen), int((f.off+f.Length-1)/m.PieceLen)
+		for p := first; p <= last && p < len(need); p++ {
+			need[p], any = true, true
+		}
+	}
+	if !any {
+		return nil
+	}
+	buf := make([]byte, m.PieceLen)
+	dropped := 0
+	for p := range need {
+		if !need[p] || !have[p] {
+			continue
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		// a piece that also covers a file that was not chosen cannot be hashed here; fetch it again to be safe
+		if t.partial[p] || !st.check(p, buf) {
+			have[p] = false
+			dropped++
+		}
+	}
+	if dropped > 0 {
+		hLog("torrent: %d piece(s) were damaged or missing and will be fetched again", dropped)
+		t.setNote("Some files changed while the torrent was stopped: fetching the damaged parts again")
 	}
 	return nil
 }
@@ -802,7 +853,7 @@ func (t *btTask) statsLoop() {
 			if st != nil {
 				st.sync()
 			}
-			btSaveState(root, m, save)
+			btSaveState(root, m, save, btStamps(st))
 		}
 	}
 }
