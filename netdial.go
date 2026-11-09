@@ -129,6 +129,19 @@ func dialOn(ctx context.Context, a Adapter, network, addr string) (net.Conn, err
 	}
 	d := &net.Dialer{Timeout: 12 * time.Second, KeepAlive: 30 * time.Second, Control: bindControl(a.Index)}
 	udp := network == "udp" || network == "udp4"
+	// A target on this very computer never leaves through a line, and a socket tied to a
+	// line's address cannot reach 127.x ("the requested address is not valid in its context").
+	if tip := net.ParseIP(host); tip != nil && tip.IsLoopback() {
+		if aip := net.ParseIP(a.IP); aip == nil || !aip.IsLoopback() {
+			d.Control = nil
+			if network == "tcp" {
+				network = "tcp4"
+			} else if network == "udp" {
+				network = "udp4"
+			}
+			return d.DialContext(ctx, network, addr)
+		}
+	}
 	if ip := net.ParseIP(a.IP); ip != nil && ip.To4() != nil {
 		if udp {
 			d.LocalAddr = &net.UDPAddr{IP: ip}

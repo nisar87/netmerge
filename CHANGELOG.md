@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.11.9
+
+Found by running the download manager on Windows with merging on:
+- A download from this computer itself (a `127.0.0.1` address, for example a local test server or a dev site) failed with "the requested address is not valid in its context" while merging was on, because the connection was tied to a network line's address. A target on this computer now ignores the line, as it should.
+
 ## 3.11.8
 
 Fixes from running the download-manager test plan against 3.11.7:

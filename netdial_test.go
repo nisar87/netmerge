@@ -187,3 +187,26 @@ func skipSyntheticAdapters(t *testing.T) {
 		t.Skip("uses made-up adapter numbers; on Windows the real adapters are exercised by installed-app testing")
 	}
 }
+
+func TestDialOnLoopbackTargetIgnoresTheLineAddress(t *testing.T) {
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, e := ln.Accept()
+			if e != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	// a line whose address is not on this machine cannot be bound, yet a loopback target must still connect
+	c, err := dialOn(context.Background(), Adapter{Name: "LAN", IP: "192.0.2.77", Index: 3}, "tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("loopback target through a line failed: %v", err)
+	}
+	c.Close()
+}
