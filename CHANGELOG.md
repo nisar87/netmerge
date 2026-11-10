@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.12.0
+
+- A redesigned desktop control center with light, dark and system themes, clearer connection status, responsive navigation, local icons, accessible dialogs and restrained motion. Connection, download, app, usage, protection, sharing, activity and settings controls have dedicated pages, with advanced options still available.
+- Speed tests now have one large live speed meter, a throughput graph and expandable details for individual connections, parallel streams and recommendations. The mobile-data warning remains visible.
+- Downloads have compact, clearly labelled action icons, bulk controls and paged transfer lists. New transfers appear in the selected sort order, explicit queue moves update the displayed order, and a failed first refresh can be retried immediately.
+- Download and browser preferences keep the final choice when settings are changed quickly while a save is pending. App-routing edits stay attached to the correct process when the rule list changes in another window.
+- Re-adding a stopped download preserves the existing copy and accurately reports its restart. Usage corrections retain edits during refreshes, and missing usage readings are handled without a page error.
+- The browser extension popup matches the new interface while preserving pairing, capture settings and interception behavior.
+- Windows executables now include the NetMerge icon at eight sizes, alongside release product and version details. The window title remains compatible with the existing tray controls.
+- The stable 3.11.25 merging engine, download backend, update behavior and saved settings formats are unchanged; this release brings the redesigned frontend and desktop branding to the stable app.
+
 ## 3.11.25
 
 - No changes to the program: this release checks on a real PC that the new update step of 3.11.24 installs a newer version correctly.
