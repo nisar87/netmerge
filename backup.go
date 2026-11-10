@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"netmerge/dm"
 	"strings"
 	"time"
 )
@@ -15,17 +14,7 @@ func registerBackupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/backup", guard(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", `attachment; filename="netmerge-settings-`+time.Now().Format("2006-01-02")+`.json"`)
-		out := sanitizedSettings()
-		var m map[string]any
-		if json.Unmarshal(out, &m) == nil {
-			if c := dm.BackupExport(); c != nil {
-				m["downloadConfig"] = c
-			}
-			if o, err := json.MarshalIndent(m, "", "  "); err == nil {
-				out = o
-			}
-		}
-		_, _ = w.Write(out)
+		_, _ = w.Write(sanitizedSettings())
 	}))
 	mux.HandleFunc("/api/restore", guard(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -43,12 +32,8 @@ func registerBackupRoutes(mux *http.ServeMux) {
 			return
 		}
 		updateSettings(func(s *Settings) { restoreInto(s, in) })
-		var extra struct {
-			DownloadConfig json.RawMessage `json:"downloadConfig"`
-		}
-		if json.Unmarshal(b, &extra) == nil && len(extra.DownloadConfig) > 0 {
-			dm.BackupImport(extra.DownloadConfig)
-		}
+		// a backup from a version with the download manager may carry "downloadConfig"; it is ignored (Pullwell has
+		// its own settings)
 		if err := engine.Apply(); err != nil {
 			writeErr(w, 500, err.Error())
 			return

@@ -20,13 +20,13 @@ async function call(path, body, headers = {}) {
 }
 beforeEach(() => call('/__test/reset', {}));
 
-test('serves actual UI and extension assets, never arbitrary repository files', async () => {
-  for (const [path, file] of [['/', '../../../ui/index.html'], ['/downloads.js', '../../../ui/downloads.js'], ['/extension/src/popup.html', '../../../extension/src/popup.html']]) {
+test('serves actual UI assets, never arbitrary repository files', async () => {
+  for (const [path, file] of [['/', '../../../ui/index.html'], ['/app/boot.mjs', '../../../ui/app/boot.mjs']]) {
     const response = await fetch(origin + path);
     assert.equal(response.status, 200);
     assert.equal(await response.text(), await readFile(new URL(file, import.meta.url), 'utf8'));
   }
-  for (const path of ['/api.go', '/.git/config', '/frontend/tests/fixtures/data.mjs', '/missing.js', '/extension/../api.go']) {
+  for (const path of ['/api.go', '/.git/config', '/frontend/tests/fixtures/data.mjs', '/missing.js', '/downloads.js', '/extension/src/popup.html', '/../api.go']) {
     assert.equal((await fetch(origin + path)).status, 404, path);
   }
 });
@@ -43,13 +43,11 @@ test('test routes are gated and mutations enforce the production header and loca
   });
   assert.equal(hostileHost, 403);
 });
-test('download opt-in, acknowledgement shapes, fake side effects and reset are deterministic', async () => {
+test('acknowledgement shapes, fake side effects and reset are deterministic; the download manager is gone', async () => {
   const baseline = (await call('/api/state')).body;
-  assert.equal(baseline.downloadsOn, false); assert.equal(baseline.downloads, null);
-  assert.deepEqual((await call('/api/downloads')).body, { enabled: false });
-  assert.equal((await call('/api/downloads', { action: 'pauseAll' })).status, 409);
-  assert.deepEqual((await call('/api/downloads/switch', { on: true })).body, { enabled: true });
-  assert.equal((await call('/api/downloads')).body.items.length, 5);
+  assert.equal(baseline.legacyDownloads, 0); assert.equal(baseline.downloads, undefined); assert.equal(baseline.downloadsOn, undefined);
+  assert.equal((await call('/api/downloads')).status, 404);
+  assert.equal((await call('/api/legacy-downloads')).status, 404);
   assert.deepEqual((await call('/api/power', { on: false })).body, { ok: true });
   assert.equal((await call('/api/state')).body.snap.running, false);
   assert.deepEqual((await call('/api/quit', {})).body, { ok: true });
@@ -58,12 +56,11 @@ test('download opt-in, acknowledgement shapes, fake side effects and reset are d
   assert.deepEqual((await call('/api/state')).body, baseline);
 });
 test('all existing GETs return real-shaped data and unknown routes fail', async () => {
-  for (const path of ['state', 'block', 'usage', 'share', 'presets', 'dns', 'events', 'history', 'log?f=engine', 'update', 'ping', 'downloads/switch', 'downloads']) {
+  for (const path of ['state', 'block', 'usage', 'share', 'presets', 'dns', 'events', 'history', 'log?f=engine', 'update', 'ping']) {
     const r = await call(`/api/${path}`); assert.equal(r.status, 200, path); assert.equal(typeof r.body, 'object', path);
   }
   assert.equal((await call('/api/not-a-contract')).status, 404);
-  assert.equal((await call('/api/downloads/switch', { on: true })).status, 200);
-  assert.equal((await call('/api/downloads', { action: 'not-a-contract' })).status, 400);
+  assert.equal((await call('/api/downloads/switch', { on: true })).status, 404);
 });
 test('complete settings writes merge by adapter name and preserve server-owned fields', async () => {
   const settings = createFixture().state.settings;
@@ -107,8 +104,6 @@ test('fault scenarios and recovery retain in-memory edits', async () => {
   }
   await call('/__test/reset', { scenario: 'null' });
   assert.equal((await call('/api/state')).body.snap.links, null);
-  await call('/__test/reset', { scenario: 'populated1000' });
-  assert.equal((await call('/api/downloads')).body.items.length, 1000);
   assert.equal((await call('/__test/reset', { scenario: 'typo' })).status, 400);
 });
 test('patches replace arrays and delayed reads retain their original snapshot', async () => {
@@ -121,45 +116,6 @@ test('patches replace arrays and delayed reads retain their original snapshot', 
   await call('/api/power', { on: false });
   assert.equal((await pending).body.snap.running, true);
   assert.equal((await call('/api/state')).body.snap.running, false);
-});
-test('download actions retain byte units, partial progress and complete configuration', async () => {
-  await call('/api/downloads/switch', { on: true });
-  const original = (await call('/api/downloads')).body;
-  const id = original.items[0].id;
-  for (const action of [
-    { action: 'pause', id }, { action: 'limit', id, limitBytes: 1048576 },
-    { action: 'setQueue', id, queue: 'night' }, { action: 'setConns', id, conns: 4 },
-    { action: 'setMirrors', id, urls: ['https://mirror.example.test/file.zip'] },
-    { action: 'relink', id, url: 'https://downloads.example.test/renewed.zip' },
-  ]) assert.equal((await call('/api/downloads', action)).status, 200);
-  const item = (await call('/api/downloads')).body.items.find(i => i.id === id);
-  assert.equal(item.limit, 1048576); assert.equal(item.done, original.items[0].done);
-  assert.equal(item.queue, 'night'); assert.equal(item.conns, 4); assert.equal(item.state, 'paused');
-  assert.deepEqual(item.mirrors, ['https://mirror.example.test/file.zip']);
-  const config = { ...original.config, noNotify: true, dir: 'C:\\Fixture\\Changed' };
-  assert.deepEqual((await call('/api/downloads', { action: 'config', config })).body.config, config);
-  assert.deepEqual((await call('/api/downloads')).body.config, config);
-  await call('/api/downloads', { action: 'remove', id, deleteFiles: true });
-  assert.equal((await call('/api/downloads')).body.items.some(i => i.id === id), false);
-});
-test('probe, add, duplicate, export/import and pairing use action-specific response shapes', async () => {
-  await call('/api/downloads/switch', { on: true });
-  const url = 'https://downloads.example.test/new.zip';
-  const probe = (await call('/api/downloads', { action: 'probe', url })).body;
-  assert.equal(probe.info.finalUrl, url); assert.equal(probe.items, undefined);
-  const add = (await call('/api/downloads', { action: 'add', url, start: false })).body;
-  assert.equal(add.added.length, 1); assert.equal(add.added[0].state, 'paused');
-  assert.equal(add.enabled, undefined);
-  assert.equal((await call('/api/downloads', { action: 'add', url })).body.duplicate, true);
-  const exported = (await call('/api/downloads', { action: 'export' })).body.file;
-  assert.equal(exported.app, 'netmerge-downloads'); assert.equal(exported.version, 1);
-  assert.equal((await call('/api/downloads', { action: 'import', text: JSON.stringify(exported) })).status, 400);
-  const mixed = { app: 'netmerge-downloads', version: 1, items: [exported.items[0], { url: 'https://downloads.example.test/imported.zip', finished: true }] };
-  const imported = await call('/api/downloads', { action: 'import', text: JSON.stringify(mixed) });
-  assert.equal(imported.body.imported, 1); assert.equal(imported.body.skipped, 1);
-  const code = (await call('/api/downloads', { action: 'extCode' })).body;
-  assert.equal(typeof code.expires, 'number'); assert.equal(code.items, undefined);
-  assert.equal((await call('/api/downloads', { action: 'extConfig', extOff: true, extMinMB: 25 })).body.ext.enabled, false);
 });
 test('DNS, presets, blocking and sharing mutations reconcile with state', async () => {
   await call('/api/dns', { action: 'set', provider: 'custom', secure: true, custom: ['192.0.2.53'], domains: ['corp.example.test'] });
@@ -177,12 +133,11 @@ test('DNS, presets, blocking and sharing mutations reconcile with state', async 
   assert.equal((await call('/api/state')).body.settings.share.enabled, true);
 });
 test('backup is sanitized, restore is inert and diagnostics is a real ZIP', async () => {
-  await call('/api/downloads/switch', { on: true });
   const backup = await fetch(origin + '/api/backup');
   assert.match(backup.headers.get('content-disposition'), /attachment/);
   const data = await backup.json();
   assert.ok(!JSON.stringify(data).includes(FAKE_PASSWORD)); assert.equal(data.secret, ''); assert.equal(data.share.pass, '');
-  assert.equal(data.deviceNames, undefined); assert.ok(data.downloadConfig);
+  assert.equal(data.deviceNames, undefined); assert.equal(data.downloadConfig, undefined);
   assert.deepEqual((await call('/api/restore', { ...data, mode: 'stable' })).body, { ok: true });
   assert.equal((await call('/api/state')).body.settings.mode, 'stable');
   const diagnostics = await fetch(origin + '/api/diagnostics');
@@ -190,22 +145,9 @@ test('backup is sanitized, restore is inert and diagnostics is a real ZIP', asyn
   assert.equal(Buffer.from(await diagnostics.arrayBuffer()).subarray(0, 4).toString('hex'), '504b0304');
 });
 
-test('extension pairing requires its own Origin and explicit fake bearer token', async () => {
-  assert.equal((await call('/ext/ping')).status, 404);
-  await call('/api/downloads/switch', { on: true });
-  await call('/api/downloads', { action: 'extCode' });
-  const headers = { Origin: 'chrome-extension://fixture-test' };
-  assert.equal((await call('/ext/ping', undefined, { Origin: origin })).status, 403);
-  const pairing = await call('/ext/pair', { code: 'TEST1-TEST2', name: 'Fixture test browser' }, headers);
-  assert.equal(pairing.status, 200);
-  assert.match(pairing.body.token, /^FAKE-TEST-ONLY/);
-  assert.equal((await call('/ext/status', undefined, headers)).status, 401);
-  const auth = { ...headers, Authorization: `Bearer ${pairing.body.token}` };
-  assert.equal((await call('/ext/status', undefined, auth)).status, 200);
-  assert.equal((await call('/ext/pair', { code: 'TEST1-TEST2' }, headers)).status, 403);
-  const preflight = await fetch(origin + '/ext/add', { method: 'OPTIONS', headers });
-  assert.equal(preflight.status, 204);
-  assert.equal(preflight.headers.get('access-control-allow-origin'), headers.Origin);
-  assert.equal((await call('/ext/unpair', {}, auth)).status, 200);
-  assert.equal((await call('/ext/status', undefined, auth)).status, 401);
+test('the old download list is offered in the format Pullwell imports', async () => {
+  await call('/__test/state', { state: { legacyDownloads: 2 } });
+  assert.equal((await call('/api/state')).body.legacyDownloads, 2);
+  const list = (await call('/api/legacy-downloads')).body;
+  assert.equal(list.app, 'netmerge-downloads'); assert.equal(list.version, 1); assert.equal(list.items.length, 2);
 });

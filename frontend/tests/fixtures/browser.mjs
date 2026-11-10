@@ -63,4 +63,3 @@ export async function mutate(page, path, expected, action) {
   expect(response?.ok(), response && await response.text()).toBeTruthy();
   return response.json();
 }
-export async function enableDownloads(fixture) { await fixture.post('downloads/switch', { on: true }); }

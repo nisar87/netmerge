@@ -1,5 +1,5 @@
 import { isIP } from 'node:net';
-import { createFixture, downloadItem, NOW, FAKE_PASSWORD, FAKE_TOKEN } from './data.mjs';
+import { createFixture, NOW, FAKE_PASSWORD } from './data.mjs';
 
 const clone = value => structuredClone(value);
 export function fail(message, status = 400) { throw Object.assign(new Error(message), { status }); }
@@ -18,9 +18,8 @@ const restoreFields = ['appRules', 'bypassIPs', 'stableDomains', 'mergeOnLaunch'
 
 export function createModel(scenario = 'default') {
   let data = createFixture(scenario), sequence = 1001, presetSequence = 1, passwordSequence = 0;
-  let speedReads = 0, dnsReads = 0, updateReads = 0, paired = false, pairingCode = '';
+  let speedReads = 0, dnsReads = 0, updateReads = 0;
   const settings = () => data.state.settings;
-  const dl = () => data.downloads;
   function sync() {
     const s = settings(), sn = data.state.snap;
     for (const link of sn.links || []) {
@@ -42,13 +41,6 @@ export function createModel(scenario = 'default') {
       custom: s.dnsCustom || [], domains: s.dnsDomains || [], fallback: s.dnsFallback };
     Object.assign(data.presets, { active: s.preset, schedule: s.presetSchedule ?? null, scheduled: s.schedActive });
     data.update.auto = !s.noUpdateCheck;
-    dl().enabled = data.state.downloadsOn;
-    dl().active = (dl().items || []).filter(i => i.state === 'downloading').length;
-    dl().speed = (dl().items || []).reduce((total, i) => total + (i.state === 'downloading' ? i.speed : 0), 0);
-    data.state.downloads = data.state.downloadsOn ? { active: dl().active, speed: dl().speed,
-      queued: (dl().items || []).filter(i => i.state === 'queued').length,
-      items: (dl().items || []).filter(i => i.state === 'downloading').slice(0, 3).map(({ name, done, size, speed }) => ({ name, done, size, speed })),
-      total: (dl().items || []).length } : null;
   }
   function mergeSettings(body, restore = false) {
     const s = settings();
@@ -69,7 +61,6 @@ export function createModel(scenario = 'default') {
   function safeBackup() {
     const output = clone(settings());
     output.secret = ''; if (output.share) output.share.pass = ''; delete output.deviceNames;
-    if (data.state.downloadsOn) output.downloadConfig = clone(dl().config);
     return output;
   }
   function presetBackup() {
@@ -139,135 +130,6 @@ export function createModel(scenario = 'default') {
     }
     sync(); return data.dns;
   }
-  function getItem(id) { return dl().items?.find(item => item.id === id) || fail('download not found'); }
-  function cleanURL(url) {
-    try {
-      const parsed = new URL(url);
-      if (!['http:', 'https:', 'ftp:', 'magnet:'].includes(parsed.protocol)) fail('Unsupported download URL');
-      return parsed.href;
-    } catch { fail('Enter a valid download link'); }
-  }
-  function add(body, restartStopped = false) {
-    let urls = [...(body.url ? [body.url] : []), ...(body.urls || [])];
-    if (!urls.length && body.torrent) urls = [''];
-    if (!urls.length) fail('paste at least one link');
-    urls = urls.flatMap(url => {
-      const match = url.match(/\[(\d+)-(\d+)\]/);
-      if (!match) return [url];
-      const start = Number(match[1]), end = Number(match[2]);
-      if (end < start || end - start >= 500) fail('too many links at once (500 at most)');
-      return Array.from({ length: end - start + 1 }, (_, i) => url.replace(match[0], String(start + i).padStart(match[1].length, '0')));
-    });
-    if (urls.length > 500) fail('too many links at once (500 at most)');
-    const added = []; let skipped = 0, restarted = 0;
-    for (const raw of urls) {
-      let url;
-      try { url = body.torrent ? raw : cleanURL(raw); } catch (error) { if (urls.length === 1) throw error; continue; }
-      const duplicate = dl().items?.findLast(item => item.url === url);
-      if (!body.force && duplicate) {
-        if (restartStopped && body.start !== false && !body.startAt && ['paused', 'error'].includes(duplicate.state)) {
-          Object.assign(duplicate, { state: 'queued', err: '', detail: '', retryAt: 0 }); restarted++;
-        } else skipped++;
-        continue;
-      }
-      const torrent = !!body.torrent || url.startsWith('magnet:') || /\.torrent($|\?)/i.test(url);
-      if (torrent && dl().config.noTorrents) fail('Torrents are disabled');
-      const name = (urls.length === 1 && body.name) || (torrent ? 'fixture-torrent' : decodeURIComponent(new URL(url).pathname.split('/').pop()) || 'download.bin');
-      const item = downloadItem(sequence++, body.start === false ? 'paused' : 'queued', {
-        url, name, done: 0, bytes: {}, added: NOW, lines: body.lines || [], dir: body.dir || '',
-        path: `${body.dir || dl().config.dir}\\${name}`, limit: body.limit || 0, startAt: body.startAt || 0,
-        hash: body.hash || '', queue: body.queue || '', mirrors: body.mirrors || [], conns: body.conns || 0,
-        height: body.height || 0, web: !!body.fromWeb, ...(torrent ? { kind: 'torrent', nFiles: 2, select: body.select || [true, true], category: 'Torrents' } : {}),
-      });
-      (dl().items ||= []).push(item); added.push(item);
-    }
-    if (!added.length && !skipped && !restarted) fail('none of the links could be used');
-    return { ...(added.length ? { added } : { duplicate: true }), skipped, restarted, items: dl().items, config: dl().config };
-  }
-  const torrentFiles = () => [{ name: 'fixture-document.txt', size: 1024 }, { name: 'fixture-image.png', size: 2048 }];
-  function downloads(body) {
-    if (!data.state.downloadsOn) fail('The download manager is off. Turn it on in Settings.', 409);
-    const items = () => dl().items || [];
-    switch (body.action) {
-      case 'probe': {
-        const url = cleanURL(body.url), name = new URL(url).pathname.split('/').pop() || 'download.bin';
-        const stream = /\.(m3u8|mpd)($|\?)/i.test(url);
-        const hls = stream ? { segments: 24, seconds: 120, quality: `${body.height || 1080}p`, kind: 'mp4', audio: true, heights: [1080, 720, 480] } : null;
-        return { ok: true, info: { url, finalUrl: url, name: stream ? name.replace(/\.(m3u8|mpd)$/i, '.mp4') : name, type: stream ? 'video stream' : 'application/octet-stream', size: stream ? -1 : 64 * 1048576,
-          ranges: !stream, etag: 'fixture-etag', lastMod: 'Mon, 09 Nov 2026 12:00:00 GMT' }, hls,
-          mux: stream && dl().ffmpeg, dir: dl().config.dir, category: 'Archives', lines: dl().lines.length, locked: false,
-          duplicate: items().some(i => i.url === url), dupState: items().findLast(i => i.url === url)?.state || '', lineNames: dl().lines.map(l => l.name) };
-      }
-      case 'add': return add(body, true);
-      case 'torrentInfo':
-        if (!body.torrent) fail('Choose a torrent file');
-        return { ok: true, name: 'fixture-torrent', size: 3072, files: torrentFiles(), private: false, trackers: 1, dir: dl().config.dir, duplicate: false };
-      case 'files': { const item = getItem(body.id); return { files: torrentFiles(), select: item.select ?? null }; }
-      case 'select': getItem(body.id).select = clone(body.select); break;
-      case 'pause': Object.assign(getItem(body.id), { state: 'paused', speed: 0, lineStats: [] }); break;
-      case 'resume': case 'retry': {
-        const item = getItem(body.id);
-        if (item.state !== 'done') Object.assign(item, { state: 'queued', speed: 0, err: '', detail: '', retryAt: 0 });
-        break;
-      }
-      case 'remove': getItem(body.id); dl().items = items().filter(i => i.id !== body.id); break;
-      case 'clear': dl().items = items().filter(i => i.state !== 'done'); break;
-      case 'pauseAll': case 'resumeAll':
-        for (const item of items()) if (item.state !== 'done') Object.assign(item, { state: body.action === 'pauseAll' ? 'paused' : 'queued', speed: 0, lineStats: [] });
-        break;
-      case 'open': case 'folder': getItem(body.id); break; // Deliberately inert: never open a path.
-      case 'move': {
-        getItem(body.id); const from = items().findIndex(i => i.id === body.id);
-        const to = { up: Math.max(0, from - 1), down: Math.min(items().length - 1, from + 1), top: 0, bottom: items().length - 1 }[body.move];
-        if (to === undefined) fail('unknown move');
-        const [item] = dl().items.splice(from, 1); dl().items.splice(to, 0, item);
-        dl().items.forEach((item, i) => item.order = i); break;
-      }
-      case 'limit': getItem(body.id).limit = Math.max(0, Number(body.limitBytes) || 0); break;
-      case 'setQueue': getItem(body.id).queue = body.queue || ''; break;
-      case 'setConns': getItem(body.id).conns = Number(body.conns) || 0; break;
-      case 'setMirrors': getItem(body.id).mirrors = (body.urls || []).map(cleanURL); break;
-      case 'relink': {
-        const item = getItem(body.id); if (item.state === 'downloading') fail('Pause the download first');
-        item.url = cleanURL(body.url); item.err = ''; item.detail = ''; break;
-      }
-      case 'cancelPower': dl().powerAt = 0; dl().config.afterAll = ''; break;
-      case 'forgetHosts': dl().knownSites = 0; break;
-      case 'config':
-        if (!body.config || typeof body.config !== 'object') fail('missing settings');
-        dl().config = clone(body.config);
-        for (const queue of dl().config.queues || []) queue.id ||= `queue-fixture-${sequence++}`;
-        for (const item of items()) if (item.queue && !dl().config.queues?.some(q => q.id === item.queue)) item.queue = '';
-        break;
-      case 'startQueue':
-        for (const item of items()) if (item.queue === body.queue && item.state !== 'done') Object.assign(item, { state: 'queued', startAt: 0 });
-        break;
-      case 'extCode': pairingCode = 'TEST1-TEST2'; return { code: pairingCode, expires: NOW + 300, repo: 'example/netmerge-fixture' };
-      case 'extRevoke': dl().ext.browsers = (dl().ext.browsers || []).filter(b => b.id !== body.id); paired = false; break;
-      case 'extConfig': dl().ext.enabled = !body.extOff; dl().ext.minMB = Math.max(0, Number(body.extMinMB) || 0); break;
-      case 'grab': {
-        const url = cleanURL(body.url);
-        return { page: url, links: ['zip', 'pdf', 'mp4'].filter(ext => !body.types?.length || body.types.includes(ext)).map(ext => ({ url: new URL(`fixture.${ext}`, url).href, name: `fixture.${ext}`, ext })) };
-      }
-      case 'export': return { file: { app: 'netmerge-downloads', version: 1, queues: clone(dl().config.queues),
-        items: items().map(i => ({ url: i.url, name: i.name, dir: i.dir, queue: i.queue, mirrors: i.mirrors, hash: i.hash, finished: i.state === 'done' })) } };
-      case 'import': {
-        let parsed;
-        try { parsed = JSON.parse(body.text); } catch { parsed = { items: String(body.text || '').split(/\r?\n/).filter(Boolean).map(url => ({ url })) }; }
-        if (String(body.text || '').trim().startsWith('{') && parsed.app !== 'netmerge-downloads') fail('that is not a NetMerge download list');
-        if (!Array.isArray(parsed.items) || !parsed.items.length) fail('No downloads in this file');
-        let imported = 0, skipped = 0;
-        for (const q of parsed.queues || []) if (!dl().config.queues.some(existing => existing.id === q.id)) dl().config.queues.push(clone(q));
-        for (const item of parsed.items) {
-          try { const result = add({ ...item, start: !item.finished }); imported += result.added?.length || 0; skipped += result.skipped || 0; } catch { skipped++; }
-        }
-        if (!imported) fail('nothing could be added (the links are already in the list or not valid)');
-        return { imported, skipped, items: dl().items, config: dl().config };
-      }
-      default: fail('unknown action');
-    }
-    sync(); return dl();
-  }
   function progress(path) {
     if (path === '/api/state' && speedReads > 0 && --speedReads === 0) {
       const results = (data.state.snap.links || []).map((l, i) => ({ name: l.name, label: l.label, mbps: 80 - i * 60, single: 40 - i * 10, ip: l.publicIP }));
@@ -290,30 +152,17 @@ export function createModel(scenario = 'default') {
     patch(changes) { patch(data, changes); sync(); },
     dispatch(path, method, body, query, headers) {
       sync(); if (method === 'GET') progress(path);
-      if (path.startsWith('/ext/')) {
-        if (!data.state.downloadsOn) fail('The download manager is off', 404);
-        if (path === '/ext/ping') return { app: 'netmerge', version: data.state.snap.app };
-        if (path === '/ext/pair' && method === 'POST') {
-          if (!pairingCode || String(body.code || body.Code).replaceAll('-', '') !== pairingCode.replaceAll('-', '')) fail('Invalid pairing code', 403);
-          pairingCode = ''; paired = true;
-          dl().ext.browsers.push({ id: 'fixture-paired', name: body.name || body.Name || 'Fixture browser', created: NOW, lastSeen: NOW });
-          return { token: FAKE_TOKEN };
-        }
-        if (!paired || headers.authorization !== `Bearer ${FAKE_TOKEN}`) fail('Not paired', 401);
-        if (path === '/ext/status') return { version: data.state.snap.app, enabled: dl().ext.enabled, minMB: dl().ext.minMB, active: dl().active, speed: dl().speed, lines: dl().lines.length };
-        if (path === '/ext/unpair' && method === 'POST') { paired = false; return { ok: true }; }
-        if (path === '/ext/add' && method === 'POST') { const r = add({ url: body.url, name: body.filename, fromWeb: true }); return r.duplicate ? { ok: true, duplicate: true } : { ok: true, id: r.added[0].id }; }
-        fail('Unknown extension route', 404);
-      }
       if (method === 'GET') {
         const resources = { '/api/state': data.state, '/api/block': data.block, '/api/usage': data.usage,
           '/api/share': data.share, '/api/presets': data.presets, '/api/dns': data.dns, '/api/events': data.events,
-          '/api/history': data.history, '/api/update': data.update, '/api/ping': { pid: 4173 },
-          '/api/downloads/switch': { enabled: data.state.downloadsOn },
-          '/api/downloads': data.state.downloadsOn ? dl() : { enabled: false } };
+          '/api/history': data.history, '/api/update': data.update, '/api/ping': { pid: 4173 } };
         if (path in resources) return resources[path];
         if (path === '/api/log') return { text: data.logs[query.get('f')] ?? data.logs.app };
         if (path === '/api/backup') return safeBackup();
+        if (path === '/api/legacy-downloads') {
+          if (!data.state.legacyDownloads) fail('There is no download list from an earlier NetMerge version', 404);
+          return { app: 'netmerge-downloads', version: 1, items: Array.from({ length: data.state.legacyDownloads }, (_, i) => ({ url: `https://files.example.test/old-${i + 1}.zip` })) };
+        }
         fail('Unknown fixture API route', 404);
       }
       if (method !== 'POST') fail('Method not allowed', 405);
@@ -374,13 +223,8 @@ export function createModel(scenario = 'default') {
           return data.update;
         case '/api/restore':
           if (!body.mode && !body.links?.length && !body.appRules) fail('That does not look like a NetMerge settings file');
-          mergeSettings(body, true); if (body.downloadConfig) dl().config = clone(body.downloadConfig); break;
+          mergeSettings(body, true); break;
         case '/api/quit': break; // Keep the fixture server alive; never signal processes.
-        case '/api/downloads/switch':
-          if (typeof body.on !== 'boolean') fail('on must be a boolean');
-          if (!body.on) for (const item of dl().items || []) if (item.state === 'downloading') Object.assign(item, { state: 'paused', speed: 0, lineStats: [] });
-          data.state.downloadsOn = body.on; sync(); return { enabled: body.on };
-        case '/api/downloads': return downloads(body);
         default: fail('Unknown fixture API route', 404);
       }
       sync(); return { ok: true };

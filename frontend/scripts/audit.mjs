@@ -10,12 +10,11 @@ await mkdir(output,{recursive:true});
 const server=createFixtureServer();await new Promise(done=>server.listen(0,'127.0.0.1',done));
 const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await chromium.launch(process.env.NETMERGE_BROWSER_EXECUTABLE?{executablePath:process.env.NETMERGE_BROWSER_EXECUTABLE}:{});
-const routes=['overview','connections','connections/speed-test','connections/presets','downloads/transfers','downloads/queues','downloads/browser','downloads/settings','apps/active','apps/rules','usage','usage/allowances','protection/routing','protection/blocking','protection/dns','sharing/connect','sharing/devices','activity/events','activity/logs','settings/general','settings/appearance','settings/maintenance','settings/advanced'];
+const routes=['overview','connections','connections/speed-test','connections/presets','apps/active','apps/rules','usage','usage/allowances','protection/routing','protection/blocking','protection/dns','sharing/connect','sharing/devices','activity/events','activity/logs','settings/general','settings/appearance','settings/maintenance','settings/advanced'];
 const reports=[],errors=[],external=[];
 try{
   for(const theme of ['light','dark'])for(const [width,height] of [[375,812],[390,844],[768,1024],[1024,768],[1440,900],[1920,1080]]){
     await fetch(origin+'/__test/reset',{method:'POST',headers:{'X-NetMerge-Test':'1','Content-Type':'application/json'},body:'{}'});
-    await fetch(origin+'/api/downloads/switch',{method:'POST',headers:{'X-NetMerge':'1','Content-Type':'application/json'},body:'{"on":true}'});
     await fetch(origin+'/api/share',{method:'POST',headers:{'X-NetMerge':'1','Content-Type':'application/json'},body:'{"enabled":true}'});
     const context=await browser.newContext({viewport:{width,height},colorScheme:theme,reducedMotion:'reduce',locale:'en-US',timezoneId:'UTC'});
     await context.route('**/*',route=>{if(route.request().url().startsWith(origin)||/^(data|blob):/.test(route.request().url()))route.continue();else{external.push(route.request().url());route.abort();}});
@@ -29,7 +28,7 @@ try{
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
       const report={theme,width,route,overflow,violations:result.violations.map(v=>({id:v.id,impact:v.impact,nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary}))}))};reports.push(report);
       if(overflow||report.violations.length)process.stdout.write(JSON.stringify(report)+'\n');
-      if(['overview','connections','downloads/transfers','downloads/settings','settings/appearance'].includes(route))await page.screenshot({path:resolve(output,`${theme}-${width}-${route.replaceAll('/','-')}.png`),fullPage:true});
+      if(['overview','connections','settings/general','settings/appearance'].includes(route))await page.screenshot({path:resolve(output,`${theme}-${width}-${route.replaceAll('/','-')}.png`),fullPage:true});
     }
     await context.close();process.stdout.write(`${theme} ${width}: ${routes.length} routes inspected\n`);
   }

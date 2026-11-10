@@ -1,6 +1,6 @@
 # Deterministic frontend fixtures
 
-Run `node frontend/scripts/serve.mjs` from any directory. It serves this checkout's actual `ui/` at `/` and `extension/` at `/extension/`. `NETMERGE_FIXTURE_PORT` (or `PORT`) overrides 4173; `NETMERGE_FIXTURE_HOST` accepts only loopback addresses. No Go process, external requests, disk settings writes, downloaded files, process launches, or OS actions are involved.
+Run `node frontend/scripts/serve.mjs` from any directory. It serves this checkout's actual `ui/` at `/`. `NETMERGE_FIXTURE_PORT` (or `PORT`) overrides 4173; `NETMERGE_FIXTURE_HOST` accepts only loopback addresses. No Go process, external requests, disk settings writes, downloaded files, process launches, or OS actions are involved.
 
 The fixtures model the frontend contracts in `api.go`, `settings.go`, `stats.go`, feature handlers, and `dm/dl_api.go`. The 3.11.25 rebase (`517ecc6`) includes stopped-duplicate download restarts, probe `dupState`, and usage correction through `POST /api/usage`; the fixtures simulate those responses without running backend operations. All addresses, domains, device names, and credentials are synthetic. Explicit `FAKE-TEST-ONLY` passwords and pairing tokens are never usable credentials. Dates are fixed at 2026-11-09T12:00:00Z. The default download manager is **off**.
 
@@ -11,7 +11,7 @@ Test control routes exist only in this development server. They require `X-NetMe
 - `POST /__test/scenario` with `{scenario:"offline"}`: enter a scenario without clearing capture. `default` recovers connectivity without discarding edits; other data scenarios replace state. Reset for a pristine baseline.
 - `GET /__test/requests`: `{requests:[{sequence,method,path,query,body,headers,status}]}`; includes asset reads, excludes control routes. Selected contract headers only; no cookies or bearer credentials.
 - `POST /__test/requests` with `{}`: clear capture only.
-- `POST /__test/state` with `{state:{...},downloads:{...},block:{...},...}`: deep patch objects; arrays replace, `null` is literal. This models backend updates while a form is dirty.
+- `POST /__test/state` with `{state:{...},block:{...},...}`: deep patch objects; arrays replace, `null` is literal. This models backend updates while a form is dirty.
 - `POST /__test/fault` with `{path:"/api/settings",method:"POST",status:500,error:"Fixture save failed",times:1}`: next matching calls fail. `delayMs` delays responses; `body` overrides the response (including `null`). Omit `times` for persistent faults; `times:0` clears that path. Delayed GETs snapshot at request time, allowing stale-response tests. Mutations with delays execute before their delayed acknowledgement.
 
 API POSTs require `X-NetMerge: 1`, JSON, and a same-origin Origin when present. Unsupported actions/paths fail rather than silently succeeding. Actions that normally trigger external work produce deterministic simulated results. Speed/DNS/update progress advances on reads, never wall-clock timers. Native downloads return sanitized JSON and a valid, deterministic diagnostics ZIP.

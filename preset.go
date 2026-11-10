@@ -21,8 +21,6 @@ type Preset struct {
 	Block   *bool     `json:"block,omitempty"` // ad blocking on/off; nil = leave as it is
 	Mobile  string    `json:"mobile"`          // role for mobile lines: "" always | "busy" | "backup"
 	Rules   []AppRule `json:"rules,omitempty"`
-	// Downloads: what the download manager does while the preset is on: "" nothing | "pause" | "slow".
-	Downloads string `json:"downloads,omitempty"`
 }
 
 type PresetBackup struct {
@@ -53,14 +51,14 @@ func stableRules(names ...string) []AppRule {
 func builtinPresets() []Preset {
 	return []Preset{
 		{ID: "work", Name: "Work from home", Builtin: true, Mode: "fast", Block: boolp(false), Mobile: "busy",
-			Desc: "Meetings and remote desktop stay on one steady line. The mobile line joins only when the others are full. Ad blocking off so work sites do not break. Downloads slow down so meetings stay smooth.", Downloads: "slow",
+			Desc:  "Meetings and remote desktop stay on one steady line. The mobile line joins only when the others are full. Ad blocking off so work sites do not break.",
 			Rules: stableRules("mstsc.exe", "AnyDesk.exe", "TeamViewer.exe", "Citrix.exe", "wfica32.exe", "Slack.exe", "Teams.exe", "ms-teams.exe", "Zoom.exe", "webex.exe")},
 		{ID: "gaming", Name: "Gaming", Builtin: true, Mode: "fast", Mobile: "busy",
-			Desc: "Games keep each server on one line so the connection stays steady. Voice chat is protected. The mobile line joins only when the others are full. Downloads wait until you stop playing.", Downloads: "pause",
+			Desc: "Games keep each server on one line so the connection stays steady. Voice chat is protected. The mobile line joins only when the others are full.",
 			Rules: stableRules("VALORANT-Win64-Shipping.exe", "RiotClientServices.exe", "LeagueClient.exe", "League of Legends.exe", "cs2.exe", "csgo.exe", "dota2.exe", "r5apex.exe",
 				"FortniteClient-Win64-Shipping.exe", "GTA5.exe", "Overwatch.exe", "TslGame.exe", "RocketLeague.exe", "Discord.exe")},
 		{ID: "maxspeed", Name: "Max speed", Builtin: true, Mode: "fast", NoCalls: true,
-			Desc: "Every line used all the time and call protection off. For big downloads when nobody is on a call. Downloads run at full speed."},
+			Desc: "Every line used all the time and call protection off. For big downloads when nobody is on a call."},
 		{ID: "travel", Name: "Travel / limited data", Builtin: true, Mode: "fast", Mobile: "backup",
 			Desc: "The mobile line is used only if the other lines fail, so your data allowance lasts."},
 		{ID: "safe", Name: "Safe browsing", Builtin: true, Mode: "stable", Block: boolp(true),

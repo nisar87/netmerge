@@ -15,7 +15,7 @@ import (
 )
 
 func listAdapters() ([]Adapter, error) {
-	if os.Getenv("NM_STUB_LOOPBACK") != "" { // development only: two lines on the loopback, for testing downloads end to end
+	if os.Getenv("NM_STUB_LOOPBACK") != "" { // development only: two lines on the loopback, for testing end to end
 		return []Adapter{
 			{Name: "Ethernet", Index: 11, Desc: "Intel(R) Ethernet Connection (2) I219-V", IP: "127.0.0.1", Up: true},
 			{Name: "Wi-Fi", Index: 7, Desc: "TP-Link Wireless USB Adapter", IP: "127.0.0.2", Up: true},
@@ -78,18 +78,3 @@ func publicNetworks() []string { return nil }
 func startUpdater(newExe, curExe, prevExe string) error {
 	return fmt.Errorf("updating is only available on Windows")
 }
-
-func openPath(path string, reveal bool) error { logf("open %s (reveal=%v)", path, reveal); return nil }
-
-func dlPower(kind string)  { logf("power action %s (not on this system)", kind) }
-func dlPowerCancel() error { return nil }
-
-func freeSpace(dir string) (int64, error) {
-	var st syscall.Statfs_t
-	if err := syscall.Statfs(dir, &st); err != nil {
-		return 0, err
-	}
-	return int64(st.Bavail) * int64(st.Bsize), nil
-}
-
-func markFromInternet(path, link string) {}

@@ -1,12 +1,8 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"net"
-	"netmerge/dm"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -241,26 +237,6 @@ func TestKindDetection(t *testing.T) {
 	}
 }
 
-func TestDownloadLinesFollowTheSameRules(t *testing.T) {
-	freshSettings(t)
-	mix := []Adapter{lan, wifi1, wifi2, mobile}
-	setAdapters(mix...)
-	syncLinks(mix)
-	got := dmLines()
-	var names []string
-	for _, l := range got.Use {
-		names = append(names, l.Name)
-	}
-	if len(got.Use) != 3 || len(got.Mobile) != 1 || strings.Contains(strings.Join(names, ","), "Ethernet 3") {
-		t.Fatalf("lines for downloads: %v + %d mobile", names, len(got.Mobile))
-	}
-	// a line that left (unplugged) or one whose name is only in the old settings is simply not there
-	setAdapters(wifi1, wifi2)
-	if got := dmLines(); len(got.Use) != 2 || len(got.Mobile) != 0 {
-		t.Fatalf("after the LAN left: %d", len(got.Use))
-	}
-}
-
 func TestEverythingKeyedByNameNotKind(t *testing.T) {
 	// capacity memory, probe state and quality are looked up by adapter name, so two Wi-Fi never share them
 	freshSettings(t)
@@ -269,119 +245,6 @@ func TestEverythingKeyedByNameNotKind(t *testing.T) {
 	probeMu.Unlock()
 	if !isDead("Wi-Fi") || isDead("Wi-Fi 2") {
 		t.Fatal("state leaked between two Wi-Fi connections")
-	}
-}
-
-func TestDownloadsFollowAnAdapterWhoseAddressChanges(t *testing.T) {
-	skipSyntheticAdapters(t)
-	freshSettings(t)
-	a := ad("Wi-Fi", "Intel(R) Wi-Fi 6 AX201 160MHz", "127.0.0.1", 7)
-	b := ad("Wi-Fi 2", "TP-Link Wireless USB Adapter", "127.0.0.3", 9)
-	setAdapters(a, b)
-	syncLinks(getAdapters(false))
-	ln, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
-	src := make(chan string, 4)
-	go func() {
-		for {
-			c, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			src <- c.RemoteAddr().(*net.TCPAddr).IP.String()
-			c.Close()
-		}
-	}()
-	var line dm.Line
-	for _, l := range dmLines().Use {
-		if l.Name == "Wi-Fi" {
-			line = l
-		}
-	}
-	if line.Dial == nil {
-		t.Fatal("no line")
-	}
-	dial := func() string {
-		c, err := line.Dial(context.Background(), "tcp", ln.Addr().String())
-		if err != nil {
-			t.Fatal(err)
-		}
-		c.Close()
-		return <-src
-	}
-	if got := dial(); got != "127.0.0.1" {
-		t.Fatalf("first dial from %s", got)
-	}
-	// the Wi-Fi reconnects and gets another address: the same line object must follow
-	a.IP = "127.0.0.2"
-	setAdapters(a, b)
-	if got := dial(); got != "127.0.0.2" {
-		t.Fatalf("after the address changed the dial still comes from %s", got)
-	}
-	// the adapter leaves: dialing fails at once instead of using a stale address
-	setAdapters(b)
-	if _, err := line.Dial(context.Background(), "tcp", ln.Addr().String()); err == nil {
-		t.Fatal("dialed through an adapter that is gone")
-	}
-}
-
-func TestBusyOnlyAndBackupLinesStayOutOfDownloads(t *testing.T) {
-	freshSettings(t)
-	setAdapters(lan, wifi1, wifi2)
-	syncLinks(getAdapters(false))
-	updateSettings(func(s *Settings) {
-		for i := range s.Links {
-			if s.Links[i].Name == "Wi-Fi 2" {
-				s.Links[i].Role = "busy"
-			}
-		}
-	})
-	names := func() string {
-		var n []string
-		ls := dmLines()
-		use := append(append([]dm.Line{}, ls.Use...), ls.Mobile...)
-		if len(use) == 0 { // the only line is used anyway
-			use = ls.Held
-		}
-		for _, l := range use {
-			n = append(n, l.Name)
-		}
-		sort.Strings(n)
-		return strings.Join(n, ",")
-	}
-	busyMu.Lock()
-	busyOn = map[string]bool{}
-	busyMu.Unlock()
-	if got := names(); got != "Ethernet,Wi-Fi" {
-		t.Fatalf("busy-only line is used for downloads while the others have room: %s", got)
-	}
-	var ui []string
-	{
-		ls := dmLines()
-		for _, l := range append(append(append([]dm.Line{}, ls.Use...), ls.Held...), ls.Mobile...) {
-			ui = append(ui, l.Name)
-		}
-	}
-	sort.Strings(ui)
-	if strings.Join(ui, ",") != "Ethernet,Wi-Fi,Wi-Fi 2" {
-		t.Fatalf("the settings page must still list the held line: %v", ui)
-	}
-	busyMu.Lock()
-	busyOn["Wi-Fi 2"] = true
-	busyMu.Unlock()
-	if got := names(); got != "Ethernet,Wi-Fi,Wi-Fi 2" {
-		t.Fatalf("busy-only line is not used when the others are full: %s", got)
-	}
-	// when it is the only line it is used anyway
-	busyMu.Lock()
-	busyOn = map[string]bool{}
-	busyMu.Unlock()
-	setAdapters(wifi2)
-	if got := names(); got != "Wi-Fi 2" {
-		t.Fatalf("the only line must be used: %s", got)
 	}
 }
 

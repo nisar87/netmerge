@@ -3,7 +3,6 @@ const ICONS = {ethernet:NM.icon('cable'),wifi:NM.icon('wifi'),mobile:NM.icon('sm
 const PAGES = {
   overview:['Overview','A clear view of your connected world.'],
   connections:['Connections','Make every connection work for you.'],
-  downloads:['Downloads','Fast downloads over all your connections'],
   dns:['DNS','Which servers look up website names'],
   history:['History','What happened and when'],
   presets:['Presets','One click for gaming, work, travel and more'],
@@ -137,8 +136,8 @@ function render(){
   renderBlockBadge();
   if (page === 'block') renderBlock();
 
-  dmApply(!!S.downloadsOn);
-  if (page === 'overview') { renderOverview(sn,run,act,P); loadHistory(); if(typeof renderDlCard==='function')renderDlCard(); }
+  { const n = S.legacyDownloads || 0; $('#pwOld').hidden = !n; $('#pwSave').hidden = !n; }
+  if (page === 'overview') { renderOverview(sn,run,act,P); loadHistory(); }
   if (page === 'connections') { renderConnectionMode(); renderLinks(sn,act,P); }
   renderWizard();
   if (page === 'apps') renderApps();

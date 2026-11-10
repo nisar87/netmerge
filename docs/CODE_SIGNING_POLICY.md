@@ -10,7 +10,6 @@ Once the project is accepted, the release workflow will send that build to SignP
 
 Only NetMerge.exe, built by this project. The network engine NetMerge can download on first use
 (mihomo, from github.com/MetaCubeX/mihomo) is a separate program by other authors and is not signed by this project.
-The browser extension zips are not Windows programs and are not signed.
 
 ## Roles
 
@@ -32,11 +31,9 @@ services, and only when the matching feature is used:
 - Speed test servers (`speed.cloudflare.com`, `proof.ovh.net`) when you run a speed test.
 - Connectivity checks (`www.msftconnecttest.com`, `www.gstatic.com`) to see whether a connection is online.
 - `ifconfig.me`, to show the public address of a connection.
-- The sites you download from, and the DNS servers you set.
+- The DNS servers you set.
 
-NetMerge keeps its settings, history and downloads list on your own computer, in its data folder.
-The optional browser extension sends a download link (and the cookies for that site, only when you allowed it) to NetMerge on
-your own computer (127.0.0.1), nowhere else.
+NetMerge keeps its settings and history on your own computer, in its data folder.
 
 ## System changes
 

@@ -210,7 +210,6 @@ func dispatchTick() {
 	callName := ""
 	if !s.NoCallProtect {
 		callName = chooseCallLink(set)
-		publishCall(callActive, proxyToLink(s, callName))
 	}
 
 	// which direction is busy decides which spare capacity counts

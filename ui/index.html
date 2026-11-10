@@ -17,7 +17,6 @@
     <a href="#/overview" class="brand" aria-label="NetMerge overview"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M6 9c7 0 7 7 13 7M6 23c7 0 7-7 13-7h7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="26" cy="16" r="2" fill="currentColor"/></svg></span><span>NetMerge<small>YOUR CONNECTIONS. TOGETHER.</small></span></a>
     <div class="nav-caption">WORKSPACE</div><nav id="nav" aria-label="Main navigation"><a class="nav" href="#/overview" data-p="overview"><span data-icon="layout-dashboard"></span><span class="nav-label">Overview</span></a>
 <a class="nav" href="#/connections" data-p="connections"><span data-icon="network"></span><span class="nav-label">Connections</span></a>
-<a class="nav" href="#/downloads/transfers" data-p="downloads" id="navDl"><span data-icon="download"></span><span class="nav-label">Downloads</span></a>
 <a class="nav" href="#/apps/active" data-p="apps"><span data-icon="panels-top-left"></span><span class="nav-label">Apps</span></a>
 <a class="nav" href="#/usage" data-p="usage"><span data-icon="chart-no-axes-combined"></span><span class="nav-label">Usage</span></a>
 <a class="nav" href="#/protection/routing" data-p="rules"><span data-icon="shield-check"></span><span class="nav-label">Protection</span><span class="navbadge" id="blkBadge" hidden></span></a>
@@ -51,7 +50,6 @@
         <section class="card"><div class="section-heading"><div><h2>Connections</h2><p class="hint2">Your internet, at a glance</p></div><a href="#/connections" class="text-link">Manage <span data-icon="arrow-up-right"></span></a></div><div id="connectionSummary"></div></section>
         <section class="card"><div class="section-heading"><div><h2>Recent activity</h2><p class="hint2">Changes that matter</p></div><button class="text-link" id="seeAll">See all <span data-icon="arrow-up-right"></span></button></div><div id="actList"></div></section>
       </div>
-      <div class="card" id="dlCard" hidden></div>
       <section class="card history-card"><div class="section-heading"><div><h2>Last 24 hours</h2><p class="hint2">Download speed per connection · one point per minute</p></div><span class="hint2">Mbps</span></div><div id="histBox"></div></section>
     </section>
     <section class="page" id="pg-connections" hidden>
@@ -209,7 +207,7 @@
         <div class="opt"><div><b>Start with Windows <em class="rec">Recommended: on</em></b><span>NetMerge opens quietly when you sign in. If off, you open it yourself after each restart.</span></div><button class="tog" id="autoTog" role="switch" aria-label="Start with Windows"></button></div>
         <div class="opt"><div><b>Merge automatically <em class="rec">Recommended: on</em></b><span>Merging turns on as soon as NetMerge starts. If off, you press the Merging switch each time.</span></div><button class="tog" id="launchTog" role="switch" aria-label="Merge automatically"></button></div>
         <div class="opt"><div><b>Protect calls and meetings <em class="rec">Recommended: on</em></b><span>Teams, Zoom, Discord and similar stay on one steady connection, and big downloads are kept off that line during a call. If off, a call may stutter while you download.</span></div><button class="tog" id="callTog" role="switch" aria-label="Protect calls and meetings"></button></div>
-        <div class="opt"><div><b>Download manager <em class="rec">Off by default</em></b><span>A built-in download manager that uses all your connections at once, and can take over big downloads from your browser. Leave it off if you already use another download manager. Turning it off stops its downloads; they continue when you turn it on again.</span></div><button class="tog" id="dmTog" role="switch" aria-label="Download manager"></button></div>
+        <div class="opt" id="pwRow"><div><b>Download manager</b><span>Downloads now have a program of their own, Pullwell (github.com/nisar87/pullwell). It works like any download manager, and while NetMerge is on it gets the merged speed by itself. <span id="pwOld" hidden>Your list from the old download manager is still here: save it, then import it in Pullwell. Your downloaded files stay where they are.</span></span></div><div class="row"><a class="btn" style="white-space:nowrap" href="https://github.com/nisar87/pullwell/releases/latest" target="_blank" rel="noopener">Get Pullwell</a><a class="btn" style="white-space:nowrap" id="pwSave" href="/api/legacy-downloads" download hidden>Save old list</a></div></div>
         <div class="opt"><div><b>Appearance</b><span>Light or dark. Auto follows Windows.</span></div><div class="seg" id="theme"><button data-v="auto">Auto</button><button data-v="dark">Dark</button><button data-v="light">Light</button></div></div>
       </div>
       <div class="card" style="margin-top:16px">
@@ -262,9 +260,6 @@
     </section>
 
     <!-- LOGS -->
-    <section class="page" id="pg-downloads" hidden>
-      <div id="dlBody"></div>
-    </section>
     <section class="page" id="pg-dns" hidden>
       <div id="dnsBody"></div>
     </section>

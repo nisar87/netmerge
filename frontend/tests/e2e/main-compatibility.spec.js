@@ -1,31 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import {test,expect,navigate,enableDownloads,mutate} from '../fixtures/browser.mjs';
-
-for(const state of ['paused','error','downloading']){
-  test(`adding a ${state} duplicate preserves main's restart and filename contract`,async({page,fixture})=>{
-    await enableDownloads(fixture);
-    const snapshot=await fixture.read('downloads');
-    const item=snapshot.items[1];item.state=state;
-    await fixture.patch({downloads:{items:snapshot.items}});
-    await navigate(page,'downloads/transfers');
-    await page.getByRole('button',{name:'Add download',exact:true}).click();
-    await page.locator('#dlUrl').fill(item.url);
-    await page.getByRole('button',{name:'Continue',exact:true}).click();
-    const stopped=state!=='downloading';
-    await expect(page.getByRole('dialog')).toContainText(stopped?'restarts that copy':'makes a second copy');
-    await mutate(page,'downloads',{action:'add',url:item.url,start:true,conns:0,limit:0,queue:'',...(stopped?{}:{force:true})},
-      ()=>page.getByRole('button',{name:'Download now',exact:true}).click());
-    await expect(page.locator('#toast')).toHaveText(stopped?'1 stopped download restarted':'1 downloads added');
-    await expect(page.locator('#toast')).not.toHaveClass(/bad/);
-    const current=await fixture.read('downloads');
-    expect(current.items).toHaveLength(stopped?5:6);
-    if(stopped){
-      const restarted=current.items.find(i=>i.id===item.id);
-      expect(restarted.state).toBe('queued');
-      expect(restarted.name).toBe(item.name);expect(restarted.path).toBe(item.path);
-    }
-  });
-}
+import {test,expect,navigate,mutate} from '../fixtures/browser.mjs';
 
 test('usage corrections survive polling and send the stable release API contract',async({page,fixture})=>{
   await navigate(page,'usage');

@@ -1,15 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
-import { test, expect, navigate, waitForRead, mutate, enableDownloads } from '../fixtures/browser.mjs';
+import { test, expect, navigate, waitForRead, mutate } from '../fixtures/browser.mjs';
 
 const routes = [
   ['overview', 'overview', /overview/i],
   ['connections', 'connections', /connections/i],
   ['connections/speed-test', 'connections', /connections|speed test/i],
   ['connections/presets', 'connections', /connections|presets/i],
-  ['downloads/transfers', 'downloads', /downloads|transfers/i],
-  ['downloads/queues', 'downloads', /downloads|queues/i],
-  ['downloads/browser', 'downloads', /downloads|browser/i],
-  ['downloads/settings', 'downloads', /downloads|settings/i],
   ['apps/active', 'apps', /apps/i], ['apps/rules', 'apps', /apps|rules/i],
   ['usage', 'usage', /usage/i], ['usage/allowances', 'usage', /usage|allowances/i],
   ['protection/routing', 'rules', /protection|routing/i],
@@ -22,7 +18,6 @@ const routes = [
 
 for (const [route, nav, heading] of routes) {
   test(`deep link and refresh: #/${route}`, async ({ page, fixture }) => {
-    await enableDownloads(fixture);
     await navigate(page, route);
     await expect(page.locator('#pageTitle')).toHaveText(heading);
     await expect(page).toHaveTitle(/^NetMerge · /);
@@ -45,24 +40,20 @@ test('top-level navigation, browser Back/Forward and heading focus', async ({ pa
   await page.goForward(); await expect(page).toHaveURL(/#\/protection\/routing$/);
 });
 
-test('Downloads remains discoverable while off without loading its API or feature assets', async ({ page, fixture }) => {
+test('the download manager moved to Pullwell: no Downloads page, old links land on its note in Settings', async ({ page, fixture }) => {
   await navigate(page, 'overview');
-  await page.locator('[data-p="downloads"]').click();
-  await expect(page).toHaveURL(/#\/downloads\/transfers$/);
-  await expect(page.locator('#pg-downloads').getByRole('button', { name: /enable download manager/i })).toBeVisible();
-  // Observe another real state polling cycle, so a hidden eager loader is caught.
+  await expect(page.locator('[data-p="downloads"]')).toHaveCount(0);
+  await page.goto('/#/downloads/transfers');
+  await expect(page.locator('#pageTitle')).toHaveText(/settings|general/i);
+  await expect(page.locator('#pwRow')).toBeVisible();
+  await expect(page.locator('#pwRow').getByRole('link', { name: 'Get Pullwell', exact: true })).toHaveAttribute('href', 'https://github.com/nisar87/pullwell/releases/latest');
+  await expect(page.locator('#pwSave')).toBeHidden(); // nothing to move for someone who never used it
+  await fixture.patch({ state: { legacyDownloads: 3 } });
   await waitForRead(page, 'state');
+  await expect(page.locator('#pwSave')).toBeVisible();
+  await expect(page.locator('#pwSave')).toHaveAttribute('href', '/api/legacy-downloads');
   const requests = await fixture.requests();
-  expect(requests.filter(r => r.path === '/api/downloads')).toEqual([]);
-  expect(requests.filter(r => /\/(downloads(?:-more)?\.(?:js|css)|features\/downloads\/)/.test(r.path))).toEqual([]);
-  expect(requests.filter(r => r.method === 'POST')).toEqual([]);
-  await navigate(page, 'settings/general');
-  await expect(page.locator('#dmTog')).toHaveAttribute('aria-checked', 'false');
-  await mutate(page, 'downloads/switch', { on: true }, () => page.locator('#dmTog').click());
-  await expect(page.locator('#dmTog')).toHaveAttribute('aria-checked', 'true');
-  await navigate(page, 'downloads/transfers');
-  await expect(page.locator('#dlSearch')).toBeVisible();
-  expect((await fixture.read('downloads')).enabled).toBe(true);
+  expect(requests.filter(r => /\/api\/downloads|downloads(?:-more)?\.(?:js|css)/.test(r.path))).toEqual([]);
 });
 
 test('null Go slices, one connection and an empty adapter list do not crash navigation', async ({ page, fixture }) => {
