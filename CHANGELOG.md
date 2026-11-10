@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.22
+
+- Downloads: a name you type in the add window is now kept. Before, the server's name always replaced it (found on a real PC). Names suggested by the browser still give way to the server's, as before.
+
 ## 3.11.21
 
 - Downloads, the end of a file: when every piece was handed out, a connection that finished early could only race a piece already running on another line, so the last pieces crawled along on single slow connections (seen on a real PC: the last 4 MB of a 148 MB file took 3 seconds while the Wi-Fi's slow connections held them). Now an idle connection takes the second half of the biggest piece still running, again and again, until the halves get small. Interrupted downloads still resume where they stopped.

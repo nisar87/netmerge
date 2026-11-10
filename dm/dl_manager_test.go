@@ -268,3 +268,24 @@ func TestDLFriendlyMessages(t *testing.T) {
 		}
 	}
 }
+
+// A name the person typed in the add window is kept, even when the server names the file differently (found on a
+// real PC: the typed name was always replaced). A name from the browser still gives way to the server's.
+func TestDLManagerKeepsTypedName(t *testing.T) {
+	size := int64(1 * MiB)
+	s := newSim(size)
+	defer s.Close()
+	m := newTestMgr(t, newSimEnv(newSimLine("A", "127.0.0.1", 0)))
+	r, err := m.handle(dlReq{Action: "add", dlAdd: dlAdd{URL: s.URL + "/file.bin", Name: "my copy.bin"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := r["added"].([]*dlItem)[0].ID
+	v := waitState(t, m, id, "done", 30*time.Second)
+	if v.Name != "my copy.bin" || filepath.Base(v.Path) != "my copy.bin" {
+		t.Fatalf("typed name replaced: %q %q", v.Name, v.Path)
+	}
+	if fileHash(t, v.Path) != simHash(size) {
+		t.Fatal("content")
+	}
+}

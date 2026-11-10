@@ -85,6 +85,7 @@ type dlItem struct {
 	Kind     string            `json:"kind,omitempty"`   // "" = a file, "torrent"
 	Files    []dlTFile         `json:"files,omitempty"`  // torrents: what is inside
 	Select   []bool            `json:"select,omitempty"` // torrents: which files to download (nil = all)
+	Named    bool              `json:"named,omitempty"`  // the person typed the name: the server's name does not replace it
 }
 
 type dlEntry struct {
@@ -568,6 +569,7 @@ func (m *dlManager) add(a dlAdd) (*dlItem, error) {
 	e.Name = dlPickName("", link)
 	if a.Name != "" {
 		e.Name = dlSafeName(a.Name)
+		e.Named = !a.FromWeb
 	}
 	e.Category = e.cat(e.Name)
 	e.State = "queued"
@@ -678,7 +680,7 @@ func (m *dlManager) pickPath(e *dlEntry, info dlInfo) (string, error) {
 	return p, nil
 }
 
-func (e *dlEntry) nameFixed() bool { return false }
+func (e *dlEntry) nameFixed() bool { return e.Named && e.Kind != "torrent" }
 
 // ---- running -------------------------------------------------------------------------------------------------------
 

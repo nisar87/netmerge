@@ -223,7 +223,7 @@ function dlDupStopped(p){ return p.dupState === 'error' || p.dupState === 'pause
 async function dlConfirm(link, p, start){
   const name = $('#dlName').value.trim(), folder = $('#dlFolder').value.trim();
   const body = {action:'add', url: link, start};
-  if (name && name !== (p.info||{}).name) body.name = name; else if (name) body.name = name;
+  if (name && name !== (p.info||{}).name) body.name = name; // only a name the person changed is kept over the server's
   if (folder && folder !== p.dir) body.dir = folder;
   if (p.duplicate && !dlDupStopped(p)) body.force = true;
   if (p.height) body.height = p.height;
