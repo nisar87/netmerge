@@ -206,13 +206,21 @@ function dlPageItems() {
   const key=[dlFilter,dlCat,dlQ,dlQf,dlSort].join('\0');
   if (key!==dlOrderKey) {dlOrderKey=key;dlPage=0;dlOrder=[];}
   dlSortItems(items);
-  // Keep the established order through telemetry ticks. Explicit moves/filters/sorts reset it.
-  const rank=new Map(dlOrder.map((id,i)=>[id,i]));
-  items.sort((a,b)=>(rank.get(a.id)??Infinity)-(rank.get(b.id)??Infinity));
-  dlOrder=items.map(v=>v.id);
-  const total=items.length, pages=Math.max(1,Math.ceil(total/100));
+  // Retain existing rows through telemetry ticks, but insert arrivals at their sorted position.
+  // Explicit moves/filters/sorts clear dlOrder and establish a completely fresh order.
+  const rank=new Map(items.map((item,i)=>[item.id,i]));
+  const previous=new Set(dlOrder), incoming=items.filter(item=>!previous.has(item.id));
+  const ordered=[];let next=0;
+  for(const id of dlOrder) {
+    if(!rank.has(id))continue;
+    while(next<incoming.length&&rank.get(incoming[next].id)<rank.get(id))ordered.push(incoming[next++]);
+    ordered.push(items[rank.get(id)]);
+  }
+  ordered.push(...incoming.slice(next));
+  dlOrder=ordered.map(v=>v.id);
+  const total=ordered.length, pages=Math.max(1,Math.ceil(total/100));
   dlPage=Math.max(0,Math.min(dlPage,pages-1));
-  return {items:items.slice(dlPage*100,(dlPage+1)*100),total,pages};
+  return {items:ordered.slice(dlPage*100,(dlPage+1)*100),total,pages};
 }
 function dlRow(v) {
   const known=v.size>0, pct=known?Math.max(0,Math.min(100,(v.done||0)/v.size*100)):null;
@@ -628,9 +636,10 @@ document.addEventListener('click', async e=>{
   for(const menu of $$('.dl-menu[open]'))if(!menu.contains(e.target)||e.target.closest('button'))menu.open=false;
   const link=e.target.closest('[data-dl-tab]');
   if(link&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey) {e.preventDefault();location.hash='#/downloads/'+link.dataset.dlTab;nmDownloadsTab(link.dataset.dlTab);return;}
-  const t=e.target.closest('button');if(!t||!DL)return;
-  if(t.id==='dlNew'||t.id==='dlEmptyAdd')return dlAddDialog();
+  const t=e.target.closest('button');if(!t)return;
   if(t.id==='dlRefresh')return loadDL(true);
+  if(!DL)return;
+  if(t.id==='dlNew'||t.id==='dlEmptyAdd')return dlAddDialog();
   if(t.dataset.page) {dlPage+=+t.dataset.page;paintDL();$('#dlSearch')?.focus();return;}
   if(t.id==='dlResetFilters') {dlFilter='all';dlCat='';dlQ='';dlQf='';dlPage=0;paintDL();return;}
   if(t.dataset.jump) {const target=$('#dlSettings-'+t.dataset.jump);target.setAttribute('tabindex','-1');target.focus();target.scrollIntoView({block:'start'});return;}

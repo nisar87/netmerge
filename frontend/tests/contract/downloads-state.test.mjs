@@ -138,6 +138,36 @@ test('live speed sorting stays stable until an explicit sort/filter change',()=>
   assert.deepEqual(plain(run('dlPageItems().items.map(x=>x.id)')),['b','a']);
 });
 
+for (const [sort,expected] of [
+  ['default',['new','a','b']],
+  ['name',['a','new','b']],
+  ['size',['a','new','b']],
+  ['added',['a','new','b']],
+  ['speed',['a','new','b']],
+]) {
+  test(`new transfers enter the selected ${sort} order between retained rows`,()=>{
+    const {run}=runtime();
+    run(`dlSort=${JSON.stringify(sort)};DL={items:[
+      {id:'a',name:'b.zip',state:'paused',order:0,size:20,added:20,speed:20},
+      {id:'b',name:'d.zip',state:'paused',order:1,size:10,added:10,speed:10}
+    ],config:{queues:[]}};dlPageItems();
+    DL.items.push({id:'new',name:'c.zip',state:'queued',order:2,size:15,added:15,speed:15});`);
+    assert.deepEqual(plain(run('dlPageItems().items.map(x=>x.id)')),expected);
+    assert.deepEqual(plain(run('dlPageItems().items.map(x=>x.id)')),expected);
+  });
+}
+
+test('multiple arrivals stay sorted without reordering retained rows as live speeds change',()=>{
+  const {run}=runtime();
+  run(`dlSort='speed';DL={items:[{id:'a',speed:20},{id:'b',speed:10}],config:{queues:[]}};
+    dlPageItems();dlSel.add('b');DL.items[1].speed=30;
+    DL.items.push({id:'slow',speed:5},{id:'mid',speed:25},{id:'fast',speed:40});`);
+  assert.deepEqual(plain(run('dlPageItems().items.map(x=>x.id)')),['fast','mid','a','b','slow']);
+  run("DL.items=DL.items.filter(x=>x.id!=='a')");
+  assert.deepEqual(plain(run('dlPageItems().items.map(x=>x.id)')),['fast','mid','b','slow']);
+  assert.equal(run("dlSel.has('b')"),true);
+});
+
 test('partial add results and duplicate feedback do not claim all jobs started',()=>{
   const {run}=runtime();
   assert.equal(run('dlAddResult({added:[{id:"a"}],skipped:1},4)'), '1 downloads added, 1 already in your list, 2 could not be added');
