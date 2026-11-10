@@ -147,7 +147,7 @@ export function createModel(scenario = 'default') {
       return parsed.href;
     } catch { fail('Enter a valid download link'); }
   }
-  function add(body) {
+  function add(body, restartStopped = false) {
     let urls = [...(body.url ? [body.url] : []), ...(body.urls || [])];
     if (!urls.length && body.torrent) urls = [''];
     if (!urls.length) fail('paste at least one link');
@@ -159,11 +159,17 @@ export function createModel(scenario = 'default') {
       return Array.from({ length: end - start + 1 }, (_, i) => url.replace(match[0], String(start + i).padStart(match[1].length, '0')));
     });
     if (urls.length > 500) fail('too many links at once (500 at most)');
-    const added = []; let skipped = 0;
+    const added = []; let skipped = 0, restarted = 0;
     for (const raw of urls) {
       let url;
       try { url = body.torrent ? raw : cleanURL(raw); } catch (error) { if (urls.length === 1) throw error; continue; }
-      if (!body.force && dl().items?.some(item => item.url === url)) { skipped++; continue; }
+      const duplicate = dl().items?.findLast(item => item.url === url);
+      if (!body.force && duplicate) {
+        if (restartStopped && body.start !== false && !body.startAt && ['paused', 'error'].includes(duplicate.state)) {
+          Object.assign(duplicate, { state: 'queued', err: '', detail: '', retryAt: 0 }); restarted++;
+        } else skipped++;
+        continue;
+      }
       const torrent = !!body.torrent || url.startsWith('magnet:') || /\.torrent($|\?)/i.test(url);
       if (torrent && dl().config.noTorrents) fail('Torrents are disabled');
       const name = (urls.length === 1 && body.name) || (torrent ? 'fixture-torrent' : decodeURIComponent(new URL(url).pathname.split('/').pop()) || 'download.bin');
@@ -175,8 +181,8 @@ export function createModel(scenario = 'default') {
       });
       (dl().items ||= []).push(item); added.push(item);
     }
-    if (!added.length && !skipped) fail('none of the links could be used');
-    return { ...(added.length ? { added } : { duplicate: true }), skipped, items: dl().items, config: dl().config };
+    if (!added.length && !skipped && !restarted) fail('none of the links could be used');
+    return { ...(added.length ? { added } : { duplicate: true }), skipped, restarted, items: dl().items, config: dl().config };
   }
   const torrentFiles = () => [{ name: 'fixture-document.txt', size: 1024 }, { name: 'fixture-image.png', size: 2048 }];
   function downloads(body) {
@@ -190,9 +196,9 @@ export function createModel(scenario = 'default') {
         return { ok: true, info: { url, finalUrl: url, name: stream ? name.replace(/\.(m3u8|mpd)$/i, '.mp4') : name, type: stream ? 'video stream' : 'application/octet-stream', size: stream ? -1 : 64 * 1048576,
           ranges: !stream, etag: 'fixture-etag', lastMod: 'Mon, 09 Nov 2026 12:00:00 GMT' }, hls,
           mux: stream && dl().ffmpeg, dir: dl().config.dir, category: 'Archives', lines: dl().lines.length, locked: false,
-          duplicate: items().some(i => i.url === url), lineNames: dl().lines.map(l => l.name) };
+          duplicate: items().some(i => i.url === url), dupState: items().findLast(i => i.url === url)?.state || '', lineNames: dl().lines.map(l => l.name) };
       }
-      case 'add': return add(body);
+      case 'add': return add(body, true);
       case 'torrentInfo':
         if (!body.torrent) fail('Choose a torrent file');
         return { ok: true, name: 'fixture-torrent', size: 3072, files: torrentFiles(), private: false, trackers: 1, dir: dl().config.dir, duplicate: false };
@@ -317,6 +323,18 @@ export function createModel(scenario = 'default') {
           data.state.snap.running = body.on; break;
         case '/api/settings': mergeSettings(body); break;
         case '/api/rescan': break;
+        case '/api/usage': {
+          if (body.action !== 'set' || ![body.downMB, body.upMB].every(n => Number.isFinite(n) && n >= 0 && n <= 1e7)) fail('bad request');
+          const link = data.usage.links?.find(l => l.name === body.link), day = data.usage.days?.find(d => d.date === body.day);
+          if (!link || !day) fail('Choose a known connection and day');
+          day.links ||= {};
+          const old = day.links[body.link] || [0, 0], next = [Math.trunc(body.downMB * 1e6), Math.trunc(body.upMB * 1e6)];
+          day.links[body.link] = next;
+          if (day.date >= data.usage.start && day.date < data.usage.end) {
+            link.rx += next[0] - old[0]; link.tx += next[1] - old[1]; link.used = link.rx + link.tx;
+          }
+          sync(); return data.usage;
+        }
         case '/api/speedtest':
           speedReads = 2; Object.assign(data.state.test, { running: true, phase: 'Testing fixture connections', progress: 0.5, live: 48 }); break;
         case '/api/applyweights':

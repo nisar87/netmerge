@@ -2,8 +2,8 @@ import {execFileSync} from 'node:child_process';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
-const base=process.argv[2]||'39987fa48c25bf2eb29a700a44abf916174105bb';
 const git=(...args)=>execFileSync('git',args,{cwd:root,encoding:'utf8'}).trim().split('\n').filter(Boolean);
+const base=process.argv[2]||git('merge-base','HEAD','origin/main')[0];
 const changed=[...new Set([...git('diff','--name-only',base),...git('ls-files','--others','--exclude-standard')])].filter(path=>!path.startsWith('.agents/'));
 // The user additionally authorized persistent Windows EXE branding on 9 Nov 2026.
 // Keep that packaging exception explicit; backend source remains outside scope.

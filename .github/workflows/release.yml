@@ -57,8 +57,11 @@ jobs:
             }
           }
           EOF
-          "$(go env GOPATH)/bin/goversioninfo" -64 -o resource_windows_amd64.syso versioninfo.json
-          ls -l resource_windows_amd64.syso
+          # Go accepts one .rsrc section: combine release details with the committed icon.
+          # Replace only after success so a generator failure leaves the icon fallback intact.
+          "$(go env GOPATH)/bin/goversioninfo" -64 -icon assets/windows/netmerge.ico -o netmerge_windows_amd64.syso.tmp versioninfo.json
+          mv -f netmerge_windows_amd64.syso.tmp netmerge_windows_amd64.syso
+          ls -l netmerge_windows_amd64.syso
       - name: Build
         if: steps.v.outputs.exists == 'false'
         run: |

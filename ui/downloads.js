@@ -419,10 +419,12 @@ async function dlExtCode() {
 }
 
 function dlAddResult(r, requested) {
-  if (r.duplicate) return 'Already in your list. No second copy was added.';
-  const added=(r.added||[]).length, skipped=r.skipped||0;
-  const rejected=requested==null?null:Math.max(0,requested-added-skipped);
-  return `${added} downloads added${skipped?`, ${skipped} already in your list`:''}${rejected?`, ${rejected} could not be added`:''}`;
+  const added=(r.added||[]).length, skipped=r.skipped||0, restarted=r.restarted||0;
+  if (r.duplicate&&!restarted) return 'Already in your list. No second copy was added.';
+  const rejected=requested==null?null:Math.max(0,requested-added-restarted-skipped);
+  return [added||!restarted?`${added} downloads added`:'',
+    restarted?`${restarted} stopped download${restarted===1?'':'s'} restarted`:'',
+    skipped?`${skipped} already in your list`:'',rejected?`${rejected} could not be added`:''].filter(Boolean).join(', ');
 }
 async function dlSubmit(start=true) {
   const ta=$('#dlUrl'); if(!ta)return;
@@ -430,7 +432,7 @@ async function dlSubmit(start=true) {
   if(!links.length){dlNotice('Paste a link first.',true);ta.focus();return;}
   if(links.length>1||/^magnet:|\.torrent(\?|#|$)/i.test(links[0])) {
     const r=await dlAct({action:'add',urls:links,start});
-    if(r){const msg=dlAddResult(r,links.some(s=>/\[/.test(s))?null:links.length);await dlClose(true);toast(msg,!!r.duplicate);}
+    if(r){const msg=dlAddResult(r,links.some(s=>/\[/.test(s))?null:links.length);await dlClose(true);toast(msg,!!r.duplicate&&!r.restarted);}
     return;
   }
   const token=dlDialogSerial;const button=$('#dlAddBtn');button.disabled=true;button.textContent='Checking…';
@@ -488,7 +490,7 @@ async function dlConfirm(link, p, start){
   const boxes = $$('.dlLn'); if (boxes.length) { const on = boxes.filter(b => b.checked).map(b => b.value); if (!on.length) return dlNotice('Choose at least one connection', true); if (on.length < boxes.length) body.lines = on; }
   try {dlReadExtraAdd(body,'dl');} catch(e){return dlNotice(e.message,true);}
   const r = await dlAct(body);
-  if (r) { dlClose(true); toast(dlAddResult(r,1),!!r.duplicate); }
+  if (r) { dlClose(true); toast(dlAddResult(r,1),!!r.duplicate&&!r.restarted); }
 }
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey||e.metaKey) && e.target.id === 'dlUrl') { e.preventDefault(); dlSubmit(); } });
 document.addEventListener('change', async e => {

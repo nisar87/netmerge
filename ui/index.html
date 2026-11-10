@@ -255,7 +255,7 @@
         <summary style="cursor:pointer;font-weight:600">Correct a wrong number</summary>
         <div class="hint" style="color:var(--mute);font-size:13px;margin:8px 0 12px">If a day shows far more data than you really used (an old version could count an adapter that was unplugged and plugged in again as billions of bytes), choose the connection and the day and type the real figure. Windows' own network statistics are the reference.</div>
         <div class="qrow"><select class="sel" id="fxLink" aria-label="Connection"></select><select class="sel" id="fxDay" aria-label="Day"></select></div>
-        <div class="qrow"><b style="min-width:70px">Down (MB)</b><input class="inp" id="fxDown" type="number" min="0" step="1" inputmode="numeric"><b style="min-width:70px;margin-left:12px">Up (MB)</b><input class="inp" id="fxUp" type="number" min="0" step="1" inputmode="numeric"><button class="btn primary" id="fxSave" style="margin-left:12px">Save</button></div>
+        <div class="qrow"><b style="min-width:70px">Down (MB)</b><input class="inp" id="fxDown" aria-label="Download usage in MB" type="number" min="0" max="10000000" step="1" inputmode="numeric"><b style="min-width:70px;margin-left:12px">Up (MB)</b><input class="inp" id="fxUp" aria-label="Upload usage in MB" type="number" min="0" max="10000000" step="1" inputmode="numeric"><button class="btn pri" id="fxSave" style="margin-left:12px" disabled>Save</button></div>
       </details>
       <h3 style="margin:0 0 8px">Daily usage <span id="usPeriod" style="font-weight:400;color:var(--mute);font-size:13px"></span> <span id="usUnit" style="font-weight:400;color:var(--mute);font-size:13px"></span></h3>
       <div class="scrollbox" style="max-height:460px"><table class="tbl" id="usTbl"></table></div>

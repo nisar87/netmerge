@@ -76,7 +76,7 @@ function dlOptions() {
     const time=$('#oTime').value;if(time){const d=new Date(),[h,m]=time.split(':').map(Number);d.setHours(h,m,0,0);if(d.getTime()<=Date.now())d.setDate(d.getDate()+1);body.startAt=Math.floor(d.getTime()/1000);}
     const lines=$$('.oLine');if(lines.length){body.lines=lines.filter(el=>el.checked).map(el=>el.value);if(!body.lines.length)return dlNotice('Choose at least one connection.',true);}
     try {dlReadExtraAdd(body,'o');} catch(e){return dlNotice(e.message,true);}
-    const r=await dlAct(body);if(r){await dlClose(true);toast(dlAddResult(r,urls.some(s=>/\[/.test(s))?null:urls.length),!!r.duplicate);}
+    const r=await dlAct(body);if(r){await dlClose(true);toast(dlAddResult(r,urls.some(s=>/\[/.test(s))?null:urls.length),!!r.duplicate&&!r.restarted);}
   };
   $('#oGo').onclick=()=>submit(true);$('#oLater').onclick=()=>submit(false);
 }
@@ -107,7 +107,7 @@ function dlGrab(){
   $('#gAdd').onclick = async () => {
     const urls = $$('.gSel').filter(c => c.checked).map(c => dlGrabbed[+c.dataset.i].url); if (!urls.length) return;
     const r = await dlAct({action:'add', urls}, null);
-    if (r) { dlClose(true); toast(dlAddResult(r,urls.length),!!r.duplicate); }
+    if (r) { dlClose(true); toast(dlAddResult(r,urls.length),!!r.duplicate&&!r.restarted); }
   };
   setTimeout(() => $('#gUrl') && $('#gUrl').focus(), 30);
 }

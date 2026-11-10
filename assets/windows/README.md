@@ -19,4 +19,6 @@ After building an EXE, run:
 python3 scripts/check-windows-icon.py NetMerge.exe
 ```
 
-The verifier reads the PE resource directory and checks every embedded image against the ICO. Both CI and release builds run it, so a missing or stale icon fails the build before publishing. The resources contain only icons: they do not change elevation, network behavior or application settings.
+The verifier reads the PE resource directory and checks every embedded image against the ICO. Both CI and release builds run it, so a missing or stale icon fails the build before publishing. The committed resources contain only icons: they do not change elevation, network behavior or application settings.
+
+Release builds combine the same icon with the stable release's product and version details using `goversioninfo@v1.4.1`. Generation writes a temporary file and replaces the amd64 resource only after success; a generation failure leaves the committed icon available. Keep exactly one resource object per Windows architecture, because Go rejects multiple `.rsrc` sections.

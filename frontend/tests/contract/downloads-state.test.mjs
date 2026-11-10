@@ -174,6 +174,13 @@ test('partial add results and duplicate feedback do not claim all jobs started',
   assert.match(run('dlAddResult({duplicate:true},1)'),/No second copy/);
 });
 
+test('stopped-copy restarts count as successful downloads, including mixed batches',()=>{
+  const {run}=runtime();
+  assert.equal(run('dlAddResult({duplicate:true,restarted:1,skipped:0},1)'), '1 stopped download restarted');
+  assert.equal(run('dlAddResult({added:[{id:"new"}],restarted:2,skipped:1},5)'),
+    '1 downloads added, 2 stopped downloads restarted, 1 already in your list, 1 could not be added');
+});
+
 test('concurrent browser preferences preserve the latest untouched preference',async()=>{
   let ext={enabled:true,minMB:5,browsers:[]};
   const {run}=runtime(async(_path,body)=>{

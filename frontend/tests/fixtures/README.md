@@ -2,7 +2,7 @@
 
 Run `node frontend/scripts/serve.mjs` from any directory. It serves this checkout's actual `ui/` at `/` and `extension/` at `/extension/`. `NETMERGE_FIXTURE_PORT` (or `PORT`) overrides 4173; `NETMERGE_FIXTURE_HOST` accepts only loopback addresses. No Go process, external requests, disk settings writes, downloaded files, process launches, or OS actions are involved.
 
-The fixtures mirror `api.go`, `settings.go`, `stats.go`, feature handlers, and `dm/dl_api.go` at 2868dbe. All addresses, domains, device names, and credentials are synthetic. Explicit `FAKE-TEST-ONLY` passwords and pairing tokens are never usable credentials. Dates are fixed at 2026-11-09T12:00:00Z. The default download manager is **off**.
+The fixtures model the frontend contracts in `api.go`, `settings.go`, `stats.go`, feature handlers, and `dm/dl_api.go`. The 3.11.25 rebase (`517ecc6`) includes stopped-duplicate download restarts, probe `dupState`, and usage correction through `POST /api/usage`; the fixtures simulate those responses without running backend operations. All addresses, domains, device names, and credentials are synthetic. Explicit `FAKE-TEST-ONLY` passwords and pairing tokens are never usable credentials. Dates are fixed at 2026-11-09T12:00:00Z. The default download manager is **off**.
 
 Test control routes exist only in this development server. They require `X-NetMerge-Test: 1`, reject foreign Origins, and are never shipped inside `ui/`:
 
