@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.13.1
+
+- After an update the window now refreshes by itself. Before, it showed "NetMerge was updated. Reload when you are ready" and kept running the old version until you clicked Reload. If you are in the middle of something (a setting being saved, an open dialog, typing in a field, or unsaved text on another page), it waits and refreshes once you are done.
+
 ## 3.13.0
 
 - The download manager is no longer part of NetMerge. It is now a program of its own, **Pullwell** (https://github.com/nisar87/pullwell). Like any download manager it opens many connections, and while NetMerge is on those connections are spread over all your lines.
