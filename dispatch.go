@@ -670,16 +670,26 @@ func delayPenalty(set []*dispLink) []float64 {
 // merge as standby and are still used when they are the only line left.
 func slowFlags(set []*dispLink) []bool {
 	out := make([]bool, len(set))
-	var best float64
+	// Compared direction by direction: a line is "too slow to help" only when it is under a tenth of the best line both
+	// ways. Adding download and upload together wrongly wrote off a phone that downloads fine but had never been seen
+	// uploading (18 Mbps down, 0.6 up, against 93 + 99 on the wired line: 18.8 < 19.2).
+	var bestRx, bestTx float64
 	for _, d := range set {
-		if v := d.capRx + d.capTx; d.seenRx && v > best {
-			best = v
+		if d.seenRx && d.capRx > bestRx {
+			bestRx = d.capRx
+		}
+		if d.seenTx && d.capTx > bestTx {
+			bestTx = d.capTx
 		}
 	}
 	for i, d := range set {
-		if d.seenRx && best > 0 && d.capRx+d.capTx < best/10 {
-			out[i] = true
+		if !d.seenRx || bestRx == 0 || d.capRx >= bestRx/10 {
+			continue
 		}
+		if d.seenTx && bestTx > 0 && d.capTx >= bestTx/10 {
+			continue
+		}
+		out[i] = true
 	}
 	return out
 }

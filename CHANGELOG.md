@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.19
+
+- A connection is now called "too slow to help: standing by" only when it is under a tenth of the best connection in both directions. Before, download and upload were added together, so a phone that downloads well but had never been seen uploading could flip between normal and "too slow" with no connections (seen on a real PC: 18 Mbps down, 0.6 up, next to a wired line of 93 down and 99 up).
+
 ## 3.11.18
 
 - Usage: the same counter restart that confused the line speeds (3.11.17) also added about 4.3 GB to that day's usage in each direction, which could wrongly use up a monthly allowance. New on the Usage page: "Correct a wrong number" (choose the connection and the day, type the real figure). The rejection of impossible counter readings now has its own test using the exact numbers seen on a real PC.

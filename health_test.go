@@ -275,6 +275,25 @@ func TestSlowFlags(t *testing.T) {
 	}
 }
 
+// The saved speeds of a real PC (2026-11-10): wired 93/99 Mbps, Wi-Fi 39/45, USB phone 18/0.6 (its upload never seen).
+// The phone is useful for downloads and must not be called "too slow to help".
+func TestSlowFlagsPhoneWithUnseenUpload(t *testing.T) {
+	m := 1e6 / 8
+	set := []*dispLink{
+		{capRx: 93 * m, capTx: 99 * m, seenRx: true, seenTx: true},
+		{capRx: 18.2 * m, capTx: 0.6 * m, seenRx: true, seenTx: true},
+		{capRx: 39 * m, capTx: 45 * m, seenRx: true, seenTx: true},
+	}
+	if f := slowFlags(set); f[0] || f[1] || f[2] {
+		t.Fatalf("got %v", f)
+	}
+	// a line that is slow both ways still is
+	set[1] = &dispLink{capRx: 5 * m, capTx: 5 * m, seenRx: true, seenTx: true}
+	if f := slowFlags(set); !f[1] || f[0] || f[2] {
+		t.Fatalf("got %v", f)
+	}
+}
+
 func TestInWindow(t *testing.T) {
 	at := func(h, m int) time.Time { return time.Date(2026, 1, 1, h, m, 0, 0, time.UTC) }
 	if !inWindow(at(23, 0), "22:00", "06:00") || !inWindow(at(3, 0), "22:00", "06:00") || inWindow(at(12, 0), "22:00", "06:00") {
