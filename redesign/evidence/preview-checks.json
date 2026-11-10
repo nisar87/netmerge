@@ -1,0 +1,158 @@
+{
+  "checks": [
+    {
+      "width": 375,
+      "theme": "light",
+      "view": "overview",
+      "overflow": false
+    },
+    {
+      "width": 375,
+      "theme": "light",
+      "view": "downloads",
+      "overflow": false
+    },
+    {
+      "width": 375,
+      "theme": "light",
+      "view": "settings",
+      "overflow": false
+    },
+    {
+      "width": 375,
+      "theme": "dark",
+      "view": "overview",
+      "overflow": false
+    },
+    {
+      "width": 375,
+      "theme": "dark",
+      "view": "downloads",
+      "overflow": false
+    },
+    {
+      "width": 375,
+      "theme": "dark",
+      "view": "settings",
+      "overflow": false
+    },
+    {
+      "width": 768,
+      "theme": "light",
+      "view": "overview",
+      "overflow": false
+    },
+    {
+      "width": 768,
+      "theme": "light",
+      "view": "downloads",
+      "overflow": false
+    },
+    {
+      "width": 768,
+      "theme": "light",
+      "view": "settings",
+      "overflow": false
+    },
+    {
+      "width": 768,
+      "theme": "dark",
+      "view": "overview",
+      "overflow": false
+    },
+    {
+      "width": 768,
+      "theme": "dark",
+      "view": "downloads",
+      "overflow": false
+    },
+    {
+      "width": 768,
+      "theme": "dark",
+      "view": "settings",
+      "overflow": false
+    },
+    {
+      "width": 1024,
+      "theme": "light",
+      "view": "overview",
+      "overflow": false
+    },
+    {
+      "width": 1024,
+      "theme": "light",
+      "view": "downloads",
+      "overflow": false
+    },
+    {
+      "width": 1024,
+      "theme": "light",
+      "view": "settings",
+      "overflow": false
+    },
+    {
+      "width": 1024,
+      "theme": "dark",
+      "view": "overview",
+      "overflow": false
+    },
+    {
+      "width": 1024,
+      "theme": "dark",
+      "view": "downloads",
+      "overflow": false
+    },
+    {
+      "width": 1024,
+      "theme": "dark",
+      "view": "settings",
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "theme": "light",
+      "view": "overview",
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "theme": "light",
+      "view": "downloads",
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "theme": "light",
+      "view": "settings",
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "view": "overview",
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "view": "downloads",
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "view": "settings",
+      "overflow": false
+    }
+  ],
+  "errors": [],
+  "externalRequests": [],
+  "interactions": [
+    "search filter",
+    "status filter",
+    "dialog open and Escape",
+    "system theme",
+    "reduced motion"
+  ],
+  "passed": true
+}

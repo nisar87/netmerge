@@ -1,0 +1,1938 @@
+{
+  "reports": [
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "downloads/queues",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "downloads/browser",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "downloads/settings",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "downloads/queues",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "downloads/browser",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "downloads/settings",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "downloads/queues",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "downloads/browser",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "downloads/settings",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "downloads/queues",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "downloads/browser",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "downloads/settings",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "downloads/queues",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "downloads/browser",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "downloads/settings",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "downloads/queues",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "downloads/browser",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "downloads/settings",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "light",
+      "width": 1920,
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "downloads/queues",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "downloads/browser",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "downloads/settings",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "downloads/queues",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "downloads/browser",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "downloads/settings",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "downloads/queues",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "downloads/browser",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "downloads/settings",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "downloads/queues",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "downloads/browser",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "downloads/settings",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "downloads/queues",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "downloads/browser",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "downloads/settings",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "downloads/queues",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "downloads/browser",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "downloads/settings",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "theme": "dark",
+      "width": 1920,
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    }
+  ],
+  "errors": [],
+  "external": []
+}

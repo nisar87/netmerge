@@ -1,0 +1,17 @@
+
+> audit
+> node scripts/audit.mjs
+
+light 375: 23 routes inspected
+light 390: 23 routes inspected
+light 768: 23 routes inspected
+light 1024: 23 routes inspected
+light 1440: 23 routes inspected
+light 1920: 23 routes inspected
+dark 375: 23 routes inspected
+dark 390: 23 routes inspected
+dark 768: 23 routes inspected
+dark 1024: 23 routes inspected
+dark 1440: 23 routes inspected
+dark 1920: 23 routes inspected
+276 route/theme/viewport cases; 0 runtime errors; 0 external requests

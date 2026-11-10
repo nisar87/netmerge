@@ -1,0 +1,33 @@
+/* Runtime tokens: primitive palette, semantic roles, shared component metrics. */
+:root {
+  color-scheme: light;
+  --canvas:#f5f7fb; --surface:#ffffff; --raised:#f0f4fa;
+  --text:#17243b; --muted:#53647c; --line:#dce3ee; --control-line:#71839c;
+  --accent:#1d4ed8; --on-accent:#ffffff; --accent-soft:#eaf0ff;
+  --success:#166534; --success-soft:#edf8f0;
+  --warning:#92400e; --warning-soft:#fff5dd;
+  --error:#b91c1c; --error-soft:#fef0ef;
+  --series-1:#1d4ed8; --series-2:#0f766e; --series-3:#7c3aed; --series-4:#92400e; --series-5:#be185d;
+  --font-ui:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --font-mono:"Cascadia Mono",Consolas,ui-monospace,monospace;
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+  --space-5:20px; --space-6:24px; --space-8:32px; --space-10:40px; --space-12:48px;
+  --radius-sm:6px; --radius-control:10px; --radius-panel:14px; --radius-dialog:18px;
+  --sidebar:224px; --rail:72px; --header:72px;
+  --motion-fast:120ms; --motion-normal:180ms; --motion-panel:240ms;
+  --ease-out:cubic-bezier(.2,.8,.2,1);
+  --shadow-overlay:0 16px 48px #17243b24;
+}
+:root[data-theme="dark"] {
+  color-scheme:dark;
+  --canvas:#0b1120; --surface:#111b2e; --raised:#19263c;
+  --text:#e6edf7; --muted:#a9b8cd; --line:#2a3b55; --control-line:#71839c;
+  --accent:#93b4ff; --on-accent:#0b1120; --accent-soft:#1c2f51;
+  --success:#86efac; --success-soft:#153528;
+  --warning:#fcd34d; --warning-soft:#3c3017;
+  --error:#fca5a5; --error-soft:#412028;
+  --series-1:#93b4ff; --series-2:#5eead4; --series-3:#c4b5fd; --series-4:#fcd34d; --series-5:#f9a8d4;
+  --shadow-overlay:0 16px 48px #00000060;
+}
+
+:root{--bg:var(--canvas);--side:var(--surface);--panel:var(--surface);--panel2:var(--raised);--inset:var(--canvas);--line2:var(--control-line);--mute:var(--muted);--dim:var(--muted);--accent-ink:var(--on-accent);--good:var(--success);--warn:var(--warning);--bad:var(--error);--info:var(--accent);--l1:var(--series-1);--l2:var(--series-2);--l3:var(--series-3);--l4:var(--series-4);--l5:var(--series-5);--shadow:var(--shadow-overlay);--mono:var(--font-mono);--sans:var(--font-ui);--r:var(--radius-panel)}

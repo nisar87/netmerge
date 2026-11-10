@@ -57,13 +57,17 @@ jobs:
             }
           }
           EOF
-          "$(go env GOPATH)/bin/goversioninfo" -64 -o resource_windows_amd64.syso versioninfo.json
-          ls -l resource_windows_amd64.syso
+          # Go accepts one .rsrc section: combine release details with the committed icon.
+          # Replace only after success so a generator failure leaves the icon fallback intact.
+          "$(go env GOPATH)/bin/goversioninfo" -64 -icon assets/windows/netmerge.ico -o netmerge_windows_amd64.syso.tmp versioninfo.json
+          mv -f netmerge_windows_amd64.syso.tmp netmerge_windows_amd64.syso
+          ls -l netmerge_windows_amd64.syso
       - name: Build
         if: steps.v.outputs.exists == 'false'
         run: |
           GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
             -ldflags "-s -w -H=windowsgui -X main.appVersion=${{ steps.v.outputs.ver }} -X main.updateRepo=${GITHUB_REPOSITORY}" -o NetMerge.exe .
+          python3 scripts/check-windows-icon.py NetMerge.exe
           sha256sum NetMerge.exe > NetMerge.exe.sha256
           cat NetMerge.exe.sha256
       - name: Build the browser extension

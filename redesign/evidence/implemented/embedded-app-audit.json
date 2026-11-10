@@ -1,0 +1,105 @@
+{
+  "errors": [],
+  "reports": [
+    {
+      "route": "overview",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "connections",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "connections/speed-test",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "connections/presets",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "downloads/transfers",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "apps/active",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "apps/rules",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "usage",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "usage/allowances",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "protection/routing",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "protection/blocking",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "protection/dns",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "sharing/connect",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "sharing/devices",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "activity/events",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "activity/logs",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "settings/general",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "settings/appearance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "settings/maintenance",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "route": "settings/advanced",
+      "overflow": false,
+      "violations": []
+    }
+  ]
+}
