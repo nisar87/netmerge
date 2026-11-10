@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.15
+
+- "Show in folder" again: on a real PC the folder still opened behind NetMerge. The window is now also lifted to the top of the stack and the system is asked to switch to it, and the log records whether the Explorer window was found.
+
 ## 3.11.14
 
 - "Show in folder": the first fix was not enough, because Windows does not let a background program take the focus. NetMerge now joins the input of the window that has the focus for a moment, so the folder comes to the front.

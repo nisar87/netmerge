@@ -384,6 +384,8 @@ var (
 	pGetForeground = user32.NewProc("GetForegroundWindow")
 	pWinThread     = user32.NewProc("GetWindowThreadProcessId")
 	pAttachInput   = user32.NewProc("AttachThreadInput")
+	pSetWindowPos  = user32.NewProc("SetWindowPos")
+	pSwitchTo      = user32.NewProc("SwitchToThisWindow")
 	pCurThread     = syscall.NewLazyDLL("kernel32.dll").NewProc("GetCurrentThreadId")
 )
 
@@ -420,10 +422,16 @@ func enumRaise(hwnd, _ uintptr) uintptr {
 	pKeybdEvent.Call(0x12, 0, 0, 0)
 	pKeybdEvent.Call(0x12, 0, 2, 0)
 	pBringToTop.Call(hwnd)
-	pSetForeground.Call(hwnd)
+	ok, _, _ := pSetForeground.Call(hwnd)
+	// If the focus was still refused, put the window on top of the others anyway (a window made
+	// topmost and then ordinary again ends up above the rest), and ask the system to switch to it.
+	pSetWindowPos.Call(hwnd, ^uintptr(0), 0, 0, 0, 0, 0x0043) // HWND_TOPMOST, no move/size, show
+	pSetWindowPos.Call(hwnd, ^uintptr(1), 0, 0, 0, 0, 0x0043) // HWND_NOTOPMOST
+	pSwitchTo.Call(hwnd, 1)
 	if attached {
 		pAttachInput.Call(me, fgThread, 0)
 	}
+	logf("show in folder: raised the %q window (focus accepted: %v)", raiseWant, ok != 0)
 	raiseDone = true
 	return 0
 }
@@ -443,6 +451,7 @@ func raiseExplorer(folder string) {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
+	logf("show in folder: no Explorer window titled %q found", folder)
 }
 
 // dlPower sleeps or shuts the PC down after the downloads (a shutdown has a one minute warning that can be cancelled).
