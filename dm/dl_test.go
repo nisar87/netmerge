@@ -3,6 +3,7 @@ package dm
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -364,4 +365,97 @@ func TestDLGivenRefererIsKept(t *testing.T) {
 	if _, _, err := dlProbeReferer(context.Background(), c, r.URL+"/x", nil); err == nil {
 		t.Fatal("a server that always refuses must still be refused")
 	}
+}
+
+// The tail: with fixed pieces, the last ones run on one connection each while the others sit idle (seen on a real PC:
+// the last quarter of a 148 MB file came at half speed). Idle connections now take the second half of a running piece.
+func TestDLEndGameSplitsRunningPieces(t *testing.T) {
+	const size = 96 * MiB // 2 MB pieces
+	run := func(noSplit bool) (int, time.Duration) {
+		dlNoSplit = noSplit
+		defer func() { dlNoSplit = false }()
+		s := newSim(size)
+		s.perConn = 1.2 * MiB // every connection is limited on its own, as with many CDNs
+		defer s.Close()
+		// the lines and speeds of the real PC: a cable of about 75 Mbps and a Wi-Fi of about 20, 8 connections each
+		a := newSimLine("A", "127.0.0.1", 9*MiB)
+		b := newSimLine("B", "127.0.0.2", 2.5*MiB)
+		tk, took, err := runDl(t, newSimEnv(a, b), s.URL+"/file.bin", dlSpec{MaxPerLine: 8})
+		mustOK(t, tk, err, size)
+		return tk.splits, took
+	}
+	n, fast := run(false)
+	_, old := run(true)
+	t.Logf("with splitting: %d splits, %v; without: %v", n, fast, old)
+	if n == 0 {
+		t.Fatal("no piece was split at the end")
+	}
+	if fast > old*110/100 { // the simulation has almost no tail to remove; the gain is measured on a real PC
+		t.Fatalf("splitting made the download slower: %v vs %v", fast, old)
+	}
+}
+
+// The state file keeps the fixed grid: bytes of split pieces count only where they follow without a gap.
+func TestGridHaveAfterSplits(t *testing.T) {
+	ps := []*dlPiece{
+		{start: 0, end: 99, have: 100, done: true},
+		{start: 100, end: 149, have: 50, done: true}, // cell 2 split in two, both finished
+		{start: 150, end: 199, have: 50, done: true},
+		{start: 200, end: 249, have: 30}, // cell 3: first half partly there,
+		{start: 250, end: 299, have: 50}, //         second half complete but after a gap
+		{start: 300, end: 349, have: 50, done: true},
+		{start: 350, end: 359, have: 0},
+	}
+	got := dlGridHave(ps, 100, 360)
+	want := []int64{100, 100, 30, 50}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// Pausing during the end game, after pieces were split, and resuming gives the right file without fetching
+// much again.
+func TestDLResumeAfterSplits(t *testing.T) {
+	size := int64(64 * MiB)
+	s := newSim(size)
+	s.perConn = 1.2 * MiB
+	defer s.Close()
+	env := newSimEnv(newSimLine("A", "127.0.0.1", 9*MiB), newSimLine("B", "127.0.0.2", 2.5*MiB))
+	path := filepath.Join(t.TempDir(), "s.bin")
+	var done int64
+	for round := 0; round < 3; round++ {
+		tk := newDlTask(dlSpec{URL: s.URL + "/file.bin", Path: path}, env)
+		ctx, cancel := context.WithCancel(context.Background())
+		if round == 0 {
+			go func() {
+				for tk.Progress().Done < size*9/10 && ctx.Err() == nil { // stop it deep in the end game
+					time.Sleep(20 * time.Millisecond)
+				}
+				time.Sleep(300 * time.Millisecond)
+				cancel()
+			}()
+		}
+		err := tk.Run(ctx)
+		cancel()
+		if err == nil {
+			if fileHash(t, tk.FinalPath()) != simHash(size) {
+				t.Fatal("wrong content after resuming split pieces")
+			}
+			sent := s.bytesFrom("127.0.0.1") + s.bytesFrom("127.0.0.2")
+			if sent > size+size/4 {
+				t.Fatalf("fetched too much again: %d for a %d file", sent, size)
+			}
+			return
+		}
+		if round == 0 {
+			tk.mu.Lock()
+			n := tk.splits
+			tk.mu.Unlock()
+			if n == 0 {
+				t.Fatal("the pause came before any piece was split")
+			}
+		}
+		done = tk.Progress().Done
+	}
+	t.Fatalf("never finished (last progress %d)", done)
 }

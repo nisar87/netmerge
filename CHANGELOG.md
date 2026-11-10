@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.11.21
+
+- Downloads, the end of a file: when every piece was handed out, a connection that finished early could only race a piece already running on another line, so the last pieces crawled along on single slow connections (seen on a real PC: the last 4 MB of a 148 MB file took 3 seconds while the Wi-Fi's slow connections held them). Now an idle connection takes the second half of the biggest piece still running, again and again, until the halves get small. Interrupted downloads still resume where they stopped.
+- Downloads: fixed a data race found by the race detector: the download list could read a download's size and pieces while that download was still starting up.
+- Downloads: pasting a link again whose download failed or was paused now restarts that download, instead of quietly doing nothing. The add window says so ("already in your list but stopped"). "Add, start later" still leaves it alone.
+
 ## 3.11.20
 
 - Downloads: some servers refuse a download unless the request names the page it came from (a `Referer`), which browsers always send. Seen with Cloudflare's speed-test link, which failed with "the website refused the download" although it works in a browser. When a server refuses the first request and no referer was given, NetMerge now asks once more with the site's own address as the referer (IDM does the same). A referer passed by the browser extension is kept unchanged.

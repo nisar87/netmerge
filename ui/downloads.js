@@ -188,7 +188,7 @@ async function dlSubmit(){
   const ta = $('#dlUrl'); const links = ta.value.split(/\s*\n\s*/).map(s => s.trim()).filter(Boolean);
   if (!links.length) return toast('Paste a link first', true);
   if (links.length === 1 && /^magnet:|\.torrent(\?|#|$)/i.test(links[0])) { const r = await dlAct({action:'add', url: links[0]}, 'Torrent added'); if (r) ta.value = ''; return; }
-  if (links.length > 1) { const r = await dlAct({action:'add', urls: links}); if (r) { ta.value = ''; toast(`${(r.added||[]).length} downloads added` + (r.skipped ? `, ${r.skipped} already in your list` : '')); } return; }
+  if (links.length > 1) { const r = await dlAct({action:'add', urls: links}); if (r) { ta.value = ''; toast(`${(r.added||[]).length} downloads added` + (r.restarted ? `, ${r.restarted} stopped ones restarted` : '') + (r.skipped ? `, ${r.skipped} already in your list` : '')); } return; }
   dlDialog(`<div class="card" role="dialog" aria-modal="true" aria-label="Add download"><h3 style="margin:0">Checking the link…</h3><div class="hint2" style="margin-top:6px">${esc(links[0])}</div></div>`);
   let p; try { p = await api('downloads', {action:'probe', url: links[0]}); } catch(e){ dlClose(); return toast(e.message, true); }
   dlShowProbe(links[0], p);
@@ -210,7 +210,7 @@ function dlShowProbe(link, p){
       <label>Checksum, to check the file is not damaged (SHA-256, SHA-1 or MD5 from the website)<input class="inp" id="dlHash" placeholder="Optional" style="width:100%;margin-top:4px"></label>
       ${(p.lineNames||[]).length > 1 ? `<div>Use these connections<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">${p.lineNames.map(n => `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="dlLn" value="${esc(n)}" checked> ${esc(labelOf(n))}</label>`).join('')}</div></div>` : ''}
     </div></details></div>
-    ${p.duplicate ? '<div class="note warn" style="margin:0 0 10px"><b>This link is already in your list.</b> Adding it again makes a second copy.</div>' : ''}
+    ${p.duplicate ? (dlDupStopped(p) ? '<div class="note warn" style="margin:0 0 10px"><b>This link is already in your list but stopped.</b> Downloading it now restarts that copy (with its name and folder).</div>' : '<div class="note warn" style="margin:0 0 10px"><b>This link is already in your list.</b> Adding it again makes a second copy.</div>') : ''}
     ${fine ? `<div class="hint2" style="margin-bottom:6px">${hls ? '<b>Video stream</b> · about ' + (p.hls.seconds < 90 ? Math.round(p.hls.seconds) + ' sec' : Math.round(p.hls.seconds/60) + ' min') + (p.hls.quality ? ' · ' + esc(p.hls.quality) : '') + ' · ' : (info.size > 0 ? '<b>' + bytes(info.size) + '</b> · ' : '')}${hls ? '' : esc(info.type || 'unknown type')}</div>${hls && (p.hls.heights||[]).length > 1 ? `<label class="hint2" style="display:block;margin:6px 0">Picture quality <select class="sel" id="dlQual" style="min-width:0;margin-left:6px"><option value="0"${!p.height?' selected':''}>Best (${p.hls.heights[0]}p)</option>${p.hls.heights.slice(1).map(h => `<option value="${h}"${p.height===h?' selected':''}>${h}p</option>`).join('')}</select></label>` : ''}<div class="hint2" style="${can?'color:var(--good)':''}">${esc(why + audioNote)}</div>` : ''}
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn" id="dlCancel">Cancel</button><button class="btn" id="dlLater">Add, start later</button><button class="btn pri" id="dlGo">Download now</button></div></div>`);
   if ($('#dlQual')) $('#dlQual').onchange = async e => { const h = +e.target.value; try { const q = await api('downloads', {action:'probe', url: link, height: h}); q.height = h; dlShowProbe(link, q); } catch(err){ toast(err.message, true); } };
@@ -219,12 +219,13 @@ function dlShowProbe(link, p){
   $('#dlCancel').onclick = dlClose;
   setTimeout(() => $('#dlGo') && $('#dlGo').focus(), 30);
 }
+function dlDupStopped(p){ return p.dupState === 'error' || p.dupState === 'paused'; }
 async function dlConfirm(link, p, start){
   const name = $('#dlName').value.trim(), folder = $('#dlFolder').value.trim();
   const body = {action:'add', url: link, start};
   if (name && name !== (p.info||{}).name) body.name = name; else if (name) body.name = name;
   if (folder && folder !== p.dir) body.dir = folder;
-  if (p.duplicate) body.force = true;
+  if (p.duplicate && !dlDupStopped(p)) body.force = true;
   if (p.height) body.height = p.height;
   const tm = $('#dlTime') && $('#dlTime').value;
   if (tm) { const [h, mi] = tm.split(':').map(Number); const d = new Date(); d.setHours(h, mi, 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); body.startAt = Math.floor(d.getTime()/1000); }

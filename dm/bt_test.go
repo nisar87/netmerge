@@ -1513,3 +1513,40 @@ func TestBrowserLinkIntoTheLocalNetworkIsRefusedUpFront(t *testing.T) {
 		}
 	}
 }
+
+// Pasting a link again whose copy failed restarts that copy (seen on a real PC: the add was silently skipped as a
+// duplicate). "Add, start later" leaves it alone, and a running or finished copy is still reported as a duplicate.
+func TestPastedDuplicateRestartsAFailedCopy(t *testing.T) {
+	m := newTestMgr(t, newSimEnv())
+	link := "http://example.com/again.zip"
+	first, err := m.add(dlAdd{URL: link, Start: new(bool)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.pause(first.ID); err != nil {
+		t.Fatal(err)
+	}
+	m.mu.Lock()
+	m.find(first.ID).State = "error"
+	m.mu.Unlock()
+	if st := m.dupState(link); st != "error" {
+		t.Errorf("the add dialog must learn that the copy failed, got %q", st)
+	}
+	count := func() int { m.mu.Lock(); defer m.mu.Unlock(); return len(m.items) }
+	later := false
+	r, err := m.handle(dlReq{Action: "add", dlAdd: dlAdd{URL: link, Start: &later}})
+	if err != nil || r["restarted"] != nil {
+		t.Fatalf("\"start later\" must not restart: %v %v", r, err)
+	}
+	r, err = m.handle(dlReq{Action: "add", dlAdd: dlAdd{URL: link}})
+	if err != nil || r["restarted"] != 1 || count() != 1 {
+		t.Fatalf("a failed copy must be restarted, not skipped or duplicated: %v %v rows=%d", r, err, count())
+	}
+	m.mu.Lock()
+	m.find(first.ID).State = "done"
+	m.mu.Unlock()
+	r, err = m.handle(dlReq{Action: "add", dlAdd: dlAdd{URL: link}})
+	if err != nil || r["duplicate"] != true || r["restarted"] != nil || count() != 1 {
+		t.Fatalf("a finished copy is reported as a duplicate: %v %v", r, err)
+	}
+}

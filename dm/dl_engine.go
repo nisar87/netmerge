@@ -86,6 +86,7 @@ func dlUA() string { return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetMerge/
 
 const (
 	dlMinPiece  = 512 << 10
+	dlMinSplit  = 512 << 10 // near the end a running piece is split in two when each half is at least this big
 	dlMaxPiece  = 16 << 20
 	dlStall     = 25 * time.Second
 	dlMaxFails  = 8
@@ -315,6 +316,7 @@ type dlPiece struct {
 	fails      int
 	cuts       int // how often a slow connection was replaced on this piece
 	atts       []*dlAtt
+	stop       int64 // atomic: the piece was split, running attempts stop after this byte (0 = not split)
 }
 
 func (p *dlPiece) size() int64 { return p.end - p.start + 1 }
@@ -327,6 +329,8 @@ type dlAtt struct {
 	prev   int64
 	speed  float64 // bytes/s (smoothed)
 	slow   bool    // it was cancelled for being far slower than the other connections of its line
+	from   int64   // where this attempt started reading (valid once begun is set)
+	begun  bool
 }
 
 type dlRun struct {
@@ -391,6 +395,7 @@ type dlTask struct {
 	file         *os.File
 	fatal        error
 	single       bool // use one line only
+	splits       int  // pieces split near the end so idle connections can help
 	note         string
 	finalPath    string
 	started      time.Time
@@ -498,7 +503,9 @@ func (t *dlTask) Run(ctx context.Context) error {
 		}
 		c()
 		if err == nil {
+			t.mu.Lock() // Progress reads it while the download starts
 			t.info, perr = info, nil
+			t.mu.Unlock()
 			break
 		}
 		perr = err
@@ -548,10 +555,15 @@ func (t *dlTask) Run(ctx context.Context) error {
 	if t.info.Size == 0 {
 		return t.finish()
 	}
-	t.single = t.env.HostLocked(dlHostOf(t.spec.URL))
+	locked := t.env.HostLocked(dlHostOf(t.spec.URL))
+	t.mu.Lock()
+	t.single = locked
+	t.mu.Unlock()
 	if !t.info.Ranges || t.info.Size < 0 {
+		t.mu.Lock()
 		t.stream = true
 		t.single = true
+		t.mu.Unlock()
 		t.setNote("This site does not allow splitting the file, so one connection is used")
 		err := t.runStream()
 		if err != nil {
@@ -633,23 +645,25 @@ func (t *dlTask) prepareFile() error {
 		if haveState {
 			ps = st.PieceSize
 		}
-		t.pieceSize = ps
+		var pieces []*dlPiece
 		for s := int64(0); s < t.info.Size; s += ps {
 			e := s + ps - 1
 			if e >= t.info.Size {
 				e = t.info.Size - 1
 			}
-			p := &dlPiece{start: s, end: e}
-			t.pieces = append(t.pieces, p)
+			pieces = append(pieces, &dlPiece{start: s, end: e})
 		}
-		if haveState && len(st.Have) == len(t.pieces) {
+		if haveState && len(st.Have) == len(pieces) {
 			for i, h := range st.Have {
-				if h > 0 && h <= t.pieces[i].size() {
-					t.pieces[i].have = h
-					t.pieces[i].done = h == t.pieces[i].size()
+				if h > 0 && h <= pieces[i].size() {
+					pieces[i].have = h
+					pieces[i].done = h == pieces[i].size()
 				}
 			}
 		}
+		t.mu.Lock() // Progress reads them while the download starts
+		t.pieceSize, t.pieces = ps, pieces
+		t.mu.Unlock()
 	}
 	return nil
 }
@@ -670,10 +684,7 @@ func (t *dlTask) saveState() {
 		return
 	}
 	t.mu.Lock()
-	have := make([]int64, len(t.pieces))
-	for i, p := range t.pieces {
-		have[i] = p.have
-	}
+	have := dlGridHave(t.pieces, t.pieceSize, t.info.Size)
 	t.mu.Unlock()
 	_ = t.file.Sync() // data first, then the note that says it is there
 	st := dlState{V: 1, URL: t.spec.URL, FinalURL: t.info.FinalURL, Name: t.info.Name, Size: t.info.Size, ETag: t.info.ETag,
@@ -949,7 +960,10 @@ func (t *dlTask) next(r *dlRun) (*dlPiece, *dlAtt, context.Context) {
 			break
 		}
 	}
-	if pick == nil { // end game: help with the biggest piece still running on another line
+	if pick == nil { // end game: take the second half of the biggest piece still running
+		pick = t.splitLocked()
+	}
+	if pick == nil { // very end: race the biggest piece still running on another line
 		var best int64
 		for _, p := range t.pieces {
 			if p.done || len(p.atts) != 1 || p.atts[0].line == r.line.Name {
@@ -967,6 +981,95 @@ func (t *dlTask) next(r *dlRun) (*dlPiece, *dlAtt, context.Context) {
 	at := &dlAtt{line: r.line.Name, cancel: cancel, since: time.Now()}
 	pick.atts = append(pick.atts, at)
 	return pick, at, ctx
+}
+
+// splitLocked cuts the running piece with the most bytes still to come in two and returns the second half as a new
+// piece. Without it, the last pieces of a file run on one connection each while the other connections sit idle.
+func (t *dlTask) splitLocked() *dlPiece {
+	if dlNoSplit {
+		return nil
+	}
+	var best *dlPiece
+	var bestPos, bestRem int64
+	for _, p := range t.pieces {
+		if p.done || len(p.atts) == 0 {
+			continue
+		}
+		pos := p.start + p.have
+		for _, a := range p.atts {
+			if a.begun {
+				if q := a.from + atomic.LoadInt64(&a.bytes); q > pos {
+					pos = q
+				}
+			}
+		}
+		if rem := p.end - pos + 1; rem > bestRem {
+			best, bestPos, bestRem = p, pos, rem
+		}
+	}
+	if best == nil || bestRem < 2*dlMinSplit {
+		return nil
+	}
+	mid := (bestPos + bestRem/2 + 65535) &^ 65535
+	if mid-bestPos < dlMinSplit || best.end-mid+1 < dlMinSplit {
+		mid = bestPos + bestRem/2
+	}
+	q := &dlPiece{start: mid, end: best.end}
+	best.end = mid - 1
+	atomic.StoreInt64(&best.stop, best.end)
+	for i, p := range t.pieces {
+		if p == best {
+			t.pieces = append(t.pieces[:i+1], append([]*dlPiece{q}, t.pieces[i+1:]...)...)
+			break
+		}
+	}
+	t.splits++
+	return q
+}
+
+var dlNoSplit = false // tests: the old end game, for comparison
+
+// dlGridHave turns the pieces (some of them split) back into the fixed grid the state file uses: for each grid cell,
+// how many bytes from its start are on the disk without a gap. Bytes after a gap are fetched again after a restart.
+func dlGridHave(ps []*dlPiece, size, total int64) []int64 {
+	if size <= 0 {
+		return nil
+	}
+	n := (total + size - 1) / size
+	out := make([]int64, n)
+	i := 0
+	for c := int64(0); c < n; c++ {
+		gs := c * size
+		ge := gs + size // exclusive
+		if ge > total {
+			ge = total
+		}
+		for i < len(ps) && ps[i].end < gs {
+			i++
+		}
+		cur := gs
+		for j := i; j < len(ps) && ps[j].start < ge; j++ {
+			p := ps[j]
+			if p.start > cur {
+				break
+			}
+			got := p.start + p.have
+			if p.done {
+				got = p.end + 1
+			}
+			if got > cur {
+				cur = got
+			}
+			if got <= p.end {
+				break // a gap inside this piece
+			}
+		}
+		if cur > ge {
+			cur = ge
+		}
+		out[c] = cur - gs
+	}
+	return out
 }
 
 func (t *dlTask) release(p *dlPiece, at *dlAtt) {
@@ -1166,6 +1269,7 @@ func (t *dlTask) fetch(ctx context.Context, r *dlRun, p *dlPiece, at *dlAtt) err
 	from := p.start + p.have
 	end := p.end
 	final := t.info.FinalURL
+	at.from, at.begun = from, true
 	t.mu.Unlock()
 	if from > end {
 		t.markDone(p)
@@ -1191,6 +1295,12 @@ func (t *dlTask) fetch(ctx context.Context, r *dlRun, p *dlPiece, at *dlAtt) err
 	var got int64
 	var rerr error
 	for got < want {
+		if s := atomic.LoadInt64(&p.stop); s > 0 && s < end { // the piece was split: its second half went to another connection
+			end = s
+			if want = end - from + 1; got >= want {
+				break
+			}
+		}
 		b := w.cur()
 		free := b[len(b):cap(b)]
 		if int64(len(free)) > want-got {
@@ -1449,7 +1559,9 @@ func (t *dlTask) streamOnce(r *dlRun) error {
 	if t.info.Size >= 0 && off != t.info.Size {
 		return io.ErrUnexpectedEOF
 	}
+	t.mu.Lock()
 	t.info.Size = off
+	t.mu.Unlock()
 	return nil
 }
 
@@ -1561,7 +1673,11 @@ func (w *dlWriter) run() {
 			} else {
 				w.off += int64(len(b))
 				w.t.mu.Lock()
-				if h := w.off - w.p.start; h > w.p.have {
+				h := w.off - w.p.start
+				if sz := w.p.size(); h > sz { // the piece was split while this buffer was on its way
+					h = sz
+				}
+				if h > w.p.have {
 					w.p.have = h
 				}
 				w.t.mu.Unlock()

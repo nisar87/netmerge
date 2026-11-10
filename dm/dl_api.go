@@ -111,7 +111,7 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 			return nil, errors.New("too many links at once (500 at most)")
 		}
 		var added []*dlItem
-		skipped := 0
+		skipped, restarted := 0, 0
 		for _, u := range urls {
 			a := in.dlAdd
 			a.URL = u
@@ -121,6 +121,12 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 			it, err := m.add(a)
 			if err != nil {
 				if errors.Is(err, errDlDuplicate) {
+					// Adding a link whose copy stopped or failed means "try again": restart that copy instead of
+					// silently doing nothing (seen on a real PC after a fix made a refused link work).
+					if (a.Start == nil || *a.Start) && a.StartAt == 0 && m.restartDuplicate(u) == "restarted" {
+						restarted++
+						continue
+					}
 					skipped++
 					if len(urls) == 1 {
 						return map[string]any{"duplicate": true, "items": m.views(), "config": m.config()}, nil
@@ -134,13 +140,16 @@ func (m *dlManager) handle(in dlReq) (map[string]any, error) {
 			}
 			added = append(added, it)
 		}
+		if len(added) == 0 && restarted > 0 {
+			return map[string]any{"duplicate": true, "restarted": restarted, "skipped": skipped, "items": m.views(), "config": m.config()}, nil
+		}
 		if len(added) == 0 && skipped > 0 {
 			return map[string]any{"duplicate": true, "skipped": skipped, "items": m.views(), "config": m.config()}, nil
 		}
 		if len(added) == 0 {
 			return nil, errors.New("none of the links could be used")
 		}
-		return map[string]any{"added": added, "skipped": skipped, "items": m.views(), "config": m.config()}, nil
+		return map[string]any{"added": added, "skipped": skipped, "restarted": restarted, "items": m.views(), "config": m.config()}, nil
 	case "torrentInfo":
 		return m.torrentPreview(in.Torrent)
 	case "files":
@@ -336,7 +345,7 @@ func (m *dlManager) probe(link string, hdr map[string]string, height int) (map[s
 		dir = filepath.Join(dir, dlCategory(info.Name))
 	}
 	return map[string]any{"ok": true, "info": info, "hls": hls, "mux": hls != nil && hls.Audio && dlFindFFmpeg() != "", "dir": dir, "category": dlCategory(info.Name), "lines": len(lines),
-		"locked": m.HostLocked(dlHostOf(link)), "duplicate": m.hasURL(link), "lineNames": dlNames(lines)}, nil
+		"locked": m.HostLocked(dlHostOf(link)), "duplicate": m.dupState(link) != "", "dupState": m.dupState(link), "lineNames": dlNames(lines)}, nil
 }
 
 func (m *dlManager) knownHosts() int {
@@ -351,15 +360,19 @@ func (m *dlManager) knownHosts() int {
 	return n
 }
 
-func (m *dlManager) hasURL(link string) bool {
+func (m *dlManager) hasURL(link string) bool { return m.dupState(link) != "" }
+
+// dupState is the state of the newest download of this link in the list ("" when there is none).
+func (m *dlManager) dupState(link string) string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	st := ""
 	for _, e := range m.items {
 		if e.URL == link {
-			return true
+			st = e.State
 		}
 	}
-	return false
+	return st
 }
 
 func dlNames(ls []dlLine) []string {
