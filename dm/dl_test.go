@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -332,5 +333,35 @@ func TestDLSlowStartingLineIsNotLeftOut(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	if env.HostLocked(dlHostOf(s.URL)) {
 		t.Fatal("host wrongly remembered as locked")
+	}
+}
+
+// A server that only answers requests with a Referer (anti-hotlinking) refuses a pasted link. The download manager
+// then asks again with the site's own address as the referer, as IDM does, and the file comes out complete.
+// (Found on a real PC with https://speed.cloudflare.com/__down?bytes=157286400.)
+func TestDLRefusedWithoutRefererRetriesWithSiteReferer(t *testing.T) {
+	s := newSim(3*MiB + 777)
+	s.needReferer = true
+	defer s.Close()
+	a := newSimLine("A", "127.0.0.1", 0)
+	tk, _, err := runDl(t, newSimEnv(a), s.URL+"/file.bin", dlSpec{})
+	mustOK(t, tk, err, 3*MiB+777)
+}
+
+// A referer that the person or the browser gave is never replaced.
+func TestDLGivenRefererIsKept(t *testing.T) {
+	s := newSim(1 * MiB)
+	s.needReferer = true
+	defer s.Close()
+	c := &http.Client{}
+	_, h, err := dlProbeReferer(context.Background(), c, s.URL+"/file.bin", map[string]string{"Referer": "http://elsewhere.test/"})
+	if err != nil || h["Referer"] != "http://elsewhere.test/" {
+		t.Fatalf("err=%v header=%v", err, h)
+	}
+	// and a server that refuses everything is still reported as refused
+	r := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "no", 403) }))
+	defer r.Close()
+	if _, _, err := dlProbeReferer(context.Background(), c, r.URL+"/x", nil); err == nil {
+		t.Fatal("a server that always refuses must still be refused")
 	}
 }

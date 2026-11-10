@@ -15,6 +15,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -235,6 +236,35 @@ func dlProbe(ctx context.Context, c *http.Client, link string, hdr map[string]st
 		}
 	}
 	return info, nil
+}
+
+// dlProbeReferer asks the server like dlProbe; when the server refuses (403) a request that carries no Referer, it asks
+// once more with the site's own address as the referer, as download managers do (many servers only answer requests that
+// look as if they came from their own page). The header that worked is returned so the download keeps using it.
+func dlProbeReferer(ctx context.Context, c *http.Client, link string, hdr map[string]string) (dlInfo, map[string]string, error) {
+	info, err := dlProbe(ctx, c, link, hdr)
+	var he dlHTTPErr
+	if err == nil || !errors.As(err, &he) || he.Code != 403 {
+		return info, hdr, err
+	}
+	for k := range hdr {
+		if strings.EqualFold(k, "Referer") {
+			return info, hdr, err // the person or the browser gave one: do not second-guess it
+		}
+	}
+	u, perr := url.Parse(link)
+	if perr != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return info, hdr, err
+	}
+	h2 := make(map[string]string, len(hdr)+1)
+	for k, v := range hdr {
+		h2[k] = v
+	}
+	h2["Referer"] = u.Scheme + "://" + u.Host + "/"
+	if info2, err2 := dlProbe(ctx, c, link, h2); err2 == nil {
+		return info2, h2, nil
+	}
+	return info, hdr, err
 }
 
 func dlRetryAfter(r *http.Response) time.Duration {
@@ -460,7 +490,11 @@ func (t *dlTask) Run(ctx context.Context) error {
 		if dlIsFTP(t.spec.URL) {
 			info, err = dlProbeFTP(pctx, l, t.spec.URL, t.hdr, t.private)
 		} else {
-			info, err = dlProbe(pctx, pc, t.spec.URL, t.hdr)
+			var h2 map[string]string
+			info, h2, err = dlProbeReferer(pctx, pc, t.spec.URL, t.hdr)
+			if err == nil {
+				t.hdr = h2
+			}
 		}
 		c()
 		if err == nil {

@@ -42,6 +42,7 @@ type simSrv struct {
 	failFirst   int32
 	slowEvery   int32 // every Nth request is served at slowRate (a throttled connection)
 	slowRate    float64
+	needReferer bool // a request without a Referer is refused with 403 (anti-hotlinking)
 }
 
 func simByte(i int64) byte { return byte((i*131 + (i>>8)*17 + (i >> 16)) ^ 0x5a) }
@@ -86,6 +87,10 @@ func newSim(size int64) *simSrv {
 func (s *simSrv) handle(w http.ResponseWriter, r *http.Request) {
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 	n := atomic.AddInt32(&s.reqs, 1)
+	if s.needReferer && r.Header.Get("Referer") == "" {
+		http.Error(w, "forbidden", 403)
+		return
+	}
 	if s.failFirst > 0 && n <= s.failFirst {
 		http.Error(w, "oops", 500)
 		return

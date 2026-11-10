@@ -315,12 +315,17 @@ use (installed on request, not bundled), checksum use (`.sha256`, `Digest` heade
 
 ## 6. Product backlog, ranked by value for daily use
 
-1. **Remove the tail.** In a test on a three-line PC, 16 plain connections averaged 86 Mbps while the lines were
-   busy at about 130 Mbps together: the slowest line's last connections finish late while the fast line is idle.
-   Fix: race the last few pieces on several connections and keep the first to finish; smaller pieces near the end.
-2. **Look like a real browser** (cookies, referer, user agent, redirects, HEAD/Range handling). One test link
-   (`https://speed.cloudflare.com/__down?bytes=157286400`) was refused ("the website refused the download") although
-   a browser downloads it; a Google file worked. Find the cause first.
+1. **Check the tail with a real benchmark.** In a test on a three-line PC, 16 *plain* connections (a browser, fixed-size
+   connections) averaged 86 Mbps while the lines were busy at about 130 Mbps together: the slow line's last connections
+   finished late while the fast line sat idle. The NetMerge engine already has end-game handling and work stealing, and
+   its own 147 MB downloads showed no visible tail (13 MB/s until the end), so this item is "verify with the benchmark and
+   fix only if a tail shows", not a known defect. Smaller pieces near the end and racing the last pieces are the tools.
+2. **Look like a real browser: DONE for the known case (NetMerge 3.11.20).** `https://speed.cloudflare.com/__down?...`
+   answered 403 to a request without a `Referer` and 200 with one (HEAD, `Range` and the user agent were not the
+   cause; the server ignores `Range`). The engine now retries once with the site's own address as the referer when a
+   server answers 403 and no referer was given (`dlProbeReferer` in `dm/dl_engine.go`, test
+   `TestDLRefusedWithoutRefererRetriesWithSiteReferer`); a referer from the browser or the person is never replaced.
+   Still open: cookies/login walls, and servers that check more than the referer.
 3. **Capture that never gets in the way:** clear on/off state, easy per-site ignore, no double downloads.
 4. **Honest progress and reasons:** speed, time left, and the plain-language reason when a download is stuck.
 5. **Automatic connection count** per file and per site (some servers ban many connections; some throttle each

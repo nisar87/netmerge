@@ -44,10 +44,10 @@ Each phase ends with a gate: do not start the next one until the gate is met.
 
 ### Phase 0 - make it dependable where it is (inside NetMerge)
 
-- Find out why the Cloudflare link was refused (request headers, user agent, HEAD / range handling) and make
-  the download manager behave like a browser where it should.
-- End-game: when only a few pieces are left, download them on several connections at once and keep the first
-  to finish (removes the tail).
+- Done in 3.11.20: the Cloudflare link was refused because that server needs a `Referer`; the engine now retries
+  with the site's own address as the referer (IDM does the same). HEAD, `Range` and the user agent were not the cause.
+- End-game: the engine already races the last pieces; verify with the benchmark (a tail was seen only with plain
+  fixed-size connections in a browser) and tune only if one shows.
 - Pieces: smaller pieces near the end, connection count that grows while speed grows (start 8, up to 32).
 - Daily use for two weeks by the owner, with a short log of every problem.
 - A repeatable benchmark script (same file, merged vs single line, 8/16/32 connections) kept in `scripts/`.

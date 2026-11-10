@@ -286,7 +286,7 @@ func (m *dlManager) probe(link string, hdr map[string]string, height int) (map[s
 			continue
 		}
 		pc := dlLineClient(l, private)
-		info, perr = dlProbe(ctx, pc, link, h)
+		info, _, perr = dlProbeReferer(ctx, pc, link, h)
 		cancel()
 		pc.CloseIdleConnections()
 		if perr == nil {
