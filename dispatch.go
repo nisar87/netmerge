@@ -399,7 +399,16 @@ func allocSlots(weights []float64, n int, slow []bool) []int {
 var (
 	pubMu    sync.Mutex
 	pubSlots = map[string]int{}
+	pubSlow  = map[string]bool{} // judged far too slow to help (not merely without slots for a moment)
 )
+
+// dispatchSlowOf: the dispatcher judged this line far too slow to help. A line can also have no slots for a few
+// seconds after it comes back (it is not in the split yet, or the split is held steady for 2 s); that is not "slow".
+func dispatchSlowOf(name string) bool {
+	pubMu.Lock()
+	defer pubMu.Unlock()
+	return pubSlow[name]
+}
 
 // dispatchSlotsOf: slots (of dispatchSlots) the smart dispatcher currently gives a connection; false when it is off.
 func dispatchSlotsOf(name string) (int, bool) {
@@ -415,8 +424,11 @@ func publishSlots(set []*dispLink, cur map[string]int) {
 	pubMu.Lock()
 	defer pubMu.Unlock()
 	pubSlots = map[string]int{}
-	for _, d := range set {
+	pubSlow = map[string]bool{}
+	slow := slowFlags(set)
+	for i, d := range set {
 		pubSlots[d.name] = cur[d.proxy]
+		pubSlow[d.name] = slow[i]
 	}
 }
 
@@ -424,6 +436,7 @@ func setInfo(v string) {
 	if v == "" {
 		pubMu.Lock()
 		pubSlots = map[string]int{}
+		pubSlow = map[string]bool{}
 		pubMu.Unlock()
 	}
 	infoMu.Lock()

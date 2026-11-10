@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.23
+
+- A line that was just plugged back in (a USB phone, a Wi-Fi stick) could show "Too slow to help: standing by" for a few seconds. The label was shown whenever a line had no share of the connections, and a returning line has none until the next split is settled. It now appears only when NetMerge has really judged the line far slower than the best one.
+
 ## 3.11.22
 
 - Downloads: a name you type in the add window is now kept. Before, the server's name always replaced it (found on a real PC). Names suggested by the browser still give way to the server's, as before.

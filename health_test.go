@@ -423,3 +423,26 @@ func TestDNSAggregate(t *testing.T) {
 		t.Fatalf("a dead line must not count against the servers: %+v", rows)
 	}
 }
+
+// A line that just came back has no slots for a few seconds (it is not in the split yet, or the split is held steady);
+// it must not be shown as "too slow to help" for that. Only the dispatcher's own verdict counts.
+func TestReturningLineIsNotCalledSlow(t *testing.T) {
+	wired := &dispLink{name: "Ethernet", proxy: "LINK1", capRx: 11.6e6, capTx: 12.4e6, seenRx: true, seenTx: true}
+	phone := &dispLink{name: "Phone", proxy: "LINK2", capRx: 2.3e6, capTx: 75e3, seenRx: true, seenTx: true}
+	publishSlots([]*dispLink{wired, phone}, map[string]int{"LINK1": 8}) // phone back, no slots yet
+	defer setInfo("")
+	if n, on := dispatchSlotsOf("Phone"); !on || n != 0 {
+		t.Fatalf("setup: %d %v", n, on)
+	}
+	if dispatchSlowOf("Phone") {
+		t.Fatal("a phone that is merely waiting for slots was called too slow")
+	}
+	if dispatchSlowOf("Wi-Fi") { // not in the split at all yet
+		t.Fatal("a line the dispatcher has not seen yet was called too slow")
+	}
+	slow := &dispLink{name: "Slow", proxy: "LINK3", capRx: 0.5e6, capTx: 0.05e6, seenRx: true, seenTx: true}
+	publishSlots([]*dispLink{wired, slow}, map[string]int{"LINK1": 8})
+	if !dispatchSlowOf("Slow") {
+		t.Fatal("a line far below a tenth of the best one must still be called slow")
+	}
+}

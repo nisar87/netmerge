@@ -416,7 +416,7 @@ func sample(slow bool) {
 		ls.Quality = qualityFor(l.Name)
 		ls.Portal = isPortal(l.Name)
 		ls.Role, ls.Standby = l.Role, running && l.Enabled && present && isStandby(l)
-		if n, on := dispatchSlotsOf(l.Name); on && n == 0 && running && l.Enabled && present && !ls.Standby {
+		if n, on := dispatchSlotsOf(l.Name); on && n == 0 && dispatchSlowOf(l.Name) && running && l.Enabled && present && !ls.Standby {
 			ls.Slow = true
 		}
 		if n, ok := dispatchSlotsOf(l.Name); ok {
