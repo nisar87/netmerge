@@ -380,6 +380,7 @@ var (
 	raiseWant      string
 	raiseCb        = syscall.NewCallback(enumRaise)
 	raiseDone      bool
+	raiseSeen      []string
 	pKeybdEvent    = user32.NewProc("keybd_event")
 	pGetForeground = user32.NewProc("GetForegroundWindow")
 	pWinThread     = user32.NewProc("GetWindowThreadProcessId")
@@ -400,7 +401,11 @@ func enumRaise(hwnd, _ uintptr) uintptr {
 	}
 	title := make([]uint16, 260)
 	pGetWindowText.Call(hwnd, uintptr(unsafe.Pointer(&title[0])), 260)
-	if !strings.EqualFold(syscall.UTF16ToString(title), raiseWant) {
+	// the title is the folder name, on some Windows builds followed by " - File Explorer"
+	tt := strings.ToLower(syscall.UTF16ToString(title))
+	w := strings.ToLower(raiseWant)
+	if tt != w && !strings.HasPrefix(tt, w+" - ") {
+		raiseSeen = append(raiseSeen, syscall.UTF16ToString(title))
 		return 1
 	}
 	if m, _, _ := pIsIconic.Call(hwnd); m != 0 {
@@ -445,13 +450,14 @@ func raiseExplorer(folder string) {
 	raiseWant = folder
 	for i := 0; i < 15; i++ {
 		raiseDone = false
+		raiseSeen = nil
 		pEnumWindows.Call(raiseCb, 0)
 		if raiseDone {
 			return
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	logf("show in folder: no Explorer window titled %q found", folder)
+	logf("show in folder: no Explorer window titled %q found (Explorer windows seen: %q)", folder, raiseSeen)
 }
 
 // dlPower sleeps or shuts the PC down after the downloads (a shutdown has a one minute warning that can be cancelled).
