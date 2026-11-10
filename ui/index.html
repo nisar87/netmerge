@@ -578,6 +578,12 @@ details.adv[open] summary::before{content:"▾ "}
         <div class="hint" style="color:var(--mute);font-size:13px;margin-bottom:12px">Optional. Set how much data each connection may use per month and NetMerge warns you at 80% and 100%, or leaves the connection out of the merge when it runs out. Leave a box empty for no limit.</div>
         <div id="usQuota"></div>
       </div>
+      <details class="card" style="margin:16px 0" id="usFix">
+        <summary style="cursor:pointer;font-weight:600">Correct a wrong number</summary>
+        <div class="hint" style="color:var(--mute);font-size:13px;margin:8px 0 12px">If a day shows far more data than you really used (an old version could count an adapter that was unplugged and plugged in again as billions of bytes), choose the connection and the day and type the real figure. Windows' own network statistics are the reference.</div>
+        <div class="qrow"><select class="sel" id="fxLink" aria-label="Connection"></select><select class="sel" id="fxDay" aria-label="Day"></select></div>
+        <div class="qrow"><b style="min-width:70px">Down (MB)</b><input class="inp" id="fxDown" type="number" min="0" step="1" inputmode="numeric"><b style="min-width:70px;margin-left:12px">Up (MB)</b><input class="inp" id="fxUp" type="number" min="0" step="1" inputmode="numeric"><button class="btn primary" id="fxSave" style="margin-left:12px">Save</button></div>
+      </details>
       <h3 style="margin:0 0 8px">Daily usage <span id="usPeriod" style="font-weight:400;color:var(--mute);font-size:13px"></span> <span id="usUnit" style="font-weight:400;color:var(--mute);font-size:13px"></span></h3>
       <div class="scrollbox" style="max-height:460px"><table class="tbl" id="usTbl"></table></div>
     </section>
@@ -1302,6 +1308,20 @@ function renderUsage(){
     $('#qAct').onchange = e => { local.quotaAction = e.target.value; saveSoon('Saved'); setTimeout(loadUsage, 900); };
   }
   q.querySelectorAll('input[data-n]').forEach(inp => { if (document.activeElement !== inp){ const l = local.links.find(x => x.name === inp.dataset.n); inp.value = l && l.quotaGB > 0 ? l.quotaGB : ''; } });
+  // correction tool: the lists are rebuilt only when the connections or days change, so nothing a person is typing is lost
+  { const fl = $('#fxLink'), fd = $('#fxDay'), k = local.links.map(l=>l.name).join('|') + '#' + U.days[0].date;
+    if (fl.dataset.keys !== k){
+      fl.dataset.keys = k;
+      fl.innerHTML = local.links.map(l => `<option value="${esc(l.name)}">${esc(l.label)}</option>`).join('');
+      fd.innerHTML = U.days.map(d => `<option value="${esc(d.date)}">${esc(d.date)}</option>`).join('');
+      const fill = () => { const d = U.days.find(x => x.date === fd.value), v = (d && d.links && d.links[fl.value]) || [0,0]; $('#fxDown').value = Math.round(v[0]/1e6); $('#fxUp').value = Math.round(v[1]/1e6); };
+      fl.onchange = fd.onchange = fill; fill();
+      $('#fxSave').onclick = async () => {
+        try { await api('usage', {action:'set', link: fl.value, day: fd.value, downMB: +$('#fxDown').value || 0, upMB: +$('#fxUp').value || 0}); toast('Number corrected'); loadUsage(); }
+        catch(e){ toast(e.message, true); }
+      };
+    }
+  }
   if (document.activeElement !== $('#qReset')) $('#qReset').value = local.quotaReset || 1;
   if (document.activeElement !== $('#qAct')) $('#qAct').value = local.quotaAction || 'warn';
 }

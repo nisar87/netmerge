@@ -185,8 +185,59 @@ type usageDayOut struct {
 	Links map[string][2]uint64 `json:"links"`
 }
 
+// usageSet replaces one connection's numbers for one day (the page's "correct a wrong number"). Older versions could
+// count a restarted adapter counter as billions of bytes; this lets anyone put the real figure back.
+func usageSet(link, day string, rx, tx uint64) error {
+	if _, err := time.Parse("2006-01-02", day); err != nil {
+		return fmt.Errorf("the date is not valid")
+	}
+	known := false
+	for _, l := range getSettings().Links {
+		if l.Name == link {
+			known = true
+		}
+	}
+	if !known {
+		return fmt.Errorf("unknown connection")
+	}
+	usageMu.Lock()
+	defer usageMu.Unlock()
+	usageLoadLocked()
+	m := usage[day]
+	if m == nil {
+		m = map[string][2]uint64{}
+		usage[day] = m
+	}
+	if rx == 0 && tx == 0 {
+		delete(m, link)
+	} else {
+		m[link] = [2]uint64{rx, tx}
+	}
+	usageDirty = true
+	return nil
+}
+
 func registerUsageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/usage", guard(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			var in struct {
+				Action string  `json:"action"`
+				Link   string  `json:"link"`
+				Day    string  `json:"day"`
+				DownMB float64 `json:"downMB"`
+				UpMB   float64 `json:"upMB"`
+			}
+			if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in) != nil || in.Action != "set" || in.DownMB < 0 || in.UpMB < 0 || in.DownMB > 1e7 || in.UpMB > 1e7 {
+				writeErr(w, 400, "bad request")
+				return
+			}
+			if err := usageSet(in.Link, in.Day, uint64(in.DownMB*1e6), uint64(in.UpMB*1e6)); err != nil {
+				writeErr(w, 400, err.Error())
+				return
+			}
+			go usageSave()
+			quotaCheck()
+		}
 		s := getSettings()
 		now := time.Now()
 		start := periodStart(now, s.QuotaReset)

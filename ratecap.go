@@ -40,3 +40,12 @@ func rateCeiling(linkRate string) float64 {
 	}
 	return c
 }
+
+// plausibleDelta: can this many bytes (in / out) have crossed the adapter in dt seconds?
+func plausibleDelta(dr, dtx uint32, dt float64, linkRate string) bool {
+	if dt <= 0 {
+		return true
+	}
+	c := rateCeiling(linkRate)
+	return float64(dr)/dt <= c && float64(dtx)/dt <= c
+}

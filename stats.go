@@ -391,7 +391,7 @@ func sample(slow bool) {
 					// bytes still count towards the totals, so usage stays exact.
 					// A counter that restarted (adapter unplugged and plugged in again) reads as billions of bytes
 					// in one second: such a reading is thrown away, for the speed and for the usage.
-					if ceil := rateCeiling(a.LinkRate); dtC > 0 && (float64(dr)/dtC > ceil || float64(dtx)/dtC > ceil) {
+					if !plausibleDelta(dr, dtx, dtC, a.LinkRate) {
 						logf("%s: ignored an impossible counter reading (%d bytes in, %d out in %.1f s)", l.Name, dr, dtx, dtC)
 						dr, dtx = 0, 0
 					} else if dtC >= 0.5 && dtC <= 2.2 {

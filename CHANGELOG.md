@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.18
+
+- Usage: the same counter restart that confused the line speeds (3.11.17) also added about 4.3 GB to that day's usage in each direction, which could wrongly use up a monthly allowance. New on the Usage page: "Correct a wrong number" (choose the connection and the day, type the real figure). The rejection of impossible counter readings now has its own test using the exact numbers seen on a real PC.
+
 ## 3.11.17
 
 - Fixed a merge problem that appeared after a connection was unplugged and plugged in again (a USB phone, a Wi-Fi stick): when the adapter's byte counter restarted, NetMerge read it as billions of bytes in one second, learned that as the line's speed and saved it. Every other line then looked "too slow to help: standing by" and all connections went to the phone, even after restarting. Impossible counter readings are now thrown away (for speed and for usage), no line can be remembered as faster than its adapter can carry, and the saved speed memory is reset (it is relearned within seconds).
