@@ -46,11 +46,14 @@ Each phase ends with a gate: do not start the next one until the gate is met.
 
 - Done in 3.11.20: the Cloudflare link was refused because that server needs a `Referer`; the engine now retries
   with the site's own address as the referer (IDM does the same). HEAD, `Range` and the user agent were not the cause.
-- End-game: the engine already races the last pieces; verify with the benchmark (a tail was seen only with plain
-  fixed-size connections in a browser) and tune only if one shows.
+- End-game: done in 3.11.21. A real tail was measured on the owner's PC (cable + Wi-Fi, 148 MB file): the last
+  10 MB took 3.5-5 s because the Wi-Fi's slow connections held the final pieces. Idle connections now take the second
+  half of the biggest running piece. After: last 10 MB in 1.6-2.3 s, whole file 15-16 s instead of 19-20 s (runs at
+  different times, so only roughly comparable). Also learned: this ISP slows the cable after about 100 MB, and
+  Cloudflare's `__down` links and cloudflaremirrors.com ignore ranges (one connection), so they are not benchmarks.
 - Pieces: smaller pieces near the end, connection count that grows while speed grows (start 8, up to 32).
 - Daily use for two weeks by the owner, with a short log of every problem.
-- A repeatable benchmark script (same file, merged vs single line, 8/16/32 connections) kept in `scripts/`.
+- A repeatable benchmark script: `scripts/dmtest/bench.py` (done; extend it with single-line and 16/32-connection runs).
 
 Gate: two weeks without data loss or corrupt file; the refused-link case understood; benchmark numbers recorded.
 
