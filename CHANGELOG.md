@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.11.24
+
+Found in a full review of NetMerge:
+
+- Security: any website open in a browser could make NetMerge act through a plain link or image pointing at 127.0.0.1:9196: turn merging off, quit NetMerge, start a speed test (using mobile data), change the line shares or block settings. Everything that changes something now accepts only the page's own request (POST with NetMerge's header), which other websites cannot send.
+- Usage: a byte counter read across a long gap (the PC waking from sleep) is no longer counted. A USB adapter's counter often restarts during sleep, and over hours such a restart could pass as believable traffic and add up to about 4 GB of false usage.
+- The network engine's download is now checked against a fingerprint fixed inside NetMerge, not only against the one listed next to the file.
+- Updating: if keeping a copy of the running version failed, the update could put back an older version instead. The new version is now put in place with a few retries, and the previous one is restored only if the program file is missing.
+- The desktop shortcut was not created when the folder name contains an apostrophe (C:\Users\O'Brien).
+- A second launch could hang if another program held NetMerge's port without answering.
+- The speed test page now says that it uses real data on every connection (about 100-300 MB on a mobile line).
+- The crash log is started afresh once it passes 1 MB.
+
 ## 3.11.23
 
 - A line that was just plugged back in (a USB phone, a Wi-Fi stick) could show "Too slow to help: standing by" for a few seconds. The label was shown whenever a line had no share of the connections, and a returning line has none until the next split is settled. It now appears only when NetMerge has really judged the line far slower than the best one.

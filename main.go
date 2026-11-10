@@ -32,7 +32,11 @@ func main() {
 	}
 	// a hard crash of the Go runtime writes its report here (the window has no console to show it)
 	os.MkdirAll(filepath.Join(rootDir, "data"), 0o755)
-	if cf, err := os.OpenFile(filepath.Join(rootDir, "data", "go-crash.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
+	crashLog := filepath.Join(rootDir, "data", "go-crash.log")
+	if st, err := os.Stat(crashLog); err == nil && st.Size() > 1<<20 { // one line per start adds up over the years
+		_ = os.Rename(crashLog, crashLog+".old")
+	}
+	if cf, err := os.OpenFile(crashLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
 		fmt.Fprintf(cf, "--- start %s ---\n", time.Now().Format("2006-01-02 15:04:05"))
 		debug.SetCrashOutput(cf, debug.CrashOptions{})
 	}
@@ -41,7 +45,8 @@ func main() {
 	// Second launch: just show the window of the running instance.
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", uiPort))
 	if err != nil {
-		if c, err := http.Get(url + "api/ping"); err == nil {
+		// a short timeout: a program that holds the port but never answers must not leave this launch hanging
+		if c, err := (&http.Client{Timeout: 3 * time.Second}).Get(url + "api/ping"); err == nil {
 			c.Body.Close()
 			if !*background {
 				openWindow(url)

@@ -661,7 +661,7 @@ func registerBlockRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, blockState())
 	}))
-	mux.HandleFunc("/api/block/allow", guard(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/block/allow", action(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Domain string `json:"domain"`
 		}
@@ -672,11 +672,11 @@ func registerBlockRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, blockState())
 	}))
-	mux.HandleFunc("/api/block/update", guard(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/block/update", action(func(w http.ResponseWriter, r *http.Request) {
 		go safely("pack update", func() { updateDuePacks(true) })
 		writeJSON(w, map[string]bool{"ok": true})
 	}))
-	mux.HandleFunc("/api/fixconflict", guard(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/fixconflict", action(func(w http.ResponseWriter, r *http.Request) {
 		if err := fixConflicts(); err != nil {
 			writeErr(w, 500, err.Error())
 			return

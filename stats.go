@@ -394,6 +394,14 @@ func sample(slow bool) {
 					if !plausibleDelta(dr, dtx, dtC, a.LinkRate) {
 						logf("%s: ignored an impossible counter reading (%d bytes in, %d out in %.1f s)", l.Name, dr, dtx, dtC)
 						dr, dtx = 0, 0
+					} else if dtC > counterGap {
+						// after sleep or hibernation (or a long stall) a USB adapter's counter has often restarted;
+						// over hours, a restarted 32-bit counter still looks like a believable speed, so a reading
+						// across such a gap is not counted (no traffic flows while the PC sleeps anyway)
+						if dr > 0 || dtx > 0 {
+							logf("%s: not counting %d bytes in, %d out read across a %.0f s gap", l.Name, dr, dtx, dtC)
+						}
+						dr, dtx = 0, 0
 					} else if dtC >= 0.5 && dtC <= 2.2 {
 						tr.rx, tr.tx = float64(dr)/dtC, float64(dtx)/dtC
 					}

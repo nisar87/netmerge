@@ -245,14 +245,10 @@ func setAutoStart(on bool) error {
 
 func createShortcut() {
 	exe, _ := os.Executable()
+	q := func(v string) string { return strings.ReplaceAll(v, "'", "''") } // a folder like C:\Users\O'Brien
 	script := fmt.Sprintf(`$s=(New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Desktop')+'\NetMerge.lnk');$s.TargetPath='%s';$s.WorkingDirectory='%s';$s.IconLocation='%s,0';$s.Save()`,
-		exe, filepath.Dir(exe), exe)
+		q(exe), q(filepath.Dir(exe)), q(exe))
 	_, _ = powershell(script)
-}
-
-func startEngineProcess(exe string, args ...string) (*exec.Cmd, error) {
-	c := hiddenCmd(exe, args...)
-	return c, c.Start()
 }
 
 // setShareFirewall opens (or closes) the proxy-sharing ports to the local network only.
@@ -310,12 +306,15 @@ $ErrorActionPreference = 'Stop'
 try { Wait-Process -Id $ProcId -Timeout 40 } catch {}
 Get-Process mihomo -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep 4
-try {
-  Copy-Item -Force $Cur $Prev
-  Move-Item -Force $New $Cur
-} catch {
-  if (Test-Path $Prev) { Copy-Item -Force $Prev $Cur }
+# keep the running version as the "previous" one; if that copy fails, the update still goes ahead
+try { Copy-Item -Force $Cur $Prev } catch {}
+# the old program may need a moment to let go of its file
+$done = $false
+for ($i = 0; $i -lt 8 -and -not $done; $i++) {
+  try { Move-Item -Force $New $Cur; $done = $true } catch { Start-Sleep 2 }
 }
+# only if the program file is gone altogether is the previous version put back
+if (-not (Test-Path $Cur) -and (Test-Path $Prev)) { Copy-Item -Force $Prev $Cur }
 Start-Process $Cur
 `
 	if err := os.WriteFile(script, []byte(body), 0o644); err != nil {

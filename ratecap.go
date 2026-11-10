@@ -41,6 +41,9 @@ func rateCeiling(linkRate string) float64 {
 	return c
 }
 
+// counterGap: a byte-counter reading taken this long after the previous one is not counted (see stats.go).
+const counterGap = 6.0 // seconds
+
 // plausibleDelta: can this many bytes (in / out) have crossed the adapter in dt seconds?
 func plausibleDelta(dr, dtx uint32, dt float64, linkRate string) bool {
 	if dt <= 0 {

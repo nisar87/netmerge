@@ -21,6 +21,11 @@ import (
 
 const engineVersion = "1.19.33"
 
+// engineZipSHA256 is the fingerprint of mihomo-windows-amd64-v1.19.33.zip as published by the mihomo project. It is
+// pinned here, so a release changed after the fact (or a different file served under the same name) is refused
+// even if its own listed fingerprint matches. Change it together with engineVersion.
+var engineZipSHA256 = "6ab2180875f9f6fff8b19386d760daec257f66b45f72b3afc650634272fa837a"
+
 var (
 	edMu     sync.Mutex
 	edStatus = "" // "" | "downloading" | "error"
@@ -68,6 +73,12 @@ func downloadEngine() {
 		}
 		if asset == "" {
 			return fmt.Errorf("the engine file %s was not found in the release", want)
+		}
+		if engineZipSHA256 != "" {
+			if sha != "" && sha != engineZipSHA256 {
+				return fmt.Errorf("the engine release lists a different fingerprint than the one NetMerge expects, so it was not used")
+			}
+			sha = engineZipSHA256
 		}
 		if len(sha) != 64 {
 			return fmt.Errorf("the engine release has no fingerprint to check against")

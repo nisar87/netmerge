@@ -47,6 +47,19 @@ func guard(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// action is guard for endpoints that change something: they answer only POST, which needs the X-NetMerge header.
+// A GET can be made by any website (an image or a link pointing at 127.0.0.1:9196), so a GET must never turn
+// merging off, quit, start a speed test (mobile data) or change settings.
+func action(h http.HandlerFunc) http.HandlerFunc {
+	return guard(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, 405, "use POST")
+			return
+		}
+		h(w, r)
+	})
+}
+
 func hostGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := strings.ToLower(r.Host)
@@ -74,7 +87,7 @@ func routes() http.Handler {
 		writeJSON(w, map[string]any{"snap": getSnapshot(), "settings": s, "test": getTest(), "adapters": getAdapters(false), "block": blockSummary(), "conflict": detectConflict(), "downloads": dm.Brief(), "downloadsOn": dm.Enabled()})
 	}))
 
-	mux.HandleFunc("/api/power", guard(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/power", action(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			On bool `json:"on"`
 		}
@@ -91,7 +104,7 @@ func routes() http.Handler {
 		writeJSON(w, map[string]bool{"ok": true})
 	}))
 
-	mux.HandleFunc("/api/settings", guard(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/settings", action(func(w http.ResponseWriter, r *http.Request) {
 		var in Settings
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			writeErr(w, 400, "bad settings")
@@ -176,7 +189,7 @@ func routes() http.Handler {
 		writeJSON(w, map[string]any{"events": allEvents()})
 	}))
 
-	mux.HandleFunc("/api/linkforget", guard(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/linkforget", action(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Name string `json:"name"`
 		}
@@ -195,17 +208,17 @@ func routes() http.Handler {
 		writeJSON(w, map[string]bool{"ok": true})
 	}))
 
-	mux.HandleFunc("/api/rescan", guard(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/rescan", action(func(w http.ResponseWriter, r *http.Request) {
 		syncLinks(getAdapters(true))
 		writeJSON(w, map[string]bool{"ok": true})
 	}))
 
-	mux.HandleFunc("/api/speedtest", guard(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/speedtest", action(func(w http.ResponseWriter, r *http.Request) {
 		go safely("speed test", runSpeedTest)
 		writeJSON(w, map[string]bool{"ok": true})
 	}))
 
-	mux.HandleFunc("/api/applyweights", guard(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/applyweights", action(func(w http.ResponseWriter, r *http.Request) {
 		t := getTest()
 		updateSettings(func(s *Settings) {
 			for i := range s.Links {
@@ -232,7 +245,7 @@ func routes() http.Handler {
 		writeJSON(w, map[string]string{"text": tailFile(filepath.Join(rootDir, "data", name), 300)})
 	}))
 
-	mux.HandleFunc("/api/quit", guard(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/quit", action(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]bool{"ok": true})
 		go func() { time.Sleep(300 * time.Millisecond); requestQuit() }()
 	}))
