@@ -126,3 +126,19 @@ for (const [route, destination] of [['connections', 'connections/presets'], ['pr
     await expect(page.locator('#pageTitle')).toBeFocused();
   });
 }
+
+test('after an update the window refreshes by itself, but waits while something is being typed', async ({ page, fixture }) => {
+  await navigate(page, 'protection/blocking');
+  await page.evaluate(() => { window.oldWindow = true; });
+  // typing in a list that is not saved yet: the refresh must wait
+  await page.locator('#blkMine').fill('typed.example.test');
+  await fixture.patch({ state: { snap: { app: '9.9.9-fixture' } } });
+  await waitForRead(page, 'state');
+  await expect(page.locator('#connectionBanner')).toContainText('NetMerge was updated');
+  expect(await page.evaluate(() => window.oldWindow)).toBe(true);
+  // nothing unsaved: the next poll loads the new window
+  await page.evaluate(() => { document.activeElement?.blur(); document.querySelector('#blkMine').dataset.dirty = ''; });
+  await expect.poll(() => page.evaluate(() => window.oldWindow === undefined), { timeout: 10_000 }).toBe(true);
+  await expect(page.locator('#connectionBanner')).toBeHidden();
+  await expect(page.locator('#blkMine')).toBeVisible();
+});
