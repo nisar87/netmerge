@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.20
+
+- Downloads: some servers refuse a download unless the request names the page it came from (a `Referer`), which browsers always send. Seen with Cloudflare's speed-test link, which failed with "the website refused the download" although it works in a browser. When a server refuses the first request and no referer was given, NetMerge now asks once more with the site's own address as the referer (IDM does the same). A referer passed by the browser extension is kept unchanged.
+
 ## 3.11.19
 
 - A connection is now called "too slow to help: standing by" only when it is under a tenth of the best connection in both directions. Before, download and upload were added together, so a phone that downloads well but had never been seen uploading could flip between normal and "too slow" with no connections (seen on a real PC: 18 Mbps down, 0.6 up, next to a wired line of 93 down and 99 up).
