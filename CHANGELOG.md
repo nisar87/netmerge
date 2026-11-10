@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.17
+
+- Fixed a merge problem that appeared after a connection was unplugged and plugged in again (a USB phone, a Wi-Fi stick): when the adapter's byte counter restarted, NetMerge read it as billions of bytes in one second, learned that as the line's speed and saved it. Every other line then looked "too slow to help: standing by" and all connections went to the phone, even after restarting. Impossible counter readings are now thrown away (for speed and for usage), no line can be remembered as faster than its adapter can carry, and the saved speed memory is reset (it is relearned within seconds).
+
 ## 3.11.16
 
 - "Show in folder": the Explorer window was not being found because its title can carry " - File Explorer" after the folder name. It is now matched correctly, and the log lists the Explorer windows it saw when it cannot find one.

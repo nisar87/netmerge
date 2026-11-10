@@ -389,7 +389,12 @@ func sample(slow bool) {
 					// A reading that comes right after a stall (no sample for >2.2 s) or right behind another one
 					// (<0.5 s) is not trusted for the speed shown: the previous speed is kept for that tick. The
 					// bytes still count towards the totals, so usage stays exact.
-					if dtC >= 0.5 && dtC <= 2.2 {
+					// A counter that restarted (adapter unplugged and plugged in again) reads as billions of bytes
+					// in one second: such a reading is thrown away, for the speed and for the usage.
+					if ceil := rateCeiling(a.LinkRate); dtC > 0 && (float64(dr)/dtC > ceil || float64(dtx)/dtC > ceil) {
+						logf("%s: ignored an impossible counter reading (%d bytes in, %d out in %.1f s)", l.Name, dr, dtx, dtC)
+						dr, dtx = 0, 0
+					} else if dtC >= 0.5 && dtC <= 2.2 {
 						tr.rx, tr.tx = float64(dr)/dtC, float64(dtx)/dtC
 					}
 					tr.totRx += uint64(dr)

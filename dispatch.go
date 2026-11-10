@@ -170,6 +170,18 @@ func dispatchTick() {
 		if d.capRx == 0 {
 			d.capRx, d.capTx = neutralCap, neutralCap
 		}
+		// no line carries more than its adapter can: this also repairs a remembered speed that a counter
+		// restart once inflated
+		if a, ok := adapterByName(l.Name); ok {
+			if c := rateCeiling(a.LinkRate); d.capRx > c || d.capTx > c {
+				if d.capRx > c {
+					d.capRx = c
+				}
+				if d.capTx > c {
+					d.capTx = c
+				}
+			}
+		}
 		set = append(set, d)
 	}
 	statsMu.Unlock()
@@ -440,7 +452,8 @@ func buildInfo(set []*dispLink, cur map[string]int) string {
 // learned capacities survive a restart (data\\capacity.json), so the first minutes after start are not blind.
 var capSaved time.Time
 
-// capacity3.json: the first file (capacity.json) held speeds inflated by false counter spikes in older versions
+// capacity4.json: the earlier files (capacity.json, capacity3.json) held speeds inflated by false counter spikes (an
+// adapter unplugged and plugged in again); such readings are now thrown away at the source (see ratecap.go)
 // capKey names a line for the speed memory: the name together with the hardware, so a different adapter that
 // ends up with the same name (a cable moved to another adapter, a Wi-Fi stick swapped) starts fresh.
 func capKey(name string) string {
@@ -450,7 +463,7 @@ func capKey(name string) string {
 	return name
 }
 
-func capFile() string { return filepath.Join(rootDir, "data", "capacity3.json") }
+func capFile() string { return filepath.Join(rootDir, "data", "capacity4.json") }
 
 func loadCaps(d *dispLink) {
 	if d.capRx != 0 {
