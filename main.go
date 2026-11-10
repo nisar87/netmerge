@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"netmerge/dm"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -124,8 +123,6 @@ func main() {
 	go safely("events", eventsLoop)
 	go dnsGuardLoop()
 	go presetScheduleLoop()
-	setupDownloads()
-	dm.LoadSwitch() // the download manager starts only when the person has turned it on
 	if engineMissing() {
 		go safely("engine download", downloadEngine)
 	}
@@ -147,7 +144,6 @@ func main() {
 	usageSave()
 	eventsSave()
 	historySave()
-	dm.Shutdown()
 	engine.Stop()
 	_ = srv.Close()
 }

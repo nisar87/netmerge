@@ -1,8 +1,7 @@
-import { test, expect, navigate, waitForRead, mutate, enableDownloads } from '../fixtures/browser.mjs';
+import { test, expect, navigate, waitForRead, mutate } from '../fixtures/browser.mjs';
 import { createFixture, FAKE_PASSWORD, NOW } from '../fixtures/data.mjs';
 
 const BASE = createFixture();
-const downloadAction = (page, action, id) => page.locator(`[data-dl="${action}"][data-id="${id}"]`);
 
 for (const [id, key, route, value] of [
   ['autoTog', 'autoStart', 'settings/general', true],
@@ -139,138 +138,6 @@ test('manual log refresh keeps the selected source and renders log markup as tex
   await expect(page.locator('#logBox img')).toHaveCount(0);
   await waitForRead(page, 'log', () => page.locator('#logRefresh').click());
   expect((await fixture.requests()).filter(r => r.path === '/api/log').at(-1).query).toEqual({ f: 'engine' });
-});
-
-test('single download probes metadata then submits a distinct add request', async ({ page, fixture }) => {
-  await enableDownloads(fixture); await navigate(page, 'downloads/transfers');
-  const url = 'https://downloads.example.test/new-test.zip';
-  await page.locator('#dlNew').click();
-  await page.locator('#dlUrl').fill(url);
-  await mutate(page, 'downloads', { action: 'probe', url }, () => page.locator('#dlAddBtn').click());
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await page.locator('#dlName').fill('named-fixture.zip');
-  await mutate(page, 'downloads', { action: 'add', url, start: false, name: 'named-fixture.zip', conns: 0, limit: 0, queue: '' }, () => page.locator('#dlLater').click());
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  const added = (await fixture.read('downloads')).items.find(i => i.url === url);
-  expect(added).toMatchObject({ name: 'named-fixture.zip', state: 'paused' });
-  await expect(page.getByText('named-fixture.zip', { exact: true })).toBeVisible();
-});
-
-test('download dialog Escape restores focus and does not queue anything', async ({ page, fixture }) => {
-  await enableDownloads(fixture); await navigate(page, 'downloads/transfers');
-  await page.locator('#dlNew').click();
-  await page.locator('#dlUrl').fill('https://downloads.example.test/cancelled.zip');
-  await page.locator('#dlAddBtn').click();
-  await expect(page.locator('#dlName')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await page.getByRole('alertdialog', { name: 'Discard changes' }).getByRole('button', { name: 'Discard', exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.locator('#dlNew')).toBeFocused();
-  expect((await fixture.requests()).filter(r => r.body?.action === 'add')).toEqual([]);
-});
-
-test('download lifecycle actions preserve byte units and distinguish remove from delete-file', async ({ page, fixture }) => {
-  await enableDownloads(fixture); await navigate(page, 'downloads/transfers');
-  const id = 'fixture-0001';
-  await mutate(page, 'downloads', { action: 'pause', id }, () => downloadAction(page, 'pause', id).click());
-  await page.locator(`.dl-name[data-id="${id}"]`).click();
-  await mutate(page, 'downloads', { action: 'limit', id, limitBytes: 1048576 }, () => page.locator(`[data-lim="${id}"]`).selectOption('1'));
-  await mutate(page, 'downloads', { action: 'resume', id }, () => page.locator('#dlDlg').locator(`[data-dl="resume"][data-id="${id}"]`).click());
-  await page.locator('#dlCancel').click();
-  await expect(page.locator('#dlDlg')).toHaveCount(0);
-  await mutate(page, 'downloads', { action: 'retry', id: 'fixture-0004' }, () => downloadAction(page, 'retry', 'fixture-0004').click());
-  await page.locator('.dl-name[data-id="fixture-0003"]').click();
-  await mutate(page, 'downloads', { action: 'remove', id: 'fixture-0003', deleteFiles: true }, async () => {
-    await downloadAction(page, 'delfile', 'fixture-0003').click();
-    await page.getByRole('alertdialog').getByRole('button', { name: 'Continue', exact: true }).click();
-  });
-  expect((await fixture.read('downloads')).items.some(i => i.id === 'fixture-0003')).toBe(false);
-});
-
-for (const [action, field] of [['notifyTog', 'noNotify'], ['torTog', 'noTorrents'], ['upTog', 'noUpload']]) {
-  test(`download ${field} toggle preserves complete queues, rules and limits`, async ({ page, fixture }) => {
-    await enableDownloads(fixture); await navigate(page, 'downloads/settings');
-    const config = (await fixture.read('downloads')).config;
-    await mutate(page, 'downloads', { action: 'config', config: { ...config, [field]: true } }, () => page.locator(`[data-dm="${action}"]`).click());
-    expect((await fixture.read('downloads')).config).toEqual({ ...config, [field]: true });
-  });
-}
-
-test('download folder draft survives unrelated refresh and saving retains complete config', async ({ page, fixture }) => {
-  await enableDownloads(fixture); await navigate(page, 'downloads/settings');
-  await page.locator('#dlDir').fill('C:\\Fixture\\Draft folder');
-  await page.locator('#pageTitle').click();
-  await waitForRead(page, 'downloads', () => fixture.patch({ downloads: { knownSites: 3 } }));
-  await expect(page.locator('#dlDir')).toHaveValue('C:\\Fixture\\Draft folder');
-  const config = (await fixture.read('downloads')).config;
-  await mutate(page, 'downloads', { action: 'config', config: { ...config, dir: 'C:\\Fixture\\Draft folder' } }, () => page.locator('#dlDirSave').click());
-});
-
-test('queue configuration and start preserve their distinct mutation contracts', async ({ page, fixture }) => {
-  await enableDownloads(fixture); await navigate(page, 'downloads/queues');
-  const config = (await fixture.read('downloads')).config;
-  await page.getByRole('button', { name: 'Manage queues', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Queue name', exact: true }).fill('Fixture overnight');
-  const queues = config.queues.map(q => ({ ...q, name: 'Fixture overnight' }));
-  await mutate(page, 'downloads', { action: 'config', config: { ...config, queues } }, () => page.locator('#qSave').click());
-  await navigate(page, 'downloads/transfers'); await navigate(page, 'downloads/queues');
-  await mutate(page, 'downloads', { action: 'startQueue', queue: 'night' }, () => page.locator('[data-start-queue="night"]').click());
-});
-
-test('browser pairing and interception settings use inverse extOff and no config overwrite', async ({ page, fixture }) => {
-  await enableDownloads(fixture); await navigate(page, 'downloads/browser');
-  await mutate(page, 'downloads', { action: 'extConfig', extMinMB: 25, extOff: false }, () => page.locator('#dlExtMin').selectOption('25'));
-  await mutate(page, 'downloads', { action: 'extConfig', extMinMB: 25, extOff: true }, () => page.locator('#dlExtOn').click());
-  await expect(page.locator('#dlExtOn')).toHaveAttribute('aria-checked', 'false');
-  await mutate(page, 'downloads', { action: 'extCode' }, () => page.locator('#dlExtCode').click());
-  await expect(page.locator('#dlExtCodeBox')).toHaveText('TEST1-TEST2');
-  await page.keyboard.press('Escape');
-  await mutate(page, 'downloads', { action: 'extRevoke', id: 'fixture-browser' }, async () => {
-    await page.locator('[data-extrm="fixture-browser"]').click();
-    await page.locator('#confirmDialog').getByRole('button', { name: 'Continue', exact: true }).click();
-  });
-  expect((await fixture.read('downloads')).config).toEqual(BASE.downloads.config);
-});
-
-test('1000 transfers render bounded rows and search retains text and selection on updates', async ({ page, fixture }) => {
-  await fixture.reset('populated1000'); await navigate(page, 'downloads/transfers');
-  const search = page.locator('#dlSearch'); await expect(search).toBeVisible();
-  const selects = page.getByRole('checkbox', { name: /^Select fixture-file-/ });
-  await expect.poll(() => selects.count()).toBeGreaterThan(0);
-  expect(await selects.count()).toBeLessThanOrEqual(100);
-  await search.fill('fixture-file-0999');
-  await expect(page.getByText('fixture-file-0999.zip', { exact: true })).toBeVisible();
-  await search.evaluate(input => input.setSelectionRange(3, 9));
-  await waitForRead(page, 'downloads', () => fixture.patch({ downloads: { knownSites: 99 } }));
-  await expect(search).toHaveValue('fixture-file-0999');
-  expect(await search.evaluate(input => [input.selectionStart, input.selectionEnd])).toEqual([3, 9]);
-  expect(await selects.count()).toBe(1);
-});
-
-test('a manager disabled externally recovers to its off state without a null-items crash', async ({ page, fixture }) => {
-  await enableDownloads(fixture); await navigate(page, 'downloads/transfers');
-  await expect(page.locator('#dlSearch')).toBeVisible();
-  await fixture.post('downloads/switch', { on: false });
-  await expect(page.locator('#dlSearch')).not.toBeVisible({ timeout: 10_000 });
-  await navigate(page, 'downloads/transfers');
-  await expect(page.locator('#pg-downloads').getByRole('button', { name: /enable download manager/i })).toBeVisible();
-  await navigate(page, 'settings/general');
-  await mutate(page, 'downloads/switch', { on: true }, () => page.locator('#dmTog').click());
-  await navigate(page, 'downloads/transfers');
-  await expect(page.locator('#dlSearch')).toBeVisible();
-});
-
-test('a failed download save retains the draft and can be retried explicitly', async ({ page, fixture }) => {
-  await enableDownloads(fixture); await navigate(page, 'downloads/settings');
-  await page.locator('#dlDir').fill('C:\\Fixture\\Retry folder');
-  await fixture.fault({ path: '/api/downloads', method: 'POST', status: 500, times: 1, error: 'Fixture configuration failed' });
-  await fixture.clear(); await page.locator('#dlDirSave').click();
-  await expect(page.getByText('Fixture configuration failed', { exact: false }).first()).toBeVisible();
-  await waitForRead(page, 'downloads');
-  await expect(page.locator('#dlDir')).toHaveValue('C:\\Fixture\\Retry folder');
-  expect((await fixture.requests()).filter(r => r.body?.action === 'config')).toHaveLength(1);
-  const config = (await fixture.read('downloads')).config;
-  await mutate(page, 'downloads', { action: 'config', config: { ...config, dir: 'C:\\Fixture\\Retry folder' } }, () => page.locator('#dlDirSave').click());
 });
 
 test('maintenance uses inert update actions and a sanitized backup download', async ({ page, fixture }) => {

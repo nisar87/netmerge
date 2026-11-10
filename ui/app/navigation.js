@@ -3,10 +3,6 @@ const ROUTES = {
   connections:{page:'connections',group:'connections'},
   'connections/speed-test':{page:'test',group:'connections'},
   'connections/presets':{page:'presets',group:'connections'},
-  'downloads/transfers':{page:'downloads',group:'downloads'},
-  'downloads/queues':{page:'downloads',group:'downloads'},
-  'downloads/browser':{page:'downloads',group:'downloads'},
-  'downloads/settings':{page:'downloads',group:'downloads'},
   'apps/active':{page:'apps',group:'apps',view:'active'},
   'apps/rules':{page:'apps',group:'apps',view:'rules'},
   usage:{page:'usage',group:'usage',view:'summary'},
@@ -23,7 +19,7 @@ const ROUTES = {
   'settings/maintenance':{page:'settings',group:'settings',view:'maintenance'},
   'settings/advanced':{page:'settings',group:'settings',view:'advanced'}
 };
-const ALIASES={downloads:'downloads/transfers',apps:'apps/active',rules:'protection/routing',block:'protection/blocking',dns:'protection/dns',share:'sharing/connect',history:'activity/events',log:'activity/logs',settings:'settings/general',test:'connections/speed-test',presets:'connections/presets'};
+const ALIASES={downloads:'settings/general',apps:'apps/active',rules:'protection/routing',block:'protection/blocking',dns:'protection/dns',share:'sharing/connect',history:'activity/events',log:'activity/logs',settings:'settings/general',test:'connections/speed-test',presets:'connections/presets'};
 const TABS={
   connections:[['connections','Connections'],['connections/speed-test','Speed test'],['connections/presets','Presets']],
   apps:[['apps/active','Active apps'],['apps/rules','Routing rules']],
@@ -38,6 +34,7 @@ $$('.nav').forEach(link=>{link.dataset.label=link.querySelector('.nav-label').te
 $('.skip-link').onclick=event=>{event.preventDefault();$('#main').focus();};
 function go(destination,fromHash=false){
   let route=destination.replace(/^#\/?/,'');route=ALIASES[route]||route;
+  if(route.startsWith('downloads/'))route='settings/general'; // the download manager moved to Pullwell: its note is in Settings
   if(!ROUTES[route])route='overview';
   if(!fromHash&&location.hash!=='#/'+route){location.hash='#/'+route;return;}
   const previous=currentRoute, config=ROUTES[route];
@@ -64,10 +61,6 @@ function go(destination,fromHash=false){
   if(page==='presets')loadPresets().catch(()=>{});
   if(page==='history')loadHistoryEvents();
   if(page==='dns')loadDNS(false);
-  if(page==='downloads'){
-    if(DM_ON)dmLoad().then(()=>{window.nmDownloadsTab?.(route.split('/')[1]);if(typeof loadDL==='function')loadDL(true);}).catch(e=>NM.report('downloads',e,()=>go(currentRoute,true)));
-    else renderDownloadsOff();
-  }
   if(S&&local)render();
 }
 function closeNavigation(restore=true){

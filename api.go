@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
-	"netmerge/dm"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,7 +83,7 @@ func routes() http.Handler {
 	mux.HandleFunc("/api/state", guard(func(w http.ResponseWriter, r *http.Request) {
 		s := getSettings()
 		s.Secret = ""
-		writeJSON(w, map[string]any{"snap": getSnapshot(), "settings": s, "test": getTest(), "adapters": getAdapters(false), "block": blockSummary(), "conflict": detectConflict(), "downloads": dm.Brief(), "downloadsOn": dm.Enabled()})
+		writeJSON(w, map[string]any{"snap": getSnapshot(), "settings": s, "test": getTest(), "adapters": getAdapters(false), "block": blockSummary(), "conflict": detectConflict(), "legacyDownloads": legacyDownloadCount()})
 	}))
 
 	mux.HandleFunc("/api/power", action(func(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +183,7 @@ func routes() http.Handler {
 	registerBackupRoutes(mux)
 	registerPresetRoutes(mux)
 	registerDNSRoutes(mux)
-	dm.Routes(mux)
+	registerLegacyDownloadRoutes(mux)
 	mux.HandleFunc("/api/events", guard(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"events": allEvents()})
 	}))

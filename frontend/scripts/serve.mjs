@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Development-only loopback server. Only ui/ and extension/ are exposed as files.
+// Development-only loopback server. Only ui/ is exposed as files.
 import { createServer } from 'node:http';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { dirname, extname, resolve, sep } from 'node:path';
@@ -32,10 +32,6 @@ function verifyLocal(req) {
   try { host = new URL(`http://${req.headers.host}`); } catch { fail('forbidden', 403); }
   if (!LOOPBACK.has(host.hostname)) fail('forbidden', 403);
   if (req.headers.origin) {
-    if (req.url.startsWith('/ext/')) {
-      if (!/^(chrome-extension|moz-extension|safari-web-extension):\/\//.test(req.headers.origin)) fail('forbidden', 403);
-      return;
-    }
     let origin; try { origin = new URL(req.headers.origin); } catch { fail('forbidden', 403); }
     if (origin.protocol !== 'http:' || !LOOPBACK.has(origin.hostname) || origin.port !== host.port) fail('forbidden', 403);
   }
@@ -94,22 +90,11 @@ export function createFixtureServer({ root = ROOT } = {}) {
         headers: Object.fromEntries(['content-type', 'x-netmerge', 'origin'].filter(k => req.headers[k] !== undefined).map(k => [k, req.headers[k]])), status: null };
       requests.push(record);
       if (requests.length > 20000) requests.shift();
-      if (path.startsWith('/ext/')) {
-        if (!model.data.state.downloadsOn) fail('The download manager is off', 404);
-        if (req.headers.origin) {
-          res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
-          res.setHeader('Vary', 'Origin');
-          res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-          res.setHeader('Access-Control-Allow-Private-Network', 'true');
-        }
-        if (req.method === 'OPTIONS') { record.status = 204; res.writeHead(204); return res.end(); }
-      }
-      const api = path.startsWith('/api/') || path.startsWith('/ext/');
+      const api = path.startsWith('/api/');
       if (api) {
         if (!['GET', 'POST'].includes(req.method)) fail('Method not allowed', 405);
         if (req.method === 'POST') {
-          if (path.startsWith('/api/') && req.headers['x-netmerge'] !== '1') fail('forbidden', 403);
+          if (req.headers['x-netmerge'] !== '1') fail('forbidden', 403);
           record.body = await readBody(req);
         }
         if (offline) fail('Fixture server is offline', 503);
@@ -131,10 +116,9 @@ export function createFixtureServer({ root = ROOT } = {}) {
         record.status = status; return reply(res, status, body, headers);
       }
       if (!['GET', 'HEAD'].includes(req.method)) fail('Method not allowed', 405);
-      const extension = path.startsWith('/extension/');
-      const directory = await realpath(resolve(root, extension ? 'extension' : 'ui'));
+      const directory = await realpath(resolve(root, 'ui'));
       let relative;
-      try { relative = decodeURIComponent(extension ? path.slice('/extension/'.length) : path.slice(1)); } catch { fail('Bad path'); }
+      try { relative = decodeURIComponent(path.slice(1)); } catch { fail('Bad path'); }
       if (!relative) relative = 'index.html';
       if (relative.split(/[\\/]/).some(part => part.startsWith('.')) || relative.includes('\0')) fail('Not found', 404);
       const target = resolve(directory, relative);
