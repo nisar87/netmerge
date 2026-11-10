@@ -374,7 +374,7 @@ uTP and no seeding after finish; no `ftps://`; no live or DRM streams; no multi-
 
 | Decision | Status |
 | --- | --- |
-| Final name (working name Convoy) | **Owner**; name check pending (Phase 2) |
+| Final name | **Owner.** Web search 2026-11-10: "Convoy" is crowded (a well-known open-source Go project `frain-dev/convoy`, a `convoypanel/downloader` repository, a trademark owner "Aegis Convoy Inc."), so do not ship under it. Candidates with no obvious hit in a quick search (not a trademark search): **Tributary**, **Spillway**, **Pullstream**. A proper check (GitHub, Chrome/Edge/Firefox stores, domain, trademark databases) is still needed before any name is public. "Rivlet" has a Product Hunt page, so avoid it. Until then use the working name "Convoy" only inside the project. |
 | Window host: own WebView2 wrapper or a vetted library | Decide at the start of Phase 2; default own wrapper, no dependency |
 | Licence and donation wording | Suggested: MIT like NetMerge, voluntary donations |
 | Code signing route | SignPath Foundation application pending; paid certificate as fallback |
