@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.13.0
+
+- The download manager is no longer part of NetMerge. It is now a program of its own, **Pullwell** (https://github.com/nisar87/pullwell). Like any download manager it opens many connections, and while NetMerge is on those connections are spread over all your lines.
+- Nothing is deleted: files you downloaded, the old list and its settings stay where they are. If you used the old download manager, **Settings → Download manager → Save old list** saves the list in the format Pullwell imports.
+- The Downloads page, its settings and the browser extension are gone. Uninstall the NetMerge extension from your browser and use Pullwell's own. Old links to the Downloads page open Settings.
+- Presets no longer pause or slow downloads. Merging, usage counting and all other features are unchanged.
+
 ## 3.12.0
 
 - A redesigned desktop control center with light, dark and system themes, clearer connection status, responsive navigation, local icons, accessible dialogs and restrained motion. Connection, download, app, usage, protection, sharing, activity and settings controls have dedicated pages, with advanced options still available.
