@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.11.25
+
+- No changes to the program: this release checks on a real PC that the new update step of 3.11.24 installs a newer version correctly.
+
 ## 3.11.24
 
 Found in a full review of NetMerge:
