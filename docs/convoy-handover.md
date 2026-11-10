@@ -92,7 +92,7 @@ Every field is optional. In the standalone program these must be implemented nat
 | `Log`, `Note` | diagnostics, activity page | implement |
 | `Notify` | desktop notification | see 4.3 (real toasts) |
 | `Power`, `PowerCancel` | sleep/hibernate/shutdown/exit after downloads; shutdown has a one-minute warning that can be cancelled | implement with Windows APIs |
-| `OpenPath` | open a file / show it in the file manager | Windows: `SHOpenFolderAndSelectItems` plus raising the window (see 7.3) |
+| `OpenPath` | open a file / show it in the file manager | Windows: `SHOpenFolderAndSelectItems` plus raising the window (see section 7, item 4) |
 | `FreeSpace` | free bytes in a folder | implement |
 | `MarkFromInternet` | the "downloaded from the internet" mark (Zone.Identifier) so SmartScreen checks the file | implement |
 | `Run` | run a program with no window (used for the after-download command, e.g. a virus scanner) | implement |
@@ -219,6 +219,12 @@ Keep the **web interface served by the Go program**, shown in a native window.
   that browser. For Convoy use Windows' built-in **WebView2** as the host (a thin native wrapper written in Go with
   syscalls, or a small vetted library if the "no dependencies" rule must be relaxed; if so, pin the version and vendor
   it). Keep Edge/Chrome app mode as a fallback, and the default browser as the last fallback.
+  **Known hard part (the hardest engineering item of Phase 2):** WebView2's entry point lives in
+  `WebView2Loader.dll`, which Windows does not ship. A wrapper without dependencies must either embed that DLL in the
+  exe (extract it to the data folder at first start) or locate the WebView2 runtime itself (registry key of the
+  runtime, then load its `EmbeddedBrowserWebView.dll`). The WebView2 runtime itself is present on current Windows 10/11
+  and with Edge; if it is missing, fall back to Edge/Chrome app mode and say so. This is Windows COM work through
+  `syscall`: give it to a stronger model, or accept one small pinned library, and test it on a real PC.
 - Window behaviour to keep: single window, closing the window keeps the program in the tray, "Open" from the tray
   brings the existing window to the front.
 - Rejected: Electron (about 100 MB, heavy), Tauri (needs Rust and Node), native toolkits (every UI change slower,
@@ -230,7 +236,8 @@ Requirements: finished, failed (with the reason in plain words), "needs attentio
 "all done" with the chosen power action. Toasts should have buttons: Open, Show in folder.
 
 - Phase 3: real Windows toast notifications through the system API (an unpackaged program needs an
-  AppUserModelID registered through a Start-menu shortcut). **Do not use PowerShell to show toasts**: hidden PowerShell
+  AppUserModelID registered through a Start-menu shortcut, so **toasts are for the installed version only**; the
+  portable zip has no shortcut and uses tray balloons). **Do not use PowerShell to show toasts**: hidden PowerShell
   with bypass flags is exactly what makes antivirus products suspicious.
 - Fallback: tray balloon (what NetMerge does today: `trayBalloon` in `sys_tray_windows.go`).
 - A switch in settings (`noNotify` exists), and no notification storm when many items finish together (group them).
@@ -239,8 +246,10 @@ Requirements: finished, failed (with the reason in plain words), "needs attentio
 
 - Installer (per-user, no administrator needed) and a portable zip. Data folder: `%LOCALAPPDATA%\Convoy\data`
   (installed) or `data` beside the exe (portable, as NetMerge does today).
-- One instance per user: a second start brings the first window to the front. Own port, picked at first start and
-  remembered; the extension is told the port during pairing.
+- One instance per user: a second start brings the first window to the front. Own port: a **fixed default port plus a short
+  list of fallback ports**. The extension must reach the program *before* it can pair, so it cannot be told a random
+  port; it tries the default, then each fallback in order, and remembers the one that answered. The program takes the
+  first free port of that list and shows it on the pairing screen. (NetMerge itself uses the fixed port 9196.)
 - Updater: GitHub Releases (like NetMerge: download, verify the `.sha256`, replace and restart). A tested model
   exists in NetMerge `update.go`; it worked on a real PC on 2026-11-10 (3.11.14 to 3.11.19 by itself).
 - "Start with Windows": a per-user Run key or a scheduled task; never create more than one; refuse from a copy that
@@ -278,7 +287,9 @@ file; refused-link case understood; benchmark recorded.
 Hide line-specific UI in this mode. Run the whole dm test suite in this mode. *Gate:* suite passes; a real-PC test
 through NetMerge equals today's speed.
 
-**Phase 2: separate the program (this is where the new thread starts).**
+**Phase 2: separate the program (this is where the new thread starts).** Timing: the Phase 0 gate needs two weeks of
+daily use, counted from 2026-11-10, so the build starts around 2026-11-24 unless the owner decides otherwise. The name
+check below is the one Phase 2 task that can run before then.
 1. Create the new repository (name after the name check) with licence, README, CI copied from NetMerge
    (`.github/workflows/release.yml`: a change of the `VERSION` file runs vet, tests, build, publish; the version in the
    code must equal `VERSION`; a `.sha256` is published next to the exe).
@@ -286,7 +297,9 @@ through NetMerge equals today's speed.
    host (`Host` with one line, native Windows implementations of the optional functions in 3.2).
 3. Window host (4.2.1), tray, single instance, updater, installer and portable zip.
 4. In NetMerge (its own thread): remove the downloads code, page and extension pairing; add a one-time import of
-   `downloads.json` into the new program (optional).
+   `downloads.json` into the new program (optional). The import must also understand the old per-download file names
+   (`.nmpart` data and `.nmdl` state): **keep reading and writing the same names** in the new program, or unfinished
+   downloads would restart from zero (rule 4.5.3). Nothing about the file formats needs to change for the move.
 *Gate:* both programs build and pass their tests; the new program works with NetMerge off and on.
 
 **Phase 3: the browser side.** Polish, store listings (Chrome Web Store, Edge Add-ons, Firefox Add-ons), a "not
