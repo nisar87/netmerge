@@ -130,8 +130,8 @@ func TestTunWindows(t *testing.T) {
 		if n != 50000000 {
 			t.Fatalf("got %d bytes (HTTP %d)", n, resp.StatusCode)
 		}
-		if !strings.Contains(logs.String(), "speed.cloudflare.com:443") {
-			t.Fatal("the log should name the site")
+		if !strings.Contains(logs.String(), "(engine.test.exe) --> speed.cloudflare.com:443") {
+			t.Fatal("the log should name the program and the site")
 		}
 	})
 

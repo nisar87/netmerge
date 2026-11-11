@@ -10,7 +10,7 @@ import (
 )
 
 // Windows: GetExtendedTcpTable / GetExtendedUdpTable list every socket with its process id; the program's path
-// comes from QueryFullProcessImageNameW. The tables are read at most every 250 ms and searched from memory.
+// comes from QueryFullProcessImageNameW. The tables are read again when a socket is not in them (at most every 50 ms) and searched from memory.
 
 var (
 	modIphlpapi             = syscall.NewLazyDLL("iphlpapi.dll")
@@ -120,8 +120,10 @@ func lookupOwner(network string, ip netip.Addr, port uint16) (uint32, bool) {
 			return pid, true
 		}
 	}
-	if time.Since(owners.at) < 250*time.Millisecond {
-		return 0, false
+	// a socket opened just after the last read is not in it: read again, at most every 50 ms (a read takes about a
+	// millisecond), waiting out the rest of that interval instead of giving up on the program's name
+	if wait := 50*time.Millisecond - time.Since(owners.at); wait > 0 {
+		time.Sleep(wait)
 	}
 	owners.refresh()
 	return try()
