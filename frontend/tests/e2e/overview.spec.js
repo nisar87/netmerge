@@ -107,3 +107,15 @@ for (const theme of ['light', 'dark']) {
     }
   });
 }
+
+test('wording follows the real behaviour of the chosen mode and balancing', async ({ page, fixture }) => {
+  await navigate(page, 'overview');
+  await expect(page.locator('#statusLine')).toContainText('most spare speed');
+  await expect(page.locator('#peak + .ov-kpi-foot')).toHaveText('Since NetMerge opened');
+  const s = (await fixture.read('state')).settings;
+  await waitForRead(page, 'state', () => fixture.patch({ state: { settings: { ...s, mode: 'stable', links: s.links.map(l => l.name === 'Wi-Fi' ? { ...l, role: 'busy' } : l) } } }));
+  await page.evaluate(() => poll(true));
+  await expect(page.locator('#statusLine')).toContainText('by the shares you set');
+  await page.locator('.lk[data-n="Wi-Fi"] .lk-settings summary').click();
+  await expect(page.locator('.lk[data-n="Wi-Fi"] [data-f=roleHint]')).toContainText('Works only with Smart balancing');
+});

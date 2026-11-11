@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.16.1
+
+Every text in the window was checked against what NetMerge really does, and corrected where it did not match. Nothing else changed.
+
+- **Overview:** "Peak speed" and "Downloaded" now say they count since NetMerge opened (they did not reset when merging started). The status line describes the mode you use: spare speed (Smart), turns by your shares (Classic), or one line per website (steady sites).
+- **Traffic mode:** "steady sites" says it uses the shares you set; one-line mode says the other connections (all of them) wait as backup; Classic balancing is described as taking turns by your shares.
+- **Roles and calls:** "Only when the others are busy" and the call protection that keeps downloads off the call's line work only with Smart balancing in "fastest" mode; the texts now say so. A connection that is not plugged in no longer says "or no internet".
+- **Settings:** Connection balancing points to the shares on each connection card (they moved to Overview); Compatibility engine mode warns that it is much slower; NetMerge checks for new connections about every 10 seconds and for updates every 6 hours; detailed logging and backup (no passwords, no phone names) are described as they work.
+- **Protection:** local network addresses and websites with "bank" in their name already have built-in rules; the VPN list names more clients and says Automatic picks the first wired line; blocking also covers phones you share with. The stronger block list now points to the "Blocked today" list by its real name.
+- **Also:** the speed test takes about two minutes; suggested shares say when they are used; encrypted DNS falls back within a few minutes; app rules point to the traffic mode, not "the Overview setting".
+
 ## 3.16.0
 
 - **A real speedometer on Overview.** The combined speed is now a gauge with a needle, tick marks and a scale. The arc fills and the needle moves with the real download speed, and the colour changes with it: grey when idle, amber for light use, yellow when busy, green near top speed. The scale follows this session's top speed, so it fits your connections. The thin inner ring still shows each line's share.

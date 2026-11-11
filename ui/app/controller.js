@@ -10,7 +10,7 @@ const PAGES = {
   test:['Speed test','Measure what your connections can really do'],
   usage:['Usage','Data used by each connection, day by day'],
   share:['Share','Let your phone use the merged internet'],
-  rules:['Protection','Keep VPNs, servers and logins working perfectly'],
+  rules:['Protection','Keep VPNs, servers and logins working'],
   block:['Blocking','Stop ads, trackers and unsafe sites for every app'],
   settings:['Settings','Startup, appearance and maintenance'],
   log:['Logs','What NetMerge has been doing']
@@ -161,9 +161,9 @@ function statusLine(sn, run){
   if ((sn.sameIsp||[]).length > 1) return ['warn', `${sn.sameIsp.join(' and ')} look like the same provider`, 'They probably leave through the same provider or router, so merging cannot add speed. Two different providers are needed.'];
   const active=NM.contributingLinks(sn);
   if (ls.some(l=>l.healthy==null)) return ['warn','Checking connection health','Waiting for a confirmed health reading.'];
-  if (active.length < 2) return ['warn',active.length ? 'One connection is contributing' : 'No connections are contributing','Check Connections for availability, standby roles and allowances.'];
+  if (active.length < 2) return ['warn',active.length ? 'One connection is contributing' : 'No connections are contributing','Check the connection cards below for status and roles, and Usage for allowances.'];
   const n = (S.share && S.share.devices) || 0;
-  return ['good', `${active.length} connections working together`, 'Each new connection goes to the line with the most spare speed.'];
+  return ['good', `${active.length} connections working together`, local.mode === 'stable' ? 'Each website stays on one line; lines are used by the shares you set.' : local.classicBalance ? 'New connections take turns over your lines, by the shares you set.' : 'Each new connection goes to the line with the most spare speed.'];
 }
 const MODE_ART = {
   // three small pictures: lines merging, each site kept on a line, one line only
@@ -173,17 +173,17 @@ const MODE_ART = {
 };
 function renderConnectionMode(){
   const sn=S.snap;
-  $('#connHint').textContent = sn.links.length ? 'NetMerge looks for new connections by itself every few seconds.' : 'No connections yet.';
+  $('#connHint').textContent = sn.links.length ? 'NetMerge looks for new connections by itself about every 10 seconds.' : 'No connections yet.';
   const ms = $('#mode');
   if (document.activeElement !== ms) {
     const opts = [['fast','Combine all · fastest'], ['stable','Combine all · steady sites']].concat(local.links.map(l => ['link:'+l.name, 'Only '+l.label + (S.snap.links.find(x=>x.name===l.name)?.present === false ? ' (not connected)' : '')]));
     setHTML(ms, opts.map(([v,t]) => `<option value="${esc(v)}"${v===local.mode?' selected':''}>${esc(t)}</option>`).join(''));
   }
   $('#modeDesc').textContent = local.mode.startsWith('link:')
-    ? `Everything uses ${labelOf(local.mode.slice(5))} only. The other connection stays ready as a backup if it drops. Apps with their own rule keep that rule.`
+    ? `Everything uses ${labelOf(local.mode.slice(5))} only. The other connections wait as a backup and take over if it stops working. Apps with their own rule keep that rule.`
     : local.mode === 'stable'
-    ? 'Each website stays on one line. Fewer sign-in problems, slightly lower top speed.'
-    : 'Uses all your lines at once, sharing the work by speed. Best for downloads and speed tests.';
+    ? 'Each website stays on one line, with lines used by the shares you set on each connection card. Fewer sign-in problems, slightly lower top speed.'
+    : (local.classicBalance ? 'Uses all your lines at once, taking turns by the shares you set (Classic balancing). Best for downloads and speed tests.' : 'Uses all your lines at once, sharing the work by spare speed. Best for downloads and speed tests.');
   // the same choice as the list above, as pictures
   const m = local.mode, single = m.startsWith('link:');
   const opt = (v, title, text, art, extra='') => `<div class="mode-opt${(v==='link'?single:m===v)?' sel':''}">${v==='link' ? '' : `<button class="mode-hit" data-mode="${v}" data-focus-key="mode-${v}" aria-pressed="${m===v}"><span class="sr-only">${esc(title)}</span></button>`}<div class="mode-art">${art}</div><div class="mode-copy"><b>${esc(title)}${(v==='link'?single:m===v)?'<span class="mode-on">'+NM.icon('check')+'In use</span>':''}</b><span>${esc(text)}</span></div>${extra}</div>`;
@@ -329,14 +329,15 @@ function renderLinks(sn, act, P){
       tag('Local ' + (l.present ? esc(l.ip) : '—'), 'Address on your network', !l.present),
       tag(h.publicIP ? 'Public ' + esc(h.publicIP) : 'Public address…', 'Internet address (what websites see)', !h.publicIP)
     ].join(''));
-    f('missing').innerHTML = l.present ? '' : '<div class="warn-line">Unplugged or no internet. It rejoins by itself when it comes back. <button class="btn" style="margin-left:8px;padding:2px 10px" data-forget="' + esc(l.name) + '">Forget it</button></div>';
+    f('missing').innerHTML = l.present ? '' : '<div class="warn-line">Not connected. It rejoins by itself when it is plugged in again. <button class="btn" style="margin-left:8px;padding:2px 10px" data-forget="' + esc(l.name) + '">Forget it</button></div>';
     f('w').textContent = '×'+ll.weight;
-    { const r = f('role'); if (document.activeElement !== r) r.value = ll.role || ''; f('roleHint').textContent = ll.role === 'busy' ? 'Saves this line: it joins only when the other lines are nearly full.' : ll.role === 'backup' ? 'Kept in reserve: it is used only if the other lines stop working.' : 'Used all the time, together with the other lines.'; }
+    { const r = f('role'); if (document.activeElement !== r) r.value = ll.role || ''; f('roleHint').textContent = ll.role === 'busy' ? (local.mode === 'fast' && !local.classicBalance ? 'Saves this line: it joins only when the other lines are nearly full.' : 'Works only with Smart balancing in “fastest” mode; for now this line is used like the others.') : ll.role === 'backup' ? 'Kept in reserve: it is used only if the other lines stop working.' : 'Used all the time, together with the other lines.'; }
     { const poor = run && on && !ll.role && (l.slow || (l.quality && l.quality.label === 'Poor')); f('slowHint').hidden = !poor; }
     f('minus').disabled = ll.weight <= 1; f('plus').disabled = ll.weight >= 5;
     const smart = !!sn.smart && !local.mode.startsWith('link:') && local.mode !== 'stable';
     f('step').style.display = smart ? 'none' : '';
     const single = local.mode.startsWith('link:'), pct = single ? (local.mode === 'link:'+l.name ? 100 : 0) : smart ? ((ll.enabled && l.present) ? Math.round((l.slots||0)/8*100) : 0) : ((ll.enabled && l.present) ? Math.round(ll.weight/totalW*100) : 0);
+    card.querySelector('.share-h>span').title = single ? 'In one-line mode everything uses the chosen line.' : smart ? 'NetMerge decides by itself how many newly opened websites and downloads use this line, based on its spare speed right now.' : 'Set with − and +: a bigger share gives this line more of the new connections.';
     f('pct').textContent = (ll.enabled && l.present) ? pct+'%' : '—';
     f('bar').style.width = pct+'%';
     f('sumHint').textContent = ll.role === 'busy' ? 'Only when busy' : ll.role === 'backup' ? 'Backup only' : '';

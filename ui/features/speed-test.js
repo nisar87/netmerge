@@ -107,7 +107,7 @@ function renderSpeedDetails(t){
   if(done&&t.suggest&&Object.keys(t.suggest).length>1){
     const links=local.links.filter(l=>t.suggest[l.name]),current=links.every(l=>l.weight===t.suggest[l.name]);
     const text=links.map(l=>`${esc(l.label)} ×${esc(t.suggest[l.name])}`).join(', ');
-    notes=current?`<div class="note info"><span>Shares already match your connection speeds (${text}).</span></div>`:`<div class="note info"><span>Suggested shares from this test: <b>${text}</b></span><button class="btn pri" id="applyW"${speedWeightsPending?' disabled':''}>${speedWeightsPending?'Applying…':'Apply shares'}</button></div>`;
+    notes=current?`<div class="note info"><span>Shares already match your connection speeds (${text}).</span></div>`:`<div class="note info"><span>Suggested shares from this test: <b>${text}</b>. Shares are used by Classic balancing and by “steady sites” mode; Smart balancing finds the speeds by itself.</span><button class="btn pri" id="applyW"${speedWeightsPending?' disabled':''}>${speedWeightsPending?'Applying…':'Apply shares'}</button></div>`;
   }
   setHTML($('#testNotes'),notes);
   const apply=$('#applyW');if(apply)apply.onclick=async()=>{
