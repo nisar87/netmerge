@@ -29,10 +29,10 @@ function renderBlock(){
     return `<div class="pack"><div class="t"><b>${esc(p.name)}</b><span>${esc(p.desc)}</span></div><div class="m">${meta}</div>${p.builtin ? '' : `<button class="tog${p.enabled?' on':''}" data-pack="${esc(p.id)}" role="switch" aria-checked="${p.enabled}" aria-label="${esc(p.name)}"></button>`}</div>`;
   }).join(''));
   $('#blkPacks').querySelectorAll('[data-pack]').forEach(b => b.onclick = () => blockPost({packs:{[b.dataset.pack]: !B.packs.find(p=>p.id===b.dataset.pack).enabled}}, 'Saved'));
-  { const top = (B.top || []).slice(0, 10), mx = Math.max(1, ...top.map(t => t.count));
-    setHTML($('#blkTop'), top.length ? '<ol class="hbars">' + top.map(t => `<li><span class="hb-label" title="${esc(t.host)}">${esc(t.host)}</span><span class="hb-track" aria-hidden="true"><i style="width:${(t.count/mx*100).toFixed(1)}%"></i></span><b class="num">${t.count.toLocaleString()}</b></li>`).join('') + '</ol>' : '<div class="hist-empty">Nothing blocked yet today.</div>'); }
+  // one list: the count column carries the bar that shows how often each website was refused
   const rec = (B.recent || []).slice(0, 20);
-  setHTML($('#blkRecent'), rec.length ? '<tr><th>Website</th><th>App</th><th class="r">Times</th><th>Last</th><th></th></tr>' + rec.map(r => `<tr><td class="proc">${esc(r.host)}</td><td>${esc(r.app || '')}</td><td class="r num">${r.count.toLocaleString()}</td><td style="color:var(--dim)">${ago(r.time)}</td><td class="r"><button class="btn sm" data-allow="${esc(r.host)}">Allow</button></td></tr>`).join('') : '<tr><td class="empty" colspan="5">No blocked connections yet.</td></tr>');
+  const recMax = Math.max(1, ...rec.map(r => r.count));
+  setHTML($('#blkRecent'), rec.length ? '<tr><th>Website</th><th>App</th><th class="r">Times</th><th>Last</th><th></th></tr>' + rec.map(r => `<tr><td class="proc"><span class="blk-host" title="${esc(r.host)}">${esc(r.host)}</span></td><td>${esc(r.app || '')}</td><td class="r num"><span class="blk-count">${r.count.toLocaleString()}<span class="hb-track" aria-hidden="true"><i style="width:${(r.count/recMax*100).toFixed(1)}%"></i></span></span></td><td style="color:var(--dim);white-space:nowrap">${ago(r.time)}</td><td class="r"><button class="btn sm" data-allow="${esc(r.host)}">Allow</button></td></tr>`).join('') : '<tr><td class="empty" colspan="5">No blocked connections yet.</td></tr>');
   $('#blkRecent').querySelectorAll('[data-allow]').forEach(b => b.onclick = () => blockPost({domain:b.dataset.allow},b.dataset.allow+' is now allowed','block/allow'));
   fillLists(false);
   blockControls();

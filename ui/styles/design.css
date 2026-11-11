@@ -239,3 +239,10 @@ details.adv>summary::-webkit-details-marker{display:none}
 #pg-history .page-hero{margin-bottom:16px}
 #pg-history #hiBox{margin-top:16px}
 .app-rate>span:first-child{white-space:nowrap}
+
+/* blocked today: one list, with a bar in the count column */
+.blk-tbl td{vertical-align:middle}
+.blk-host{display:inline-block;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+.blk-count{display:inline-flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:72px}
+.blk-count .hb-track{display:block;width:72px;height:5px}
+#pg-block .grid2>.card .scrollbox{max-height:420px}
