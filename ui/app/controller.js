@@ -159,30 +159,7 @@ function statusLine(sn, run){
   if (ls.some(l=>l.healthy==null)) return ['warn','Checking connection health','Waiting for a confirmed health reading.'];
   if (active.length < 2) return ['warn',active.length ? 'One connection is contributing' : 'No connections are contributing','Check Connections for availability, standby roles and allowances.'];
   const n = (S.share && S.share.devices) || 0;
-  return ['good', `${active.length} connections working together`, `${fmtM(sn.totalDown)} Mbps down · ${fmtM(sn.totalUp)} Mbps up right now`];
-}
-function renderActivity(sn){
-  const a = sn.activity || [];
-  setHTML($('#actList'), a.length ? a.map(e => { const d = new Date(e.time*1000); return `<div class="act"><span class="dot ${e.kind==='info'?'':e.kind}"></span><span class="at">${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span><span>${esc(e.text)}</span></div>`; }).join('') : '<div class="hint2">Nothing yet. NetMerge writes here whenever it changes something and says why.</div>');
-}
-function renderOverview(sn, run, act, P){
-  $('#downloadLabel').textContent=run?'Combined download':'Adapter traffic';
-  $('#downloadHint').textContent=run?'Measured across detected adapters':'Network activity while merging is off';
-  renderActivity(sn);
-  const st = statusLine(sn, run);
-  setHTML($('#statusLine'), `<span class="dot ${st[0]}"></span><b>${esc(st[1])}</b><span class="hint2">${esc(st[2])}</span>`);
-  $('#totalDown').innerHTML = `${fmtM(sn.totalDown)}<small>Mbps</small>`;
-  $('#totalUp').textContent = fmtM(sn.totalUp)+' Mbps';
-  $('#peak').textContent = fmtM(sn.peakDown)+' Mbps';
-  $('#session').textContent = bytes(sn.links.reduce((a,l)=>a+(l.totalRx||0),0));
-  $('#uptime').textContent = run ? dur(sn.uptime) : '—';
-  setHTML($('#legend'), sn.links.filter(l=>l.present && l.enabled).map(l => `<div><i style="background:${colorOf(l.name)}"></i>${esc(l.label)}<b>${fmtM(l.down)}</b></div>`).join(''));
-  renderConnectionSummary(sn);
-  if(!chartPaused) drawChart();
-  setHTML($('#chartTable'),'<thead><tr><th scope="col">Connection</th><th scope="col">Download (Mbps)</th><th scope="col">Upload (Mbps)</th><th scope="col">Status</th></tr></thead><tbody>'+sn.links.map(l=>`<tr><th scope="row">${esc(l.label || l.name)}</th><td>${fmtM(l.down)}</td><td>${fmtM(l.up)}</td><td>${esc(statusOf(l,sn.running)[0])}</td></tr>`).join('')+'</tbody>');
-}
-function renderConnectionSummary(sn){
-  setHTML($('#connectionSummary'),sn.links.length ? sn.links.map(l=>`<a class="connection-row" href="#/connections" style="--c:${colorOf(l.name)}"><span class="connection-icon">${ICONS[l.kind]||ICONS.ethernet}</span><span class="connection-name"><b>${esc(l.label || l.name)}</b><small>${esc(statusOf(l,sn.running)[0])}</small></span><span class="connection-rate num">${fmtM(l.down)}<small>Mbps</small></span>${NM.icon('chevron-right')}</a>`).join('') : '<div class="empty"><h3>No connections found</h3><p>Connect Ethernet, Wi-Fi or a mobile hotspot to get started.</p><a href="#/connections" class="text-link">View connections</a></div>');
+  return ['good', `${active.length} connections working together`, 'Each new connection goes to the line with the most spare speed.'];
 }
 function renderConnectionMode(){
   const sn=S.snap;
@@ -248,8 +225,6 @@ function renderLinks(sn, act, P){
           </div>
           <button class="tog" data-f="tog" role="switch" aria-label="Use ${esc(l.label || l.name)}"></button>
         </div>
-        <div class="lk-s"><span class="num" data-f="down">0</span><small>Mbps</small><span class="up" data-f="up"></span></div>
-        <canvas class="spark" data-f="spark"></canvas>
         <div class="meta"><span class="chip" data-f="status"></span><span data-f="tags" style="display:contents"></span></div>
         <div data-f="missing"></div>
         <div class="share">
@@ -290,16 +265,12 @@ function renderLinks(sn, act, P){
     f('status').textContent = st; f('status').style.setProperty('--c', sc);
     f('tog').classList.toggle('on', ll.enabled); f('tog').setAttribute('aria-checked', ll.enabled);
     f('desc').textContent = l.present ? `${l.desc}${l.linkRate ? ' · '+l.linkRate : ''}` : 'Not connected';
-    f('down').textContent = fmtM(l.down);
-    f('up').textContent = '↑ '+fmtM(l.up)+' Mbps';
     const h = holdFor(l.name), on = l.present && ll.enabled;
     const tag = (txt, title, dim) => `<span class="tag${dim ? ' dim' : ''}" title="${title}">${txt}</span>`;
+    // Live figures (speed, response time, share of traffic) are on Overview; usage is on Usage. Here: who the line is.
     setHTML(f('tags'), [
-      tag(l.present ? esc(l.ip) : '—', 'Address on your network', !l.present),
-      tag(h.publicIP ? esc(h.publicIP) : 'internet address…', 'Internet address (what websites see)', !h.publicIP),
-      tag((h.delay ? h.delay : '—') + ' ms' + (l.quality && l.quality.label ? ' · ' + l.quality.label : ''), l.quality && l.quality.label ? `Response time and line quality: ${l.quality.label} (${Number(l.quality.loss||0).toFixed(0)}% lost, jitter ${l.quality.jitter} ms, last few minutes)` : 'Response time', !(run && on && h.delay)),
-      tag(bytes(l.useDay||0) + ' today', 'Data used on this connection today (this month: ' + bytes(l.useMonth||0) + ')', !l.useDay),
-      tag((h.share == null ? '—' : h.share) + '% of traffic', 'Share of the traffic over the last few seconds', !(run && on && h.share != null))
+      tag('Local ' + (l.present ? esc(l.ip) : '—'), 'Address on your network', !l.present),
+      tag(h.publicIP ? 'Public ' + esc(h.publicIP) : 'Public address…', 'Internet address (what websites see)', !h.publicIP)
     ].join(''));
     f('missing').innerHTML = l.present ? '' : '<div class="warn-line">Unplugged or no internet. It rejoins by itself when it comes back. <button class="btn" style="margin-left:8px;padding:2px 10px" data-forget="' + esc(l.name) + '">Forget it</button></div>';
     f('w').textContent = '×'+ll.weight;
@@ -311,7 +282,6 @@ function renderLinks(sn, act, P){
     const single = local.mode.startsWith('link:'), pct = single ? (local.mode === 'link:'+l.name ? 100 : 0) : smart ? ((ll.enabled && l.present) ? Math.round((l.slots||0)/8*100) : 0) : ((ll.enabled && l.present) ? Math.round(ll.weight/totalW*100) : 0);
     f('pct').textContent = (ll.enabled && l.present) ? pct+'%' : '—';
     f('bar').style.width = pct+'%';
-    spark(f('spark'), l.history, c);
   });
 }
 
@@ -320,14 +290,6 @@ function setupCanvas(c){
   if (c.width !== Math.round(r.width*d) || c.height !== Math.round(r.height*d)){ c.width = Math.round(r.width*d); c.height = Math.round(r.height*d); }
   const g = c.getContext('2d'); g.setTransform(d,0,0,d,0,0); g.clearRect(0,0,r.width,r.height);
   return [g, r.width, r.height];
-}
-function spark(c, h, col){
-  const [g,w,ht] = setupCanvas(c); if (!h || !h.length || w < 5) return;
-  const n = 90, max = Math.max(...h, 125000), x = i => (i + n - h.length)/(n-1)*w, y = v => ht - 3 - v/max*(ht-8);
-  g.beginPath(); h.forEach((v,i) => i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v)));
-  g.strokeStyle = col; g.lineWidth = 1.7; g.lineJoin = 'round'; g.stroke();
-  g.lineTo(x(h.length-1), ht); g.lineTo(x(0), ht); g.closePath();
-  const gr = g.createLinearGradient(0,0,0,ht); gr.addColorStop(0, col+'55'); gr.addColorStop(1, col+'00'); g.fillStyle = gr; g.fill();
 }
 function niceMax(v){ for (const s of [1,2,5,10,20,25,40,50,80,100,150,200,250,400,500,800,1000,2000]) if (v<=s) return s; return Math.ceil(v/1000)*1000; }
 

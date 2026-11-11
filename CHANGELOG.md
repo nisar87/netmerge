@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.14.0
+
+A redesigned Overview. Only the window changed: merging, usage counting, settings and everything else work exactly as before.
+
+- **One picture of the merge.** Each working connection flows into one ring that shows the combined speed. Each line's slice of the ring and the thickness of its ribbon show its share of the traffic right now, and the ribbons move while data flows. Upload, peak speed, data downloaded and running time sit next to it.
+- **Live speed by connection, on Overview.** Every connection has its own card with its current download and upload speed, a 90-second graph, its share of the traffic and its response time. A line that is unplugged, off or standing by is shown dimmed with its status.
+- **Each figure in one place.** Live figures (speed, graph, response time, share of traffic) are now only on Overview, data used today is on Usage, and the Connections page keeps what you set there: on/off, name, addresses, share of the work and preferences. The short connection list and the numbers in the chart legend, which repeated the same speeds, are gone.
+- **Clearer last 24 hours.** The graph has a speed scale, grid lines, shaded areas and each connection's peak and average. Recent activity is now a short timeline next to it.
+
 ## 3.13.1
 
 - After an update the window now refreshes by itself. Before, it showed "NetMerge was updated. Reload when you are ready" and kept running the old version until you clicked Reload. If you are in the middle of something (a setting being saved, an open dialog, typing in a field, or unsaved text on another page), it waits and refreshes once you are done.

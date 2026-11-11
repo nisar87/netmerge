@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="styles/components.css">
 <link rel="stylesheet" href="styles/application.css">
 <link rel="stylesheet" href="styles/speed-test.css">
+<link rel="stylesheet" href="styles/overview.css">
 <script src="app/theme-init.js"></script>
 </head><body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -33,28 +34,36 @@
     <div id="connectionBanner" role="status" hidden></div><div id="saveStatus" role="status" hidden></div><div id="featureError" role="status" hidden></div>
     <div id="updBanner"></div><div id="alerts"></div>
     <section class="page" id="pg-overview">
-      <div class="statusline" id="statusLine"></div>
-      <div class="overview-stats">
-        <article class="metric primary"><div class="metric-label"><span id="downloadLabel">Adapter traffic</span><span data-icon="arrow-down"></span></div><div class="big num" id="totalDown">—<small>Mbps</small></div><div class="metric-foot" id="downloadHint">Network activity while merging is off</div></article>
-        <article class="metric"><div class="metric-label">Upload <span data-icon="arrow-up"></span></div><b class="metric-value num" id="totalUp">—</b><div class="metric-foot">Combined outgoing traffic</div></article>
-        <article class="metric"><div class="metric-label">Peak speed <span data-icon="gauge"></span></div><b class="metric-value num" id="peak">—</b><div class="metric-foot">This merging session</div></article>
-        <article class="metric"><div class="metric-label">Downloaded <span data-icon="hard-drive"></span></div><b class="metric-value num" id="session">—</b><div class="metric-foot">Running for <span id="uptime">—</span></div></article>
-      </div>
+      <section class="card ov-hero" aria-labelledby="ovStatusTitle">
+        <div class="ov-status" id="statusLine"></div>
+        <div class="ov-hero-body">
+          <div class="ov-flow" id="mergeFlow" role="img" aria-label="Combined speed: not measured yet"></div>
+          <dl class="ov-kpis">
+            <div class="ov-kpi"><dt><span data-icon="arrow-up"></span>Upload</dt><dd><span class="num ov-kpi-value" id="totalUp">—</span><span class="ov-kpi-foot">Combined, right now</span></dd></div>
+            <div class="ov-kpi"><dt><span data-icon="gauge"></span>Peak speed</dt><dd><span class="num ov-kpi-value" id="peak">—</span><span class="ov-kpi-foot">This merging session</span></dd></div>
+            <div class="ov-kpi"><dt><span data-icon="hard-drive"></span>Downloaded</dt><dd><span class="num ov-kpi-value" id="session">—</span><span class="ov-kpi-foot">Through all connections</span></dd></div>
+            <div class="ov-kpi"><dt><span data-icon="clock-3"></span>Running for</dt><dd><span class="num ov-kpi-value" id="uptime">—</span><span class="ov-kpi-foot" id="contribHint">Since merging started</span></dd></div>
+          </dl>
+        </div>
+      </section>
+      <section class="ov-links-section" aria-labelledby="ovLinksTitle">
+        <div class="section-heading"><div><h2 id="ovLinksTitle">Live speed by connection</h2><p class="hint2">What each line is doing right now · last 90 seconds</p></div><a href="#/connections" class="text-link">Manage connections <span data-icon="arrow-up-right"></span></a></div>
+        <div class="ov-links" id="linkSpeeds"></div>
+      </section>
       <section class="card traffic-card" aria-labelledby="trafficTitle">
-        <div class="section-heading"><div><h2 id="trafficTitle">Live traffic</h2><p class="hint2">Download speed across your connections</p></div><div class="row"><span class="live-label"><i></i> Live · 90 seconds</span><button class="btn icon-button" id="chartPause" aria-label="Pause chart updates" aria-pressed="false" title="Pause chart updates"><span data-icon="pause"></span></button></div></div>
+        <div class="section-heading"><div><h2 id="trafficTitle">Live traffic</h2><p class="hint2">Download speed of all connections, stacked</p></div><div class="row"><span class="live-label"><i></i> Live · 90 seconds</span><button class="btn icon-button" id="chartPause" aria-label="Pause chart updates" aria-pressed="false" title="Pause chart updates"><span data-icon="pause"></span></button></div></div>
         <div id="chartBox"><canvas id="chart" tabindex="0" role="img" aria-label="Download speed in Mbps over the last 90 seconds. Use left and right arrows to inspect a sample." aria-describedby="chartReadout"></canvas><div class="tip" id="tip" hidden></div></div>
-        <div class="chart-footer"><div class="legend" id="legend"></div><span id="chartReadout" class="hint2" aria-live="off">Rates in Mbps</span></div>
+        <div class="chart-footer"><div class="legend" id="legend"></div><span id="chartReadout" class="hint2" aria-live="off">Hover or use the arrow keys for exact rates</span></div>
         <details class="chart-data"><summary>View current rates as a table</summary><table class="tbl" id="chartTable" aria-label="Current download and upload rates"></table></details>
       </section>
       <div class="overview-bottom">
-        <section class="card"><div class="section-heading"><div><h2>Connections</h2><p class="hint2">Your internet, at a glance</p></div><a href="#/connections" class="text-link">Manage <span data-icon="arrow-up-right"></span></a></div><div id="connectionSummary"></div></section>
-        <section class="card"><div class="section-heading"><div><h2>Recent activity</h2><p class="hint2">Changes that matter</p></div><button class="text-link" id="seeAll">See all <span data-icon="arrow-up-right"></span></button></div><div id="actList"></div></section>
+        <section class="card history-card"><div class="section-heading"><div><h2>Last 24 hours</h2><p class="hint2">Download speed per connection · one point per minute</p></div></div><div id="histBox"></div></section>
+        <section class="card activity-card"><div class="section-heading"><div><h2>Recent activity</h2><p class="hint2">Changes that matter</p></div><button class="text-link" id="seeAll">See all <span data-icon="arrow-up-right"></span></button></div><div id="actList"></div></section>
       </div>
-      <section class="card history-card"><div class="section-heading"><div><h2>Last 24 hours</h2><p class="hint2">Download speed per connection · one point per minute</p></div><span class="hint2">Mbps</span></div><div id="histBox"></div></section>
     </section>
     <section class="page" id="pg-connections" hidden>
       <div class="card mode-card"><div><h2>How your connections work together</h2><p class="hint2" id="modeDesc"></p></div><select class="sel" id="mode" aria-label="How to share traffic"></select></div>
-      <div class="sec"><h2>Your connections</h2><span class="hint" id="connHint"></span><div class="spacer"></div><button class="btn" id="rescanConnections"><span data-icon="refresh-cw"></span>Scan connections</button></div>
+      <div class="sec"><h2>Your connections</h2><span class="hint" id="connHint"></span><div class="spacer"></div><a class="btn" href="#/overview"><span data-icon="activity"></span>Live speed</a><button class="btn" id="rescanConnections"><span data-icon="refresh-cw"></span>Scan connections</button></div>
       <div class="links" id="links"></div>
       <div class="card empty" id="connectionsEmpty" hidden><span data-icon="network"></span><h3>No connections found</h3><p>Connect Ethernet, join Wi-Fi or attach a mobile hotspot. NetMerge checks automatically; you can also scan again.</p></div>
     </section>

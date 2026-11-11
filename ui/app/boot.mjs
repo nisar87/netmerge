@@ -49,7 +49,7 @@ window.NM={request,saveSettings:(base,draft)=>writer.save(base,draft),saveSettin
 document.querySelectorAll('.page').forEach(page=>{page.inert=true;page.setAttribute('aria-busy','true');});
 icons();
 new MutationObserver(()=>icons()).observe(document.body,{childList:true,subtree:true});
-const files=['app/controller.js','app/navigation.js','features/apps.js','features/speed-test.js','features/protection.js','features/settings.js','features/logs.js','features/blocking.js','features/sharing.js','features/usage.js','features/updates.js','app/state.js','features/presets.js','features/dns.js','features/activity.js','features/history-chart.js','features/backup.js','features/setup.js','app/start.js'];
+const files=['app/controller.js','features/overview.js','app/navigation.js','features/apps.js','features/speed-test.js','features/protection.js','features/settings.js','features/logs.js','features/blocking.js','features/sharing.js','features/usage.js','features/updates.js','app/state.js','features/presets.js','features/dns.js','features/activity.js','features/history-chart.js','features/backup.js','features/setup.js','app/start.js'];
 try {
   for(const file of files)await new Promise((resolve,reject)=>{
     const script=document.createElement('script');script.src=file;script.onload=resolve;script.onerror=()=>reject(Error(`Could not load ${file}`));document.head.append(script);
