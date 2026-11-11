@@ -21,7 +21,7 @@ const ROUTES = {
 };
 const ALIASES={downloads:'settings/general',apps:'apps/active',rules:'protection/routing',block:'protection/blocking',dns:'protection/dns',share:'sharing/connect',history:'activity/events',log:'activity/logs',settings:'settings/general',test:'connections/speed-test',presets:'connections/presets'};
 const TABS={
-  connections:[['connections','Connections'],['connections/speed-test','Speed test'],['connections/presets','Presets']],
+  connections:[['connections','Traffic mode'],['connections/speed-test','Speed test'],['connections/presets','Presets']],
   apps:[['apps/active','Active apps'],['apps/rules','Routing rules']],
   usage:[['usage','Usage summary'],['usage/allowances','Allowances']],
   rules:[['protection/routing','Routing exceptions'],['protection/blocking','Blocking'],['protection/dns','DNS']],
@@ -95,7 +95,7 @@ appearance.innerHTML='<h2>Make yourself at home</h2><p class="hint2">Choose a co
 appearance.append($('#theme').closest('.opt'));$('#pg-settings').append(appearance);$('#theme button[data-v="auto"]').textContent='System';
 const advanced=$('#pg-settings details.adv');advanced.dataset.view='advanced';advanced.open=true;advanced.querySelector('summary').textContent='Advanced settings';
 $('#pg-settings > .hint2').remove();
-const appRules=$('#pg-apps > .card');appRules.dataset.view='rules';
+const appRules=$('#pg-apps > .card:not(.page-hero)');appRules.dataset.view='rules';
 const activeApps=document.createElement('section');activeApps.className='card';activeApps.dataset.view='active';
 activeApps.append($('#pg-apps > .sec'),$('#appsTbl'));$('#pg-apps').append(activeApps);
 const usage=$('#pg-usage');const quota=$('#usQuota').closest('.card');quota.dataset.view='allowances';

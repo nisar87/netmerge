@@ -137,9 +137,10 @@ function render(){
   if (page === 'block') renderBlock();
 
   { const n = S.legacyDownloads || 0; $('#pwOld').hidden = !n; $('#pwSave').hidden = !n; }
-  if (page === 'overview') { renderOverview(sn,run,act,P); loadHistory(); }
-  if (page === 'connections') { renderConnectionMode(); renderLinks(sn,act,P); }
+  if (page === 'overview') { renderOverview(sn,run,act,P); renderLinks(sn,act,P); loadHistory(); }
+  if (page === 'connections') renderConnectionMode();
   renderWizard();
+  if (page === 'usage' && typeof U !== 'undefined' && U && !$('#usSum').dataset.h) renderUsage(); // first paint without waiting for the next usage read
   if (page === 'apps') renderApps();
   if (page === 'test') renderTest();
   if (page === 'rules') renderRules();
@@ -161,9 +162,15 @@ function statusLine(sn, run){
   const n = (S.share && S.share.devices) || 0;
   return ['good', `${active.length} connections working together`, 'Each new connection goes to the line with the most spare speed.'];
 }
+const MODE_ART = {
+  // three small pictures: lines merging, each site kept on a line, one line only
+  fast:`<svg viewBox="0 0 160 72" aria-hidden="true"><path d="M8 14C60 14 70 36 116 36M8 36H116M8 58C60 58 70 36 116 36" fill="none" stroke-width="5" stroke-linecap="round" style="stroke:var(--l1)" class="ma-a"/><path d="M8 36H116" fill="none" stroke-width="5" stroke-linecap="round" style="stroke:var(--l2)"/><path d="M8 58C60 58 70 36 116 36" fill="none" stroke-width="5" stroke-linecap="round" style="stroke:var(--l3)"/><circle cx="134" cy="36" r="16" class="ma-hub"/><path d="M128 36h12m-5-5 5 5-5 5" class="ma-arrow"/></svg>`,
+  stable:`<svg viewBox="0 0 160 72" aria-hidden="true"><path d="M8 14H120M8 36H120M8 58H120" fill="none" stroke-width="5" stroke-linecap="round" class="ma-a"/><path d="M8 14H120" fill="none" stroke-width="5" stroke-linecap="round" style="stroke:var(--l1)"/><path d="M8 36H120" fill="none" stroke-width="5" stroke-linecap="round" style="stroke:var(--l2)"/><path d="M8 58H120" fill="none" stroke-width="5" stroke-linecap="round" style="stroke:var(--l3)"/><g class="ma-site"><rect x="126" y="6" width="26" height="16" rx="4"/><rect x="126" y="28" width="26" height="16" rx="4"/><rect x="126" y="50" width="26" height="16" rx="4"/></g></svg>`,
+  link:`<svg viewBox="0 0 160 72" aria-hidden="true"><path d="M8 14H70M8 58H70" fill="none" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 9" class="ma-off"/><path d="M8 36H118" fill="none" stroke-width="5" stroke-linecap="round" style="stroke:var(--l1)"/><circle cx="134" cy="36" r="16" class="ma-hub"/><path d="M128 36h12m-5-5 5 5-5 5" class="ma-arrow"/></svg>`
+};
 function renderConnectionMode(){
   const sn=S.snap;
-  $('#connHint').textContent = sn.links.length ? 'NetMerge shares the work between your connections by itself. Turn one off to leave it out.' : '';
+  $('#connHint').textContent = sn.links.length ? 'NetMerge looks for new connections by itself every few seconds.' : 'No connections yet.';
   const ms = $('#mode');
   if (document.activeElement !== ms) {
     const opts = [['fast','Combine all · fastest'], ['stable','Combine all · steady sites']].concat(local.links.map(l => ['link:'+l.name, 'Only '+l.label + (S.snap.links.find(x=>x.name===l.name)?.present === false ? ' (not connected)' : '')]));
@@ -174,7 +181,19 @@ function renderConnectionMode(){
     : local.mode === 'stable'
     ? 'Each website stays on one line. Fewer sign-in problems, slightly lower top speed.'
     : 'Uses all your lines at once, sharing the work by speed. Best for downloads and speed tests.';
-
+  // the same choice as the list above, as pictures
+  const m = local.mode, single = m.startsWith('link:');
+  const opt = (v, title, text, art, extra='') => `<div class="mode-opt${(v==='link'?single:m===v)?' sel':''}">${v==='link' ? '' : `<button class="mode-hit" data-mode="${v}" data-focus-key="mode-${v}" aria-pressed="${m===v}"><span class="sr-only">${esc(title)}</span></button>`}<div class="mode-art">${art}</div><div class="mode-copy"><b>${esc(title)}${(v==='link'?single:m===v)?'<span class="mode-on">'+NM.icon('check')+'In use</span>':''}</b><span>${esc(text)}</span></div>${extra}</div>`;
+  const lines = local.links.map(l => `<button class="btn sm${m==='link:'+l.name?' pri':''}" data-mode="link:${esc(l.name)}" data-focus-key="mode-link-${esc(l.name)}" aria-pressed="${m==='link:'+l.name}">${esc(l.label)}</button>`).join('');
+  setHTML($('#modePick'), opt('fast','Combine all · fastest','Every line works at once. Best for downloads, updates and speed tests.',MODE_ART.fast)
+    + opt('stable','Combine all · steady sites','Each website keeps one line, so sign-ins and banks stay happy.',MODE_ART.stable)
+    + opt('link','One line only','The others wait as a backup. Pick the line:',MODE_ART.link, `<div class="mode-lines">${lines || '<span class="hint2">No connections yet.</span>'}</div>`));
+  $$('#modePick [data-mode]').forEach(b => b.onclick = () => { if (local.mode === b.dataset.mode) return; ms.value = b.dataset.mode; ms.onchange({target: ms}); });
+  // counts only: the connections themselves are on Overview
+  const present = sn.links.filter(l => l.present), merged = NM.contributingLinks(sn);
+  const waiting = present.filter(l => l.enabled && !merged.includes(l)), off = sn.links.filter(l => !l.enabled), gone = sn.links.filter(l => l.enabled && !l.present);
+  const tile = (icon, n, label, tone) => `<div class="cx-tile ${tone}"><span class="cx-ic">${NM.icon(icon)}</span><b class="num">${n}</b><span>${label}</span></div>`;
+  setHTML($('#connFound'), `<div class="cx-tiles">${tile('network', present.length, 'found', 'info')}${tile('circle-check', merged.length, 'in the merge', 'good')}${tile('clock', waiting.length, 'waiting or standing by', 'mute')}${tile('unplug', gone.length + off.length, 'off or unplugged', gone.length ? 'warn' : 'mute')}</div>`);
 }
 
 /* values that should never blink in and out: keep the last good reading and smooth the traffic share */
@@ -215,25 +234,37 @@ function renderLinks(sn, act, P){
     const existing=new Map([...box.children].map(card=>[card.dataset.n,card]));
     const focused=document.activeElement,selection=focused?.tagName==='INPUT'?[focused.selectionStart,focused.selectionEnd]:null;
     const next=document.createElement('div');
-    next.innerHTML = sn.links.map(l => `
-      <div class="lk" data-n="${esc(l.name)}">
-        <div class="lk-h">
-          <div class="ico">${ICONS[l.kind]||ICONS.ethernet}</div>
-          <div style="flex:1;min-width:0">
+    // One card per connection, on Overview: live figures on top, its switch in the header, its settings folded away.
+    next.innerHTML = sn.links.map((l,i) => `
+      <article class="lk ov-link" data-n="${esc(l.name)}">
+        <header class="lk-h">
+          <span class="ov-link-icon">${ICONS[l.kind]||ICONS.ethernet}</span>
+          <span class="ov-link-name">
             <input class="lbl" value="${esc(l.label)}" spellcheck="false" aria-label="Name for ${esc(l.name)}" title="Click to rename">
-            <div class="desc" data-f="desc"></div>
-          </div>
+            <small class="desc" data-f="desc"></small>
+          </span>
+          <span class="chip" data-f="status"></span>
           <button class="tog" data-f="tog" role="switch" aria-label="Use ${esc(l.label || l.name)}"></button>
+        </header>
+        <div class="ov-link-speed"><span class="ov-down">${NM.icon('arrow-down')}<b class="num" data-f="down">—</b><small>Mbps</small></span><span class="ov-up num">${NM.icon('arrow-up')}<span data-f="up">—</span> <small>Mbps</small></span></div>
+        <svg class="ov-spark" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true" focusable="false"><defs><linearGradient id="lkg${i}-${Date.now()%1e6}" x1="0" y1="0" x2="0" y2="1"><stop offset="0"/><stop offset="1"/></linearGradient></defs><line class="ov-spark-base" x1="0" x2="300" y1="55" y2="55"/><path class="ov-spark-area" data-f="area"/><path class="ov-spark-line" data-f="line" vector-effect="non-scaling-stroke"/></svg>
+        <div class="ov-link-foot">
+          <div class="ov-share"><span>Share of traffic <b class="num" data-f="tshare">—</b></span><span class="ov-bar" role="presentation"><i data-f="tbar"></i></span></div>
+          <div class="ov-ping"><span>Response</span><b class="num" data-f="ping">—</b><small class="q" data-f="q" hidden></small></div>
         </div>
-        <div class="meta"><span class="chip" data-f="status"></span><span data-f="tags" style="display:contents"></span></div>
         <div data-f="missing"></div>
-        <div class="share">
-          <div class="share-h"><span title="NetMerge decides by itself how many newly opened websites and downloads use this line, based on its speed right now.">Share of the work<b data-f="pct"></b></span>
-            <div class="step" data-f="step"><button data-f="minus" aria-label="Give this connection a smaller share">−</button><b class="num" data-f="w"></b><button data-f="plus" aria-label="Give this connection a bigger share">+</button></div></div>
-          <div class="share-bar"><div data-f="bar"></div></div>
-        </div>
-        <details class="role connection-detail"><summary>Connection preferences</summary><label>When to use this line<select class="sel" data-f="role" aria-label="When to use this connection"><option value="">Always</option><option value="busy">Only when the others are busy</option><option value="backup">Only if the others fail</option></select></label><div class="hint2" data-f="roleHint"></div><div class="hint2 slowHint" data-f="slowHint" hidden>This line is much slower or less steady than the others. <button class="btn" data-f="slowBtn" style="padding:2px 8px;font-size:12px">Use it only when the others are busy</button></div></details>
-      </div>`).join('');
+        <details class="role connection-detail lk-settings"><summary>${NM.icon('settings-2')}<span>Settings</span><small data-f="sumHint"></small>${NM.icon('chevron-down')}</summary>
+          <div class="lk-settings-body">
+            <div class="meta"><span data-f="tags" style="display:contents"></span></div>
+            <div class="share">
+              <div class="share-h"><span title="NetMerge decides by itself how many newly opened websites and downloads use this line, based on its speed right now.">Share of the work<b data-f="pct"></b></span>
+                <div class="step" data-f="step"><button data-f="minus" aria-label="Give this connection a smaller share">−</button><b class="num" data-f="w"></b><button data-f="plus" aria-label="Give this connection a bigger share">+</button></div></div>
+              <div class="share-bar"><div data-f="bar"></div></div>
+            </div>
+            <label>When to use this line<select class="sel" data-f="role" aria-label="When to use this connection"><option value="">Always</option><option value="busy">Only when the others are busy</option><option value="backup">Only if the others fail</option></select></label><div class="hint2" data-f="roleHint"></div><div class="hint2 slowHint" data-f="slowHint" hidden>This line is much slower or less steady than the others. <button class="btn" data-f="slowBtn" style="padding:2px 8px;font-size:12px">Use it only when the others are busy</button></div>
+          </div>
+        </details>
+      </article>`).join('');
     let cursor=box.firstElementChild;
     for(const child of [...next.children]){const node=existing.get(child.dataset.n)||child;if(node!==cursor)box.insertBefore(node,cursor);cursor=node.nextElementSibling;}
     while(cursor){const nextNode=cursor.nextElementSibling;cursor.remove();cursor=nextNode;}
@@ -254,18 +285,36 @@ function renderLinks(sn, act, P){
     });
   }
   const totalW = local.links.filter(l => l.enabled && sn.links.find(s=>s.name===l.name)?.present).reduce((a,l)=>a+l.weight,0) || 1;
-  const totalDown = sn.links.reduce((a,l)=>a+(l.present?l.down:0),0) || 1;
+  const liveDown = sn.links.reduce((a,l)=>a+(l.present && l.enabled && Number.isFinite(l.down) ? l.down : 0),0);
+  // one shared scale for every graph, so a taller line really means a faster connection
+  const sparkMax = Math.max(125000, ...sn.links.flatMap(l => l.present ? (l.history||[]) : []));
   sn.links.forEach((l,i) => {
     const card = box.querySelector(`.lk[data-n="${CSS.escape(l.name)}"]`); if (!card) return;
     const ll = local.links.find(x=>x.name===l.name) || l, c = colorOf(l.name);
     card.style.setProperty('--c', c);
     card.classList.toggle('off', !ll.enabled || !l.present);
+    card.classList.toggle('dim', !(run && l.present && ll.enabled && l.healthy === true && !l.standby && !l.slow && !l.portal && !l.quotaOut));
     const f = n => card.querySelector(`[data-f=${n}]`);
     const [st, sc] = statusOf({...l, enabled: ll.enabled}, run);
     f('status').textContent = st; f('status').style.setProperty('--c', sc);
     f('tog').classList.toggle('on', ll.enabled); f('tog').setAttribute('aria-checked', ll.enabled);
     f('desc').textContent = l.present ? `${l.desc}${l.linkRate ? ' · '+l.linkRate : ''}` : 'Not connected';
     const h = holdFor(l.name), on = l.present && ll.enabled;
+    // live figures
+    f('down').textContent = l.present ? fmtM(l.down) : '—';
+    f('up').textContent = l.present ? fmtM(l.up) : '—';
+    const tshare = on && liveDown > 0 ? Math.round((l.down||0)/liveDown*100) : null;
+    f('tshare').textContent = tshare == null ? '—' : tshare + '%';
+    f('tbar').style.width = (tshare || 0) + '%';
+    f('ping').textContent = l.present && h.delay ? h.delay + ' ms' : '—';
+    { const q = f('q'), lab = l.present && h.delay && l.quality && l.quality.label ? l.quality.label : ''; q.hidden = !lab; q.textContent = lab; q.className = 'q ' + lab.toLowerCase(); }
+    { const hist = l.present ? (l.history||[]).slice(-90) : [];
+      if (hist.length > 1) { const n = 90, x = k => (k + n - hist.length)/(n-1)*300, y = v => 54 - v/sparkMax*50;
+        const line = hist.map((v,k) => (k ? 'L' : 'M') + x(k).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+        f('line').setAttribute('d', line); f('area').setAttribute('d', `${line} L300 56 L${x(0).toFixed(1)} 56 Z`);
+        const g = card.querySelector('linearGradient'); f('area').setAttribute('fill', `url(#${g.id})`);
+      } else { f('line').removeAttribute('d'); f('area').removeAttribute('d'); } }
+    card.setAttribute('aria-label', `${ll.label || l.label || l.name}: ${statusOf({...l, enabled: ll.enabled}, run)[0]}, ${l.present ? fmtM(l.down) : '—'} Mbps down`);
     const tag = (txt, title, dim) => `<span class="tag${dim ? ' dim' : ''}" title="${title}">${txt}</span>`;
     // Live figures (speed, response time, share of traffic) are on Overview; usage is on Usage. Here: who the line is.
     setHTML(f('tags'), [
@@ -282,6 +331,7 @@ function renderLinks(sn, act, P){
     const single = local.mode.startsWith('link:'), pct = single ? (local.mode === 'link:'+l.name ? 100 : 0) : smart ? ((ll.enabled && l.present) ? Math.round((l.slots||0)/8*100) : 0) : ((ll.enabled && l.present) ? Math.round(ll.weight/totalW*100) : 0);
     f('pct').textContent = (ll.enabled && l.present) ? pct+'%' : '—';
     f('bar').style.width = pct+'%';
+    f('sumHint').textContent = ll.role === 'busy' ? 'Only when busy' : ll.role === 'backup' ? 'Backup only' : '';
   });
 }
 

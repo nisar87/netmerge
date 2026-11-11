@@ -7,6 +7,8 @@ function targetOptions(sel, withDefault){
   o.push(['bypass','Skip NetMerge']);
   return o.map(([v,t]) => `<option value="${esc(v)}"${v===sel?' selected':''}>${esc(t)}</option>`).join('');
 }
+// a small coloured initial for each app, always the same colour for the same name
+const appAvatar = name => { let h = 0; for (const ch of String(name)) h = (h*31 + ch.charCodeAt(0)) >>> 0; return `<span class="app-av" style="--c:var(--l${h%5+1})" aria-hidden="true">${esc(String(name).replace(/\.exe$/i,'').slice(0,1).toUpperCase() || '?')}</span>`; };
 function renderApps(){
   const at = $('#appTarget');
   if (!at.dataset.init || at.dataset.links !== local.links.map(l=>l.name).join('|')){
@@ -18,7 +20,7 @@ function renderApps(){
   const rt = $('#rulesTbl');
   if (!(document.activeElement && rt.contains(document.activeElement))){
     setHTML(rt, '<tr><th>App</th><th>Uses</th><th style="width:44px"></th></tr>' + (local.appRules.length ? local.appRules.map(r => `
-      <tr><td class="proc">${esc(r.process)}</td><td><select class="sel" data-process="${esc(r.process)}" aria-label="Rule for ${esc(r.process)}">${targetOptions(r.target, false)}</select></td><td><button class="x" data-del="${esc(r.process)}" title="Remove rule" aria-label="Remove rule">✕</button></td></tr>`).join('')
+      <tr><td class="proc"><span class="app-name">${appAvatar(r.process)}${esc(r.process)}</span></td><td><select class="sel" data-process="${esc(r.process)}" aria-label="Rule for ${esc(r.process)}">${targetOptions(r.target, false)}</select></td><td><button class="x" data-del="${esc(r.process)}" title="Remove rule" aria-label="Remove rule">✕</button></td></tr>`).join('')
       : '<tr><td colspan="3" class="empty">No rules yet — apps follow the Overview setting.</td></tr>'));
     // Focus preserves this DOM through polling; resolve the process in the latest rules.
     rt.querySelectorAll('select').forEach(s => s.onchange = () => {
@@ -34,6 +36,9 @@ function renderApps(){
     });
   }
   const tb = $('#appsTbl'), apps = S.snap.apps || [], P = pal();
+  { const down = apps.reduce((a,x)=>a+(x.down||0),0), stat = (v,l) => `<div class="hero-stat"><b>${v}</b><span>${l}</span></div>`;
+    setHTML($('#appsStats'), stat(S.snap.running ? apps.length : '—', 'apps online') + stat(S.snap.running ? fmtM(down) : '—', 'Mbps down') + stat((local.appRules||[]).length, (local.appRules||[]).length === 1 ? 'rule' : 'rules')); }
+  const maxDown = Math.max(1, ...apps.map(a => a.down || 0));
   if (document.activeElement && tb.contains(document.activeElement)) return;
   setHTML(tb, '<tr><th>App</th><th>Connections used</th><th class="r">Download</th><th class="r">Upload</th><th>Rule</th></tr>' +
     (!S.snap.running ? '<tr><td colspan="5" class="empty">Turn merging on to see which apps are using the internet.</td></tr>' :
@@ -43,7 +48,7 @@ function renderApps(){
        const split = Object.entries(a.links).map(([n,c]) => `<i title="${esc(n==='bypass'?'Skip NetMerge':labelOf(n))}: ${c}" style="width:${c/tot*100}%;background:${n==='bypass'?'var(--dim)':colorOf(n)}"></i>`).join('');
        const names = Object.keys(a.links).map(n => n==='bypass' ? 'Skip' : labelOf(n)).join(' + ');
        const rule = local.appRules.find(r => r.process === a.process)?.target || '';
-       return `<tr><td class="proc">${esc(a.process)}</td><td><div class="split" aria-hidden="true">${split}</div><div style="font-size:12px;color:var(--dim);margin-top:3px">${esc(names)} · ${a.conns} conn</div></td><td class="r num">${fmtM(a.down)} Mbps</td><td class="r num">${fmtM(a.up)} Mbps</td>
+       return `<tr><td class="proc"><span class="app-name">${appAvatar(a.process)}${esc(a.process)}</span></td><td><div class="split" aria-hidden="true">${split}</div><div class="app-lines">${esc(names)} · ${a.conns} conn</div></td><td class="r num"><span class="app-rate"><span><b>${fmtM(a.down)}</b> Mbps</span><span class="app-bar" aria-hidden="true"><i style="width:${((a.down||0)/maxDown*100).toFixed(1)}%"></i></span></span></td><td class="r num">${fmtM(a.up)} Mbps</td>
          <td>${a.process==='system'?'':`<select class="sel" data-p="${esc(a.process)}" aria-label="Rule for ${esc(a.process)}">${targetOptions(rule, true)}</select>`}</td></tr>`;
      }).join('')));
   tb.querySelectorAll('select').forEach(s => s.onchange = () => {

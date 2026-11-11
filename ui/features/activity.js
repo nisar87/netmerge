@@ -3,6 +3,8 @@ let HI = null, hiFilter = 'all';
 async function loadHistoryEvents(){ try { HI = (await api('events')).events || []; } catch(e){if(page==='history')NM.report('activity',e,loadHistoryEvents);return;}NM.report('activity');paintHistoryEvents(); }
 function paintHistoryEvents(){
   const box = $('#hiBox'); if (!box || !HI) return;
+  { const today = new Date().toDateString(), stat = (v,l) => `<div class="hero-stat"><b>${v}</b><span>${l}</span></div>`;
+    setHTML($('#hiStats'), stat(HI.filter(e => new Date(e.time*1000).toDateString() === today).length, 'today') + stat(HI.filter(e => e.kind === 'warn' || e.kind === 'bad').length, 'problems') + stat(HI.length, 'in total')); }
   const ev = HI.filter(e => hiFilter === 'all' || (hiFilter === 'problems' ? (e.kind === 'warn' || e.kind === 'bad') : (e.kind === 'info' || e.kind === 'good')));
   if (!ev.length) { setHTML(box, '<div class="hint2">Nothing here yet. Connection changes, outages, presets and starts and stops show up as they happen.</div>'); return; }
   let day = '', html = '';

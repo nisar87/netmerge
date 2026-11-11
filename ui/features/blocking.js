@@ -22,13 +22,15 @@ function renderBlock(){
   const on = B.enabled, run = S.snap.running;
   $('#blkTog').classList.toggle('on', on); $('#blkTog').setAttribute('aria-checked', on);
   $('#blkToday').textContent = (S.block?.today ?? B.today).toLocaleString(); $('#blkTotal').textContent = (S.block?.total ?? B.total).toLocaleString();
-  setHTML($('#blkHint'), !on ? '<div class="note warn" style="margin:0">Blocking is off.</div>' : !run ? '<div class="note info" style="margin:0">Blocking works while merging is on. Turn merging on to start blocking.</div>' : '');
+  setHTML($('#blkHint'), !on ? '<div class="note warn" style="margin:10px 0 0">Blocking is off.</div>' : !run ? '<div class="note info" style="margin:10px 0 0">Blocking works while merging is on. Turn merging on to start blocking.</div>' : '');
+  $('.blk-hero .hero-icon')?.classList.toggle('good', on && run);
   setHTML($('#blkPacks'), B.packs.map(p => {
     const meta = p.builtin ? `${p.count.toLocaleString()} sites` : p.updating ? 'Updating…' : p.error ? `<span style="color:var(--bad)" title="${esc(p.error)}">Update failed</span>` : p.updated ? `${p.count.toLocaleString()} sites · ${ago(p.updated)}` : (p.enabled ? 'Downloading…' : '');
     return `<div class="pack"><div class="t"><b>${esc(p.name)}</b><span>${esc(p.desc)}</span></div><div class="m">${meta}</div>${p.builtin ? '' : `<button class="tog${p.enabled?' on':''}" data-pack="${esc(p.id)}" role="switch" aria-checked="${p.enabled}" aria-label="${esc(p.name)}"></button>`}</div>`;
   }).join(''));
   $('#blkPacks').querySelectorAll('[data-pack]').forEach(b => b.onclick = () => blockPost({packs:{[b.dataset.pack]: !B.packs.find(p=>p.id===b.dataset.pack).enabled}}, 'Saved'));
-  setHTML($('#blkTop'), B.top?.length ? B.top.map(t => `<div class="pack" style="padding:8px 0"><div class="t"><b style="font-weight:500">${esc(t.host)}</b></div><div class="m">${t.count.toLocaleString()}</div></div>`).join('') : '<p class="d" style="margin:0">Nothing blocked yet.</p>');
+  { const top = (B.top || []).slice(0, 10), mx = Math.max(1, ...top.map(t => t.count));
+    setHTML($('#blkTop'), top.length ? '<ol class="hbars">' + top.map(t => `<li><span class="hb-label" title="${esc(t.host)}">${esc(t.host)}</span><span class="hb-track" aria-hidden="true"><i style="width:${(t.count/mx*100).toFixed(1)}%"></i></span><b class="num">${t.count.toLocaleString()}</b></li>`).join('') + '</ol>' : '<div class="hist-empty">Nothing blocked yet today.</div>'); }
   const rec = (B.recent || []).slice(0, 20);
   setHTML($('#blkRecent'), rec.length ? '<tr><th>Website</th><th>App</th><th class="r">Times</th><th>Last</th><th></th></tr>' + rec.map(r => `<tr><td class="proc">${esc(r.host)}</td><td>${esc(r.app || '')}</td><td class="r num">${r.count.toLocaleString()}</td><td style="color:var(--dim)">${ago(r.time)}</td><td class="r"><button class="btn sm" data-allow="${esc(r.host)}">Allow</button></td></tr>`).join('') : '<tr><td class="empty" colspan="5">No blocked connections yet.</td></tr>');
   $('#blkRecent').querySelectorAll('[data-allow]').forEach(b => b.onclick = () => blockPost({domain:b.dataset.allow},b.dataset.allow+' is now allowed','block/allow'));
