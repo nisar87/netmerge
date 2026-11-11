@@ -33,6 +33,22 @@ jobs:
           echo "132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz" | sha256sum -c
           gunzip -c /tmp/mihomo.gz > /tmp/mihomo && chmod +x /tmp/mihomo
       - run: NM_ENGINE_BIN=/tmp/mihomo go test -count=1 -run TestEngineContract -v .
+  engine:
+    # NetMerge's own engine (engine/): its tests, the capture test (needs root: virtual adapter, network namespaces)
+    # and the same contract mihomo passes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: cd engine && gofmt -l . | (! grep .)
+      - run: cd engine && go vet ./... && GOOS=windows go vet ./...
+      - run: cd engine && go test -count=1 -v ./...
+      - name: Capture test (root)
+        run: cd engine && sudo -E env "PATH=$PATH" "GOCACHE=$(go env GOCACHE)" "GOMODCACHE=$(go env GOMODCACHE)" go test -count=1 -run TestTunEndToEnd -v .
+      - run: cd engine && go build -o /tmp/nmengine ./cmd/nmengine
+      - run: NM_ENGINE_BIN=/tmp/nmengine go test -count=1 -run TestEngineContract -v .
   frontend:
     # the window's own tests: a fixture server that imitates NetMerge's API, driven by a real Chromium
     runs-on: ubuntu-latest
