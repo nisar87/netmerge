@@ -36,7 +36,7 @@ test('a rapid reversal while a save is pending preserves the final choice',async
 });
 
 test('adapter discovery preserves a rename being typed and its focus',async({page,fixture})=>{
-  await navigate(page,'connections');const input=page.getByRole('textbox',{name:'Name for Ethernet',exact:true});
+  await navigate(page,'overview');const input=page.getByRole('textbox',{name:'Name for Ethernet',exact:true});
   await input.fill('Unsaved connection name');
   const current=await fixture.read('state');
   await fixture.patch({state:{snap:{links:[...current.snap.links,{...current.snap.links[0],name:'USB',label:'USB'}]},settings:{links:[...current.settings.links,{...current.settings.links[0],name:'USB',label:'USB'}]}}});

@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.15.0
+
+The whole window now has the look of the new Overview. Only the window changed: merging, usage counting, settings and everything else work exactly as before.
+
+- **Each connection in one place.** Your connections now have one card each, on Overview: live speed, a 90-second graph, share of traffic and response time on top, the on/off switch in the corner, and its name, addresses, share of the work and "when to use" under **Settings** on the card. The Connections page no longer repeats them.
+- **Connections → Traffic mode.** Choose how your lines work together with three pictures (fastest, steady sites, one line only) instead of a drop-down list, with a count of connections found, in the merge, waiting and unplugged.
+- **Usage.** A ring for each connection (its share of the data, or of its allowance), a period total with a colour split, the last 7 days as small bars, and a 31-day bar chart above the daily table.
+- **Apps.** A summary of apps online, download speed and rules; each app has a coloured initial and a speed bar.
+- **Protection.** Blocking opens with a shield and the day's count; the most blocked websites are shown as bars. Routing exceptions and DNS have the same clear header.
+- **Activity.** Events are a timeline with counts for today, problems and in total; logs read like a terminal.
+- **Presets and Settings.** Each preset has its own icon; Settings sections have clearer headings.
+
 ## 3.14.0
 
 A redesigned Overview. Only the window changed: merging, usage counting, settings and everything else work exactly as before.

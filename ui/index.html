@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="styles/application.css">
 <link rel="stylesheet" href="styles/speed-test.css">
 <link rel="stylesheet" href="styles/overview.css">
+<link rel="stylesheet" href="styles/design.css">
 <script src="app/theme-init.js"></script>
 </head><body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -47,8 +48,9 @@
         </div>
       </section>
       <section class="ov-links-section" aria-labelledby="ovLinksTitle">
-        <div class="section-heading"><div><h2 id="ovLinksTitle">Live speed by connection</h2><p class="hint2">What each line is doing right now · last 90 seconds</p></div><a href="#/connections" class="text-link">Manage connections <span data-icon="arrow-up-right"></span></a></div>
-        <div class="ov-links" id="linkSpeeds"></div>
+        <div class="section-heading"><div><h2 id="ovLinksTitle">Your connections</h2><p class="hint2">Live speed of each line, last 90 seconds · switch a line off or open its settings here</p></div><button class="btn" id="rescanConnections"><span data-icon="refresh-cw"></span>Scan for connections</button></div>
+        <div class="links ov-links" id="links"></div>
+        <div class="card empty" id="connectionsEmpty" hidden><span data-icon="network"></span><h3>No connections found</h3><p>Connect Ethernet, join Wi-Fi or attach a mobile hotspot. NetMerge checks automatically; you can also scan again.</p></div>
       </section>
       <section class="card traffic-card" aria-labelledby="trafficTitle">
         <div class="section-heading"><div><h2 id="trafficTitle">Live traffic</h2><p class="hint2">Download speed of all connections, stacked</p></div><div class="row"><span class="live-label"><i></i> Live · 90 seconds</span><button class="btn icon-button" id="chartPause" aria-label="Pause chart updates" aria-pressed="false" title="Pause chart updates"><span data-icon="pause"></span></button></div></div>
@@ -62,16 +64,20 @@
       </div>
     </section>
     <section class="page" id="pg-connections" hidden>
-      <div class="card mode-card"><div><h2>How your connections work together</h2><p class="hint2" id="modeDesc"></p></div><select class="sel" id="mode" aria-label="How to share traffic"></select></div>
-      <div class="sec"><h2>Your connections</h2><span class="hint" id="connHint"></span><div class="spacer"></div><a class="btn" href="#/overview"><span data-icon="activity"></span>Live speed</a><button class="btn" id="rescanConnections"><span data-icon="refresh-cw"></span>Scan connections</button></div>
-      <div class="links" id="links"></div>
-      <div class="card empty" id="connectionsEmpty" hidden><span data-icon="network"></span><h3>No connections found</h3><p>Connect Ethernet, join Wi-Fi or attach a mobile hotspot. NetMerge checks automatically; you can also scan again.</p></div>
+      <section class="card page-hero" aria-labelledby="modeTitle">
+        <span class="hero-icon" data-icon="network"></span>
+        <div class="hero-text"><h2 id="modeTitle">How your connections work together</h2><p class="hint2" id="modeDesc"></p></div>
+        <label class="hero-side" hidden><span class="sr-only">How to share traffic</span><select class="sel" id="mode" aria-label="How to share traffic" tabindex="-1"></select></label>
+      </section>
+      <div class="mode-grid" id="modePick"></div>
+      <section class="card cx-found"><div class="section-heading"><div><h2>Connections found</h2><p class="hint2" id="connHint"></p></div><a class="btn" href="#/overview"><span data-icon="activity"></span>See them live on Overview</a></div><div id="connFound"></div></section>
     </section>
     <!-- APPS -->
     <section class="page" id="pg-presets" hidden>
       <div id="prBody"></div>
     </section>
     <section class="page" id="pg-apps" hidden>
+      <section class="card page-hero" aria-labelledby="appsHeroTitle"><span class="hero-icon" data-icon="panels-top-left"></span><div class="hero-text"><h2 id="appsHeroTitle">Apps and their connections</h2><p class="hint2">Every app follows the traffic mode unless you give it a rule of its own.</p></div><div class="hero-stats" id="appsStats"></div></section>
       <div class="card">
         <h3>Choose which connection an app uses</h3>
         <p class="d">Apps without a rule follow the traffic mode selected in Connections.</p>
@@ -141,22 +147,22 @@
 
     <!-- PROTECTION -->
     <section class="page" id="pg-rules" hidden>
-      <div class="hint2" style="margin-bottom:12px">You normally do not need anything on this page. These are exceptions for special cases (a company VPN, a bank that signs you out, a Remote Desktop server). Leave them empty if none of that applies to you.</div>
+      <section class="card page-hero"><span class="hero-icon" data-icon="shield"></span><div class="hero-text"><h2>Routing exceptions</h2><p class="hint2">You normally do not need anything on this page. These are exceptions for special cases (a company VPN, a bank that signs you out, a Remote Desktop server). Leave them empty if none of that applies to you.</p></div></section>
       <div class="grid2">
         <div class="card">
-          <h3>Skip NetMerge for these addresses <span class="rec">Only if needed</span></h3>
+          <span class="pc-ic" data-icon="arrow-up-right"></span><h3>Skip NetMerge for these addresses <span class="rec">Only if needed</span></h3>
           <p class="d">Traffic to these IPs skips NetMerge and uses normal Windows routing — for example a Remote Desktop server reached through your VPN.</p>
           <div class="row" style="flex-wrap:nowrap"><input class="inp" id="ipInput" placeholder="203.0.113.5 or 10.20.0.0/16" style="flex:1" aria-label="IP address"><button class="btn" id="ipAdd">Add</button></div>
           <div class="listchips" id="ipList"></div>
         </div>
         <div class="card">
-          <h3>Keep these websites on one line <span class="rec">Only if needed</span></h3>
+          <span class="pc-ic" data-icon="link"></span><h3>Keep these websites on one line <span class="rec">Only if needed</span></h3>
           <p class="d">Banks and login pages can sign you out if your IP changes between requests. These stay on a single link.</p>
           <div class="row" style="flex-wrap:nowrap"><input class="inp" id="domInput" placeholder="mybank.com" style="flex:1" aria-label="Website"><button class="btn" id="domAdd">Add</button></div>
           <div class="listchips" id="domList"></div>
         </div>
         <div class="card">
-          <h3>Line used by your VPN <span class="rec">Only if you use a VPN</span></h3>
+          <span class="pc-ic" data-icon="shield-check"></span><h3>Line used by your VPN <span class="rec">Only if you use a VPN</span></h3>
           <p class="d">VPN tunnels (SonicWALL, Cisco, FortiClient, OpenVPN…) are kept on one link so they never break.</p>
           <select class="sel" id="vpnLink" style="width:100%" aria-label="VPN connection"></select>
         </div>
@@ -165,17 +171,12 @@
 
     <!-- BLOCKING -->
     <section class="page" id="pg-block" hidden>
-      <div class="card" style="margin-bottom:16px">
-        <div class="row" style="flex-wrap:nowrap;align-items:flex-start">
-          <div style="flex:1">
-            <h3 style="margin-bottom:2px">Block ads &amp; trackers</h3>
-            <p class="d" style="margin:0 0 4px">NetMerge refuses connections to known ad, tracking and malware websites before they use your internet. It works for every app, while merging is on.</p>
-          </div>
-          <button class="tog" id="blkTog" role="switch" aria-label="Block ads and trackers"></button>
-        </div>
-        <div class="stat"><div><div class="big" id="blkToday">0</div><small>blocked today</small></div><div><div class="big" id="blkTotal">0</div><small>blocked in total</small></div></div>
-        <div id="blkHint" style="margin-top:12px"></div>
-      </div>
+      <section class="card page-hero blk-hero" aria-labelledby="blkTitle">
+        <span class="hero-icon good" data-icon="shield-check"></span>
+        <div class="hero-text"><h2 id="blkTitle">Block ads &amp; trackers</h2><p class="hint2">NetMerge refuses connections to known ad, tracking and malware websites before they use your internet. It works for every app, while merging is on.</p><div id="blkHint"></div></div>
+        <div class="hero-stats"><div class="hero-stat"><b id="blkToday">0</b><span>blocked today</span></div><div class="hero-stat"><b id="blkTotal">0</b><span>blocked in total</span></div></div>
+        <button class="tog" id="blkTog" role="switch" aria-label="Block ads and trackers"></button>
+      </section>
       <div class="grid2">
         <div class="card">
           <div class="row" style="flex-wrap:nowrap;margin-bottom:4px"><h3 style="margin:0;flex:1">Block lists</h3><button class="btn sm" id="blkUpdate">Update now</button></div>
@@ -184,7 +185,8 @@
         </div>
         <div class="card">
           <h3>Most blocked today</h3>
-          <div id="blkTop" style="min-height:300px"></div>
+          <p class="d">Websites asked for most often, and refused.</p>
+          <div id="blkTop"></div>
         </div>
       </div>
       <div class="card" style="margin-top:16px">
@@ -258,14 +260,17 @@
         <div class="hint" style="color:var(--mute);font-size:13px;margin-bottom:12px">Optional. Set how much data each connection may use per month and NetMerge warns you at 80% and 100%, or leaves the connection out of the merge when it runs out. Leave a box empty for no limit.</div>
         <div id="usQuota"></div>
       </div>
-      <details class="card" style="margin:16px 0" id="usFix">
+      <section class="card us-daily" aria-labelledby="usDailyTitle">
+        <div class="section-heading"><div><h2 id="usDailyTitle">Daily usage <span id="usPeriod" class="hint2"></span> <span id="usUnit" class="hint2"></span></h2><p class="hint2">Download and upload of every connection, day by day</p></div><div class="legend" id="usLegend"></div></div>
+        <div id="usChart"></div>
+        <div class="scrollbox" style="max-height:460px"><table class="tbl" id="usTbl"></table></div>
+      </section>
+      <details class="card" id="usFix">
         <summary style="cursor:pointer;font-weight:600">Correct a wrong number</summary>
         <div class="hint" style="color:var(--mute);font-size:13px;margin:8px 0 12px">If a day shows far more data than you really used (an old version could count an adapter that was unplugged and plugged in again as billions of bytes), choose the connection and the day and type the real figure. Windows' own network statistics are the reference.</div>
         <div class="qrow"><select class="sel" id="fxLink" aria-label="Connection"></select><select class="sel" id="fxDay" aria-label="Day"></select></div>
         <div class="qrow"><b style="min-width:70px">Down (MB)</b><input class="inp" id="fxDown" aria-label="Download usage in MB" type="number" min="0" max="10000000" step="1" inputmode="numeric"><b style="min-width:70px;margin-left:12px">Up (MB)</b><input class="inp" id="fxUp" aria-label="Upload usage in MB" type="number" min="0" max="10000000" step="1" inputmode="numeric"><button class="btn pri" id="fxSave" style="margin-left:12px" disabled>Save</button></div>
       </details>
-      <h3 style="margin:0 0 8px">Daily usage <span id="usPeriod" style="font-weight:400;color:var(--mute);font-size:13px"></span> <span id="usUnit" style="font-weight:400;color:var(--mute);font-size:13px"></span></h3>
-      <div class="scrollbox" style="max-height:460px"><table class="tbl" id="usTbl"></table></div>
     </section>
 
     <!-- LOGS -->
@@ -273,6 +278,7 @@
       <div id="dnsBody"></div>
     </section>
     <section class="page" id="pg-history" hidden>
+      <section class="card page-hero"><span class="hero-icon" data-icon="activity"></span><div class="hero-text"><h2>What NetMerge changed, and why</h2><p class="hint2">Lines joining and leaving, outages, presets, starts and stops.</p></div><div class="hero-stats" id="hiStats"></div></section>
       <div class="row" style="gap:10px;flex-wrap:wrap"><div class="seg" id="hiSel"><button data-v="all" class="sel">Everything</button><button data-v="problems">Problems</button><button data-v="changes">Changes</button></div><div class="spacer"></div><button class="btn" id="hiRefresh">Refresh</button></div>
       <div class="card" style="margin-top:12px" id="hiBox"></div>
     </section>
