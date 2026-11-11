@@ -6,7 +6,7 @@ NetMerge wraps the open-source [mihomo](https://github.com/MetaCubeX/mihomo) eng
 
 ## What it does
 
-- **Merges your connections.** Every new connection a program opens is handed to the line with the most spare speed right now, so downloads, uploads and many-connection programs (browsers, torrent clients, game launchers) use all lines at once.
+- **Merges your connections.** In the default mode every new connection a program opens is handed to the line with the most spare speed right now (or, if you prefer, each website stays on one line, or everything uses one line with the others as backup), so downloads, uploads and many-connection programs (browsers, torrent clients, game launchers) use all lines at once.
 - **Per-app control.** Send a program to one line only, or keep it off the merge.
 - **Usage tab.** Download and upload per connection per day, monthly allowance, warnings and a forecast.
 - **Share with your phone.** Scan a QR code with a free app (Hiddify, v2rayNG, Streisand, Shadowrocket) and the phone uses the merged connection too. Connected devices are listed and can be named.
@@ -15,7 +15,7 @@ NetMerge wraps the open-source [mihomo](https://github.com/MetaCubeX/mihomo) eng
 - **Same-provider warning.** If two lines leave through the same public address, NetMerge tells you merging cannot add speed.
 - **Diagnostics export.** One click saves the logs, settings (without passwords) and a summary.
 - **Quality score, activity log and 24-hour graph.** See how steady each line is and what NetMerge changed.
-- **Calls protection.** Meeting apps use one steady line, kept as free as possible during a call.
+- **Calls protection.** Meeting apps use one steady line; with Smart balancing, new downloads go mostly to the other lines during a call.
 - **Presets and schedule.** Gaming, work, travel and more in one click, with your own presets and a time schedule.
 - **Backup and restore** of settings, plus a first-run guide.
 - **Health checks.** A line without internet is left out until it works again.

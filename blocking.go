@@ -49,7 +49,7 @@ var packDefs = []packDef{
 	{"ads", "Ads & trackers", "A large, regularly maintained community list of ad and tracking domains (HaGeZi Light, about 90,000 sites).",
 		[]string{"https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/light-onlydomains.txt",
 			"https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/light-onlydomains.txt"}},
-	{"pro", "Ads, trackers & more (stronger)", "A bigger list that also blocks more telemetry and annoyances (HaGeZi Pro, about 220,000 sites). May break a few sites - use \"Allow\" on the Recent blocks list if one does.",
+	{"pro", "Ads, trackers & more (stronger)", "A bigger list that also blocks more telemetry and annoyances (HaGeZi Pro, about 220,000 sites). May break a few sites - use \"Allow\" on the Blocked today list if one does.",
 		[]string{"https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/pro-onlydomains.txt",
 			"https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt"}},
 	{"malware", "Malware & phishing", "Domains used for malware, phishing and scams (HaGeZi Threat Intelligence Mini, about 195,000 sites).",

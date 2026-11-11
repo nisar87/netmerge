@@ -21,7 +21,7 @@ function renderApps(){
   if (!(document.activeElement && rt.contains(document.activeElement))){
     setHTML(rt, '<tr><th>App</th><th>Uses</th><th style="width:44px"></th></tr>' + (local.appRules.length ? local.appRules.map(r => `
       <tr><td class="proc"><span class="app-name">${appAvatar(r.process)}${esc(r.process)}</span></td><td><select class="sel" data-process="${esc(r.process)}" aria-label="Rule for ${esc(r.process)}">${targetOptions(r.target, false)}</select></td><td><button class="x" data-del="${esc(r.process)}" title="Remove rule" aria-label="Remove rule">✕</button></td></tr>`).join('')
-      : '<tr><td colspan="3" class="empty">No rules yet — apps follow the Overview setting.</td></tr>'));
+      : '<tr><td colspan="3" class="empty">No rules yet — apps follow the traffic mode.</td></tr>'));
     // Focus preserves this DOM through polling; resolve the process in the latest rules.
     rt.querySelectorAll('select').forEach(s => s.onchange = () => {
       const rule=local.appRules.find(r=>r.process===s.dataset.process);

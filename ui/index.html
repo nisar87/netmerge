@@ -41,8 +41,8 @@
           <div class="ov-flow" id="mergeFlow" role="img" aria-label="Combined speed: not measured yet"></div>
           <dl class="ov-kpis">
             <div class="ov-kpi"><dt><span data-icon="arrow-up"></span>Upload</dt><dd><span class="num ov-kpi-value" id="totalUp">—</span><span class="ov-kpi-foot">Combined, right now</span></dd></div>
-            <div class="ov-kpi"><dt><span data-icon="gauge"></span>Peak speed</dt><dd><span class="num ov-kpi-value" id="peak">—</span><span class="ov-kpi-foot">This merging session</span></dd></div>
-            <div class="ov-kpi"><dt><span data-icon="hard-drive"></span>Downloaded</dt><dd><span class="num ov-kpi-value" id="session">—</span><span class="ov-kpi-foot">Through all connections</span></dd></div>
+            <div class="ov-kpi"><dt><span data-icon="gauge"></span>Peak speed</dt><dd><span class="num ov-kpi-value" id="peak">—</span><span class="ov-kpi-foot">Since NetMerge opened</span></dd></div>
+            <div class="ov-kpi"><dt><span data-icon="hard-drive"></span>Downloaded</dt><dd><span class="num ov-kpi-value" id="session">—</span><span class="ov-kpi-foot">All connections, since NetMerge opened</span></dd></div>
             <div class="ov-kpi"><dt><span data-icon="clock-3"></span>Running for</dt><dd><span class="num ov-kpi-value" id="uptime">—</span><span class="ov-kpi-foot" id="contribHint">Since merging started</span></dd></div>
           </dl>
         </div>
@@ -114,7 +114,7 @@
           <div class="speed-phase" id="testPhase" aria-live="polite">Ready when you are</div>
           <div class="speed-progress" id="testProg" role="progressbar" aria-label="Speed test progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div></div></div>
           <button class="btn pri speed-start" id="testBtn"><span data-icon="play"></span><span>Start test</span></button>
-          <p class="speed-help">Allow a few minutes. Pause other downloads for a clearer result.</p>
+          <p class="speed-help">Takes about two minutes. Pause other downloads for a clearer result.</p>
           <p class="speed-help">It uses real data on every connection: on a mobile connection about 100–300 MB per test, which counts towards its allowance.</p>
         </div>
         <figure class="speed-graph" aria-labelledby="testGraphTitle">
@@ -151,19 +151,19 @@
       <div class="grid2">
         <div class="card">
           <span class="pc-ic" data-icon="arrow-up-right"></span><h3>Skip NetMerge for these addresses <span class="rec">Only if needed</span></h3>
-          <p class="d">Traffic to these IPs skips NetMerge and uses normal Windows routing — for example a Remote Desktop server reached through your VPN.</p>
+          <p class="d">Traffic to these IPs skips NetMerge and uses normal Windows routing — for example a Remote Desktop server reached through your VPN. Addresses on your local network (such as 192.168.x.x) already skip it.</p>
           <div class="row" style="flex-wrap:nowrap"><input class="inp" id="ipInput" placeholder="203.0.113.5 or 10.20.0.0/16" style="flex:1" aria-label="IP address"><button class="btn" id="ipAdd">Add</button></div>
           <div class="listchips" id="ipList"></div>
         </div>
         <div class="card">
           <span class="pc-ic" data-icon="link"></span><h3>Keep these websites on one line <span class="rec">Only if needed</span></h3>
-          <p class="d">Banks and login pages can sign you out if your IP changes between requests. These stay on a single link.</p>
+          <p class="d">Banks and login pages can sign you out if your IP changes between requests. These stay on a single line. Websites with “bank” in their name already do.</p>
           <div class="row" style="flex-wrap:nowrap"><input class="inp" id="domInput" placeholder="mybank.com" style="flex:1" aria-label="Website"><button class="btn" id="domAdd">Add</button></div>
           <div class="listchips" id="domList"></div>
         </div>
         <div class="card">
           <span class="pc-ic" data-icon="shield-check"></span><h3>Line used by your VPN <span class="rec">Only if you use a VPN</span></h3>
-          <p class="d">VPN tunnels (SonicWALL, Cisco, FortiClient, OpenVPN…) are kept on one link so they never break.</p>
+          <p class="d">VPN tunnels (SonicWALL, Cisco, FortiClient, GlobalProtect, OpenVPN, WireGuard…) are kept on one line so they do not drop. Automatic uses the first wired connection.</p>
           <select class="sel" id="vpnLink" style="width:100%" aria-label="VPN connection"></select>
         </div>
       </div>
@@ -173,7 +173,7 @@
     <section class="page" id="pg-block" hidden>
       <section class="card page-hero blk-hero" aria-labelledby="blkTitle">
         <span class="hero-icon good" data-icon="shield-check"></span>
-        <div class="hero-text"><h2 id="blkTitle">Block ads &amp; trackers</h2><p class="hint2">NetMerge refuses connections to known ad, tracking and malware websites before they use your internet. It works for every app, while merging is on.</p><div id="blkHint"></div></div>
+        <div class="hero-text"><h2 id="blkTitle">Block ads &amp; trackers</h2><p class="hint2">NetMerge refuses connections to known ad, tracking and malware websites before they use your internet. It works for every app, and for phones you share with, while merging is on.</p><div id="blkHint"></div></div>
         <div class="hero-stats"><div class="hero-stat"><b id="blkToday">0</b><span>blocked today</span></div><div class="hero-stat"><b id="blkTotal">0</b><span>blocked in total</span></div></div>
         <button class="tog" id="blkTog" role="switch" aria-label="Block ads and trackers"></button>
       </section>
@@ -217,24 +217,24 @@
         <div class="sechead">Everyday <span>safe to change</span></div>
         <div class="opt"><div><b>Start with Windows <em class="rec">Recommended: on</em></b><span>NetMerge opens quietly when you sign in. If off, you open it yourself after each restart.</span></div><button class="tog" id="autoTog" role="switch" aria-label="Start with Windows"></button></div>
         <div class="opt"><div><b>Merge automatically <em class="rec">Recommended: on</em></b><span>Merging turns on as soon as NetMerge starts. If off, you press the Merging switch each time.</span></div><button class="tog" id="launchTog" role="switch" aria-label="Merge automatically"></button></div>
-        <div class="opt"><div><b>Protect calls and meetings <em class="rec">Recommended: on</em></b><span>Teams, Zoom, Discord and similar stay on one steady connection, and big downloads are kept off that line during a call. If off, a call may stutter while you download.</span></div><button class="tog" id="callTog" role="switch" aria-label="Protect calls and meetings"></button></div>
+        <div class="opt"><div><b>Protect calls and meetings <em class="rec">Recommended: on</em></b><span>Teams, Zoom, Discord and similar stay on one steady line. With Smart balancing in “fastest” mode, NetMerge picks the steadiest line for calls and sends new downloads mostly to the other lines while a call runs. If off, a call may stutter while you download.</span></div><button class="tog" id="callTog" role="switch" aria-label="Protect calls and meetings"></button></div>
         <div class="opt" id="pwRow"><div><b>Download manager</b><span>Downloads now have a program of their own, Pullwell (github.com/nisar87/pullwell). It works like any download manager, and while NetMerge is on it gets the merged speed by itself. <span id="pwOld" hidden>Your list from the old download manager is still here: save it, then import it in Pullwell. Your downloaded files stay where they are.</span></span></div><div class="row"><a class="btn" style="white-space:nowrap" href="https://github.com/nisar87/pullwell/releases/latest" target="_blank" rel="noopener">Get Pullwell</a><a class="btn" style="white-space:nowrap" id="pwSave" href="/api/legacy-downloads" download hidden>Save old list</a></div></div>
         <div class="opt"><div><b>Appearance</b><span>Light or dark. Auto follows Windows.</span></div><div class="seg" id="theme"><button data-v="auto">Auto</button><button data-v="dark">Dark</button><button data-v="light">Light</button></div></div>
       </div>
       <div class="card" style="margin-top:16px">
         <div class="sechead">Updates and backup <span>safe to change</span></div>
         <div class="opt"><div><b>NetMerge <span id="appVer"></span></b><span id="updInfo">—</span></div><button class="btn" id="updCheck">Check for updates</button></div>
-        <div class="opt"><div><b>Check for updates automatically <em class="rec">Recommended: on</em></b><span>Tells you when a new version is out. Nothing installs until you click Update. If off, you check by hand.</span></div><button class="tog" id="updTog" role="switch" aria-label="Check for updates automatically"></button></div>
-        <div class="opt"><div><b>Back up settings</b><span>Saves your connections and options to a file (no passwords). Restore it after a reinstall or on another PC.</span></div><div class="row"><a class="btn" href="/api/backup" download>Save</a><button class="btn" id="restBtn">Restore…</button><input type="file" id="restFile" accept=".json,application/json" hidden></div></div>
+        <div class="opt"><div><b>Check for updates automatically <em class="rec">Recommended: on</em></b><span>Looks for a new version shortly after start and every 6 hours, and tells you when one is out. Nothing installs until you click Update. If off, you check by hand.</span></div><button class="tog" id="updTog" role="switch" aria-label="Check for updates automatically"></button></div>
+        <div class="opt"><div><b>Back up settings</b><span>Saves your connections and options to a file (no passwords and no phone names). Restore it after a reinstall or on another PC.</span></div><div class="row"><a class="btn" href="/api/backup" download>Save</a><button class="btn" id="restBtn">Restore…</button><input type="file" id="restFile" accept=".json,application/json" hidden></div></div>
         <div class="opt"><div><b>Setup guide</b><span>Shows the first-run checklist again.</span></div><button class="btn" id="wizBtn">Open</button></div>
         <div class="opt"><div><b>Quit NetMerge</b><span>Closing the window keeps merging in the background. Quit stops merging and exits.</span></div><button class="btn danger" id="quit">Quit</button></div>
       </div>
       <details class="card adv" style="margin-top:16px">
         <summary><span class="sechead" style="display:inline">Advanced <span>leave as they are unless something is wrong</span></span></summary>
-        <div class="opt"><div><b>Connection balancing <em class="rec">Recommended: Smart</em></b><span>Smart sends new traffic to the line with the most spare speed. Classic uses the fixed shares (×1–×5) in Connections. Switch to Classic only if Smart gives unexpected results.</span></div><select class="sel" id="balSel" aria-label="Connection balancing"><option value="smart">Smart (recommended)</option><option value="classic">Classic (fixed shares)</option></select></div>
-        <div class="opt"><div><b>Network engine mode <em class="rec">Recommended: Normal</em></b><span>How the engine handles traffic. If single downloads feel slow, try System. If a program stops working, try Compatibility. Changing it restarts merging for a moment.</span></div><select class="sel" id="stackSel" aria-label="Network engine mode"><option value="">Normal (recommended)</option><option value="system">System</option><option value="gvisor">Compatibility</option></select></div>
-        <div class="opt"><div><b>Look for new connections</b><span>NetMerge already checks every few seconds. Use this only if a line you just plugged in is missing.</span></div><button class="btn" id="rescan">Scan now</button></div>
-        <div class="opt"><div><b>Detailed logging <em class="rec">Recommended: off</em></b><span>Writes a speed line every second. Only for troubleshooting. It makes the log files grow fast.</span></div><button class="tog" id="debugTog" role="switch" aria-label="Detailed logging"></button></div>
+        <div class="opt"><div><b>Connection balancing <em class="rec">Recommended: Smart</em></b><span>Smart sends each new connection to the line with the most spare speed. Classic hands new connections out in turn, using the fixed shares (×1–×5) under Settings on each connection card on Overview. “Steady sites” mode always uses those shares. Switch to Classic only if Smart gives unexpected results.</span></div><select class="sel" id="balSel" aria-label="Connection balancing"><option value="smart">Smart (recommended)</option><option value="classic">Classic (fixed shares)</option></select></div>
+        <div class="opt"><div><b>Network engine mode <em class="rec">Recommended: Normal</em></b><span>How the engine handles traffic. If single downloads feel slow, try System. If a program stops working, try Compatibility, which is much slower (one download may reach only about 20 Mbps). Changing it restarts merging for a moment.</span></div><select class="sel" id="stackSel" aria-label="Network engine mode"><option value="">Normal (recommended)</option><option value="system">System</option><option value="gvisor">Compatibility</option></select></div>
+        <div class="opt"><div><b>Look for new connections</b><span>NetMerge already checks about every 10 seconds. Use this only if a line you just plugged in is missing.</span></div><button class="btn" id="rescan">Scan now</button></div>
+        <div class="opt"><div><b>Detailed logging <em class="rec">Recommended: off</em></b><span>While data flows, writes the speed of each line and the busiest connections every second, and records each connection in the engine log. Only for troubleshooting. It makes the log files grow fast.</span></div><button class="tog" id="debugTog" role="switch" aria-label="Detailed logging"></button></div>
         <div class="opt"><div><b>Diagnostics</b><span>Saves a zip with logs, settings (no passwords) and a summary, to send when asking for help. Logs can contain website names, so look before sharing.</span></div><a class="btn" id="diagDl" href="/api/diagnostics" download>Download</a></div>
         <div class="opt"><div><b>Engine</b><span id="engineVer">—</span></div></div>
       </details>
@@ -257,7 +257,7 @@
       <div id="usSum" class="usgrid"></div>
       <div class="card" style="margin:16px 0">
         <h3 style="margin-bottom:2px">Monthly allowance</h3>
-        <div class="hint" style="color:var(--mute);font-size:13px;margin-bottom:12px">Optional. Set how much data each connection may use per month and NetMerge warns you at 80% and 100%, or leaves the connection out of the merge when it runs out. Leave a box empty for no limit.</div>
+        <div class="hint" style="color:var(--mute);font-size:13px;margin-bottom:12px">Optional. Set how much data each connection may use per month and NetMerge warns you at 80% and 100% and, if you choose, leaves the connection out of the merge when it runs out. Leave a box empty for no limit.</div>
         <div id="usQuota"></div>
       </div>
       <section class="card us-daily" aria-labelledby="usDailyTitle">

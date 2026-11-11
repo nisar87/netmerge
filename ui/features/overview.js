@@ -34,7 +34,7 @@ function renderOverview(sn, run){
 }
 
 /* The merge picture: each connection flows into one speedometer. The needle and the coloured arc show the combined
-   download against a scale that follows this session's top speed; the thin inner ring shows each line's share. */
+   download against a scale that follows the top speed since NetMerge opened; the thin inner ring shows each line's share. */
 let gaugeTop = 10;
 function renderMergeFlow(sn, run){
   const box = $('#mergeFlow'); if (!box) return;
