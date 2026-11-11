@@ -54,8 +54,20 @@ func TestRebuildAndConfig(t *testing.T) {
 		t.Fatal("regex")
 	}
 	// the line mihomo 1.19.33 really writes for the combined rule (seen in a run of the engine)
-	if m := blockedRe.FindStringSubmatch(`time="x" level=info msg="[TCP] 198.18.0.1:55696(node.exe) --> ads.doubleclick.net:443 match AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow))))) using REJECT"`); m == nil || m[1] != "node.exe" || m[2] != "ads.doubleclick.net:443" {
+	if m := blockedRe.FindStringSubmatch(`time="x" level=info msg="[TCP] 198.18.0.1:55696(node.exe) --> ads.doubleclick.net:443 match AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow))))) using REJECT"`); m == nil || blockedApp(m[1], m[2]) != "node.exe" || m[3] != "ads.doubleclick.net:443" {
 		t.Fatalf("regex for the combined rule: %v", m)
+	}
+	// lines copied from engine.log on the real PC: a shared phone (no program name) over TCP and UDP, and a PC program
+	for _, c := range []struct{ line, app, host string }{
+		{`time="2026-11-12T03:12:11.207397100+05:00" level=info msg="[TCP] 192.168.1.107:60372 --> 172.217.117.4:443 match AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow))))) using REJECT"`, "Shared device (192.168.1.107)", "172.217.117.4:443"},
+		{`time="2026-11-12T03:09:06.933493200+05:00" level=info msg="[UDP] 192.168.1.107:36424 --> 142.251.37.130:443 match AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow))))) using REJECT"`, "Shared device (192.168.1.107)", "142.251.37.130:443"},
+		{`time="2026-11-12T03:12:16.391114200+05:00" level=info msg="[TCP] 198.18.0.1:61047(msedge.exe) --> 51.11.192.52:443 match AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow))))) using REJECT"`, "msedge.exe", "51.11.192.52:443"},
+		{`time="x" level=info msg="[TCP] 198.18.0.1:61050 --> ads.example.com:443 match AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow))))) using REJECT"`, "", "ads.example.com:443"},
+	} {
+		m := blockedRe.FindStringSubmatch(c.line)
+		if m == nil || blockedApp(m[1], m[2]) != c.app || m[3] != c.host {
+			t.Fatalf("not counted right: %v for %s", m, c.line)
+		}
 	}
 	if blockedRe.MatchString(`time="x" level=info msg="[TCP] 1.1.1.1:5(git.exe) --> www.allowed.test:443 match DomainSuffix(allowed.test) using LINK1"`) {
 		t.Fatal("an allowed website counted as blocked")
@@ -92,6 +104,7 @@ func TestPump(t *testing.T) {
 	go func() { pumpEngineLog(pr, lf); close(done) }()
 	pw.WriteString(`time="x" level=info msg="[TCP] 1.1.1.1:5(chrome.exe) --> ads.doubleclick.net:443 match RuleSet(nm_block) using REJECT"` + "\n")
 	pw.WriteString(`time="x" level=info msg="[TCP] 1.1.1.1:7(chrome.exe) --> ads.doubleclick.net:443 match AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow))))) using REJECT"` + "\n")
+	pw.WriteString(`time="x" level=info msg="[TCP] 192.168.1.107:60372 --> 172.217.117.4:443 match AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow))))) using REJECT"` + "\n")
 	pw.WriteString(`time="x" level=info msg="[TCP] 1.1.1.1:6(chrome.exe) --> a.com:443 match Match using FAST[LINK1]"` + "\n")
 	pw.WriteString(`time="x" level=warning msg="something odd"` + "\n")
 	pw.Close()
@@ -101,7 +114,7 @@ func TestPump(t *testing.T) {
 		t.Fatalf("log wrong: %s", b)
 	}
 	today, _, recent, top := bstats.snapshot()
-	if today != 2 || len(recent) != 1 || recent[0].Host != "ads.doubleclick.net" || recent[0].App != "chrome.exe" || recent[0].Count != 2 || len(top) != 1 {
+	if today != 3 || len(recent) != 2 || recent[0].Host != "ads.doubleclick.net" || recent[0].App != "chrome.exe" || recent[0].Count != 2 || recent[1].App != "Shared device (192.168.1.107)" || len(top) != 2 {
 		t.Fatalf("stats wrong %v %v %v", today, recent, top)
 	}
 }

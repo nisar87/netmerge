@@ -343,7 +343,24 @@ var bstats = &blockStatsT{top: map[string]int{}, recent: map[string]*BlockEvent{
 
 // The engine logs a refused connection as "match AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow))))) using
 // REJECT" (checked with mihomo 1.19.33); the plain "match RuleSet(nm_block)" form of older versions still counts.
-var blockedRe = regexp.MustCompile(`\[(?:TCP|UDP)\] \S+?\(([^)]*)\) --> (\S+) match (?:RuleSet\(nm_block\)|AND\(\(\(RuleSet,nm_block\))`)
+// The program name in brackets after the source is there only for programs on this PC: a shared phone's line is
+// "[TCP] 192.168.1.107:60372 --> 172.217.117.4:443 match ..." (seen on a real PC), so the brackets are optional.
+var blockedRe = regexp.MustCompile(`\[(?:TCP|UDP)\] ([^\s(]+)(?:\(([^)]*)\))? --> (\S+) match (?:RuleSet\(nm_block\)|AND\(\(\(RuleSet,nm_block\))`)
+
+// blockedApp names who asked: the program on this PC, or the shared device by its address.
+func blockedApp(src, app string) string {
+	if app != "" {
+		return app
+	}
+	ip, _, err := net.SplitHostPort(src)
+	if err != nil {
+		ip = src
+	}
+	if ip == "" || strings.HasPrefix(ip, "198.18.") || ip == "127.0.0.1" || ip == "::1" {
+		return "" // a program on this PC whose name the engine could not find
+	}
+	return "Shared device (" + ip + ")"
+}
 
 func (b *blockStatsT) rollLocked() {
 	d := time.Now().Format("2006-01-02")
@@ -479,7 +496,7 @@ func pumpEngineLog(r *os.File, lf *os.File) {
 			continue
 		}
 		if m := blockedRe.FindStringSubmatch(line); m != nil {
-			bstats.add(m[1], m[2])
+			bstats.add(blockedApp(m[1], m[2]), m[3])
 			if !debug {
 				continue
 			}
