@@ -1,0 +1,96 @@
+# Handover: NetMerge for Windows
+
+Written 2026-11-11 for the next person or session working on NetMerge (version 3.13.1). Read this first, then
+`README.md` and the top of `CHANGELOG.md`. Facts here were true on that date; check the code when in doubt.
+
+## 1. The owner and how to work with him
+
+- The owner (Nisar) wants a very stable product and expects the engineer to decide and act, not to ask at every step:
+  "do what you think is right". Ask only before something hard to undo.
+- Be honest about what is verified and what is not. Say "tested on your PC", "tested in CI only" or "not tested".
+- Plain words, no jargon. Short answers. He is not always at the PC.
+- He gave full access to his PC for testing (see section 5) and does not mind test installs there.
+- Every change goes through a branch and a pull request; CI must pass; then merge to main; then a release.
+
+## 2. What NetMerge is
+
+A single Windows program (Go, standard library only, MIT licence) that merges several internet connections (cable,
+Wi-Fi, USB phone tethering) into one, for the whole PC. It runs the mihomo engine (TUN mode) underneath and sends each
+**new connection** out on one of the lines. One single connection never gets faster than its line; many connections
+(downloads in pieces, browsers, updates) do.
+
+Not part of NetMerge any more:
+- The download manager is now a separate program, **Pullwell** (`nisar87/pullwell`), built in another thread.
+  NetMerge keeps only a note in Settings and `/api/legacy-downloads` (saves an old download list for Pullwell).
+- An **Android** version is being explored in `nisar87/netmerge-android` (another thread). Code is copied, never shared.
+
+## 3. Code map (repository root)
+
+| File | What it does |
+| --- | --- |
+| `main.go` | Start-up, single instance (port 9196), admin relaunch, tray, crash log |
+| `engine.go`, `enginedl.go` | Starts/stops mihomo; downloads the pinned engine (v1.19.33, SHA-256 pinned in code) |
+| `config.go` | Writes the mihomo config: one proxy per line bound to its adapter, TUN, rules, bypass lists |
+| `dispatch.go` | The heart: decides which line new connections use (smooth weighted slots, 8 slots, learned capacities with ~15-minute half-life, "slow" flags, call protection) |
+| `ratecap.go` | Rejects impossible byte-counter readings (USB adapter counters restart; 32-bit wrap) and readings across a long gap (sleep) |
+| `stats.go` | Samples adapter counters every second; per-line speed, usage, status shown in the window |
+| `health.go` | Probes each line every 10 s; dead after 4 failures; captive portal detection |
+| `usage.go` | Daily usage per line, data allowances (quota) with "leave" action; correction tool |
+| `adapters.go`, `sys_windows.go` | Windows adapters, routes, shell, updater script, shortcuts, power |
+| `api.go` | Local web API for the window. **Anything that changes state must be POST with header `X-NetMerge: 1`** (`action()` wrapper); GET is read-only. Fixed in 3.11.24 after a security audit. |
+| `update.go` | Self-update from GitHub releases (`appVersion` here must match `VERSION`) |
+| `speedtest.go`, `blocking.go`, `dns.go`, `share.go`, `preset.go`, `backup.go`, `history.go` | Speed test, ad blocking, DNS, sharing to other devices, presets, backup, history |
+| `ui/` | The window (HTML/CSS/JS served by the program; redesigned in 3.12.0) |
+| `frontend/` | Tests for the window: a fixture server that imitates the API + Playwright browser tests |
+
+## 4. Build, test, release
+
+- Local: `go vet ./... && go test ./...` (also `GOOS=windows go vet ./...`). The window: `cd frontend && npm run
+  test:unit && npm run test:fixtures` (Playwright e2e runs in CI).
+- CI (`.github/workflows/ci.yml`) runs on pull requests: Go tests + Windows build, and the window's Playwright suite
+  (88+ tests).
+- Release: change `VERSION` **and** `appVersion` in `update.go`, add a `CHANGELOG.md` entry at the top, push to main.
+  `release.yml` builds `NetMerge.exe` + `.sha256` and publishes the release (6-10 minutes). A push without a
+  `VERSION` change does not release.
+- Commit messages and PR descriptions follow the attribution lines the session gives you.
+
+## 5. Testing on the owner's real PC
+
+- The PC: Windows 11, lines = **Ethernet** (Intel, about 100 Mbps cable; the ISP slows it after about 100 MB),
+  **Wi-Fi** (TP-Link USB stick, 130 Mbps link), **Ethernet 6** (Samsung phone, USB tethering, mobile data,
+  plugged in when testing). Gateway 192.168.1.1 for cable and Wi-Fi (different public IPs).
+- A **test copy** of NetMerge runs from `E:\NetMerge\test-3.11.14\` (self-updates; currently 3.13.1). Its window is
+  `http://127.0.0.1:9196`. After a release, update it with `POST /api/update {"action":"check"}` then
+  `{"action":"install"}` (header `X-NetMerge: 1`), then check the version.
+- Tools that worked: the built-in browser pane on the PC (tab on `127.0.0.1:9196`) for the API and the window;
+  `E:\NetMerge` is a connected folder (read/write files). The Windows shell can only be clicked, not typed into.
+  For commands, a small helper (`E:\NetMerge\tools\phone-runner.cmd`, double-click to start) runs `*.ps1` files
+  dropped into `E:\NetMerge\tools\jobs` and writes the output to `jobs\done` (made for the Android tests; it can run
+  any PowerShell test).
+- Good measurements: many connections to neutral servers (e.g. `dl.google.com` Chrome .deb, ranges allowed).
+  Not good: fast.com (few connections, ISP/Netflix limits), Cloudflare `__down` links and cloudflaremirrors.com
+  (ignore ranges, one connection).
+
+## 6. Verified on the real PC (so far)
+
+Merging across 3 real lines; a line lost and rejoined (cable pull, USB unplug); self-update; "Show in folder";
+counter restart after replugging a USB adapter (fixed 3.11.17-3.11.19); false usage across sleep (fixed 3.11.24);
+"too slow" label after replug (fixed 3.11.23); GET requests from other websites cannot change anything (3.11.24);
+the download manager removal (3.13.0); the window refreshes itself after an update (3.13.1, tested in CI; the
+first real update after it will show it on the PC).
+
+## 7. Open items
+
+1. **IPv6 is not merged** (`"ipv6": false` in the engine config). If a line gives the PC IPv6, that traffic bypasses
+   NetMerge. Not the case on the owner's PC; matters for other users.
+2. Starting the engine kills **any** process named `mihomo.exe`, also one of another tool. Should kill only its own.
+3. The window can freeze briefly (up to 15 s if it fails) while the engine starts: `engine.Start` holds a lock.
+4. Usage is not counted while NetMerge is closed.
+5. Not yet done: code signing (SignPath application pending; "Windows protected your PC" warning), a 24-hour run,
+   running as a standard user, a trademark check of the name "NetMerge" (a similar `net-merge` project exists).
+
+## 8. Lessons
+
+- Anything that counts bytes or learns speeds must reject impossible readings (counters restart and wrap).
+- Test on the real PC before calling something fixed; the logs (`/api/log`, `/api/log?f=engine`) explain most problems.
+- The merging logic (`dispatch.go`) took long to get stable: change it only with a test that shows the problem first.
