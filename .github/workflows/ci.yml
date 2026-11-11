@@ -17,6 +17,22 @@ jobs:
       - run: go test ./...
       - run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w -H=windowsgui" -o NetMerge.exe .
       - run: python3 scripts/check-windows-icon.py NetMerge.exe
+  engine-contract:
+    # everything NetMerge needs from its network engine (engine_contract_test.go), checked against a real engine.
+    # mihomo is the engine NetMerge ships today (same version as enginedl.go); NetMerge's own engine (engine/) must
+    # pass the same contract before it can be switched on.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Get mihomo 1.19.33 (checked against its known fingerprint)
+        run: |
+          curl -sSL -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
+          echo "132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz" | sha256sum -c
+          gunzip -c /tmp/mihomo.gz > /tmp/mihomo && chmod +x /tmp/mihomo
+      - run: NM_ENGINE_BIN=/tmp/mihomo go test -count=1 -run TestEngineContract -v .
   frontend:
     # the window's own tests: a fixture server that imitates NetMerge's API, driven by a real Chromium
     runs-on: ubuntu-latest
