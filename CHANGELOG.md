@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.16.3
+
+- **Blocked ads from shared phones are now counted.** Ads were already blocked for a phone using Sharing, but "blocked today", the total and the "Blocked today" list missed them: NetMerge looked for a program name in the engine's log line, and a phone's line has none. On a real PC's log the old count caught 97 of 3,183 blocked connections (the other 3,086 came from a phone); now all are counted. A phone's entries show as "Shared device (its address)". Its websites may appear as an address instead of a name, because that is what the engine reports for them.
+
 ## 3.16.2
 
 - **Allowed websites now follow your rules.** With blocking on, a website on an allow list used to skip every rule after it: an app sent to one line (or to skip NetMerge) was merged anyway for that site, a bank or login site you allowed could be spread over several lines, and an allowed call address left the steady call line. Now an allowed website is simply not blocked, and goes on to your app rules, call protection, "keep on one line" list and the built-in bank rule like any other site. This also covers the sites NetMerge always allows (GitHub, jsdelivr, gstatic and Microsoft's connection check). Checked with the same engine version NetMerge uses (mihomo 1.19.33): it accepts the new rule, refuses blocked sites and lets allowed ones continue; the "blocked today" counts read the engine's new log line.
