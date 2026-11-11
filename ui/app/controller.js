@@ -26,6 +26,9 @@ const bytes = b => b >= 1e9 ? (b/1e9).toFixed(2)+' GB' : b >= 1e6 ? (b/1e6).toFi
 const dur = s => { if (!s) return '—'; const h=Math.floor(s/3600), m=Math.floor(s%3600/60); return h ? `${h}h ${m}m` : m ? `${m}m ${s%60}s` : `${s}s`; };
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const pal = () => [1,2,3,4,5].map(i => css('--l'+i));
+// speed colour: grey when idle, amber when lightly used, through yellow, to green near the top of the scale
+const speedColor = p => { p = Math.max(0, Math.min(1, p || 0)); return p < .02 ? 'var(--muted)' : `color-mix(in oklch, var(--gauge-low) ${Math.round((1-p)*100)}%, var(--gauge-high))`; };
+const speedTier = p => p < .02 ? 'Idle' : p < .35 ? 'Light use' : p < .7 ? 'Busy' : 'Near top speed';
 const linkColors=new Map();
 const colorOf=name=>{if(!linkColors.has(name))linkColors.set(name,linkColors.size%5);return pal()[linkColors.get(name)];};
 const labelOf = name => (local?.links||[]).find(l => l.name === name)?.label || name;
@@ -198,13 +201,14 @@ function renderConnectionMode(){
 
 /* values that should never blink in and out: keep the last good reading and smooth the traffic share */
 const held = {};
-function holdFor(name){ return held[name] ||= {delay:0, publicIP:'', ema:0, share:null, activeAt:0}; }
+function holdFor(name){ return held[name] ||= {delay:0, publicIP:'', ema:0, share:null, activeAt:0, peak:0}; }
 function updateHeld(sn){
   const now = Date.now();
   sn.links.forEach(l => {
     const h = holdFor(l.name);
     if (l.delay) h.delay = l.delay;
     if (l.publicIP) h.publicIP = l.publicIP;
+    if (l.present && Number.isFinite(l.down)) h.peak = Math.max(h.peak, l.down, ...(l.history || []));
     h.ema = h.ema*0.8 + (l.present && Number.isFinite(l.down) ? l.down : 0)*0.2;
     if (mbps(l.down) > 0.3 || mbps(l.up) > 0.3) h.activeAt = now;
   });
@@ -246,7 +250,7 @@ function renderLinks(sn, act, P){
           <span class="chip" data-f="status"></span>
           <button class="tog" data-f="tog" role="switch" aria-label="Use ${esc(l.label || l.name)}"></button>
         </header>
-        <div class="ov-link-speed"><span class="ov-down">${NM.icon('arrow-down')}<b class="num" data-f="down">—</b><small>Mbps</small></span><span class="ov-up num">${NM.icon('arrow-up')}<span data-f="up">—</span> <small>Mbps</small></span></div>
+        <div class="ov-link-speed"><span class="ov-down"><svg class="mini-gauge" viewBox="0 0 64 38" aria-hidden="true" focusable="false"><path class="mg-track" d="M7 33 A25 25 0 0 1 57 33"/><path class="mg-val" data-f="gauge" d="M7 33 A25 25 0 0 1 57 33" pathLength="100" stroke-dasharray="0 100"/><line class="mg-needle" data-f="gneedle" x1="32" y1="33" x2="32" y2="14" style="transform:rotate(-90deg)"/><circle class="mg-hub" cx="32" cy="33" r="3"/></svg><b class="num" data-f="down">—</b><small>Mbps</small></span><span class="ov-up num">${NM.icon('arrow-up')}<span data-f="up">—</span> <small>Mbps</small></span></div>
         <svg class="ov-spark" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true" focusable="false"><defs><linearGradient id="lkg${i}-${Date.now()%1e6}" x1="0" y1="0" x2="0" y2="1"><stop offset="0"/><stop offset="1"/></linearGradient></defs><line class="ov-spark-base" x1="0" x2="300" y1="55" y2="55"/><path class="ov-spark-area" data-f="area"/><path class="ov-spark-line" data-f="line" vector-effect="non-scaling-stroke"/></svg>
         <div class="ov-link-foot">
           <div class="ov-share"><span>Share of traffic <b class="num" data-f="tshare">—</b></span><span class="ov-bar" role="presentation"><i data-f="tbar"></i></span></div>
@@ -303,6 +307,10 @@ function renderLinks(sn, act, P){
     // live figures
     f('down').textContent = l.present ? fmtM(l.down) : '—';
     f('up').textContent = l.present ? fmtM(l.up) : '—';
+    { const scale = Math.max(5, niceMax(mbps(h.peak) * 1.15)), p = run && on ? Math.max(0, Math.min(1, (mbps(l.down) || 0) / scale)) : 0;
+      f('gauge').setAttribute('stroke-dasharray', `${(p*100).toFixed(2)} 100`); f('gauge').style.stroke = speedColor(p);
+      f('gneedle').style.transform = `rotate(${(-90 + 180*p).toFixed(1)}deg)`;
+      f('gauge').closest('svg').setAttribute('data-tier', speedTier(p)); }
     const tshare = on && liveDown > 0 ? Math.round((l.down||0)/liveDown*100) : null;
     f('tshare').textContent = tshare == null ? '—' : tshare + '%';
     f('tbar').style.width = (tshare || 0) + '%';

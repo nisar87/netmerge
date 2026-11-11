@@ -33,23 +33,30 @@ function renderOverview(sn, run){
   setHTML($('#chartTable'),'<thead><tr><th scope="col">Connection</th><th scope="col">Download (Mbps)</th><th scope="col">Upload (Mbps)</th><th scope="col">Status</th></tr></thead><tbody>'+links.map(l=>`<tr><th scope="row">${esc(l.label || l.name)}</th><td>${fmtM(l.down)}</td><td>${fmtM(l.up)}</td><td>${esc(statusOf(l,sn.running)[0])}</td></tr>`).join('')+'</tbody>');
 }
 
-/* The merge picture: each connection flows into one ring. The ring is split by each line's share of the download right now. */
+/* The merge picture: each connection flows into one speedometer. The needle and the coloured arc show the combined
+   download against a scale that follows this session's top speed; the thin inner ring shows each line's share. */
+let gaugeTop = 10;
 function renderMergeFlow(sn, run){
   const box = $('#mergeFlow'); if (!box) return;
   const shown = (sn.links || []).filter(l => l.present && l.enabled);
   const compact = box.clientWidth > 0 && box.clientWidth < 520;
-  const key = (compact ? 'c|' : 'w|') + shown.map(l => l.name).join('|');
   const n = shown.length;
-  const W = compact ? 280 : 720, rowH = 74, H = compact ? 280 : Math.max(280, n * rowH + 40);
-  const cx = compact ? 140 : 560, cy = H/2, R = compact ? 104 : 106, ring = 14;
+  const W = compact ? 300 : 720, rowH = 74, H = compact ? 290 : Math.max(300, n * rowH + 40);
+  const cx = compact ? 150 : 560, cy = H/2 - 6, R = 110, arcW = 16, inner = R - 40;
+  // scale: a round number above the fastest reading of this session, so the needle has room to move
+  const now = mbps(sn.totalDown) || 0, peak = Math.max(mbps(sn.peakDown) || 0, now);
+  const top = Math.max(10, niceMax(peak * 1.15));
+  const key = (compact ? 'c|' : 'w|') + shown.map(l => l.name).join('|') + '|' + top;
+  const P = (r, deg) => { const a = deg * Math.PI / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+  const arc = r => { const [x1, y1] = P(r, 135), [x2, y2] = P(r, 405); return `M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 1 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`; };
   if (box.dataset.key !== key) {
-    box.dataset.key = key;
+    box.dataset.key = key; gaugeTop = top;
     const y0 = cy - (n - 1) * rowH / 2;
     const nodes = compact ? '' : shown.map((l, i) => {
       const y = y0 + i * rowH;
       return `<g class="mf-node" data-n="${esc(l.name)}" style="--c:${colorOf(l.name)}">
-        <path class="mf-ribbon" d="M196 ${y} C 340 ${y}, 370 ${cy}, ${cx - R - 4} ${cy}"/>
-        <path class="mf-flow" d="M196 ${y} C 340 ${y}, 370 ${cy}, ${cx - R - 4} ${cy}"/>
+        <path class="mf-ribbon" d="M196 ${y} C 330 ${y}, 360 ${cy}, ${cx - R - 30} ${cy}"/>
+        <path class="mf-flow" d="M196 ${y} C 330 ${y}, 360 ${cy}, ${cx - R - 30} ${cy}"/>
         <rect class="mf-card" x="0" y="${y - 28}" width="196" height="56" rx="12"/>
         <rect class="mf-icon" x="10" y="${y - 18}" width="36" height="36" rx="9"/>
         ${svgIcon(l.kind, 18, y - 10, 20)}
@@ -57,23 +64,33 @@ function renderMergeFlow(sn, run){
         <text class="mf-state" x="56" y="${y + 14}" data-f="state"></text>
       </g>`;
     }).join('');
-    const C = 2 * Math.PI * R;
-    const segs = shown.map(l => `<circle class="mf-seg" data-n="${esc(l.name)}" cx="${cx}" cy="${cy}" r="${R}" stroke="${colorOf(l.name)}" stroke-width="${ring}" stroke-dasharray="0 ${C}" transform="rotate(-90 ${cx} ${cy})"/>`).join('');
+    const ticks = Array.from({length: 41}, (_, k) => { const deg = 135 + 270 * k / 40, major = k % 10 === 0, mid = k % 5 === 0;
+      const [x1, y1] = P(R - arcW/2 - 5, deg), [x2, y2] = P(R - arcW/2 - (major ? 15 : mid ? 11 : 8), deg);
+      return `<line class="mf-tick${major ? ' major' : ''}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`; }).join('');
+    const labels = [0, .25, .5, .75, 1].map(k => { const [x, y] = P(R + 22, 135 + 270 * k); return `<text class="mf-scale" x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle">${fmt(top * k).replace(/\.0+$/, '')}</text>`; }).join('');
+    const C = 2 * Math.PI * inner;
+    const segs = shown.map(l => `<circle class="mf-seg" data-n="${esc(l.name)}" cx="${cx}" cy="${cy}" r="${inner}" stroke="${colorOf(l.name)}" stroke-width="5" stroke-dasharray="0 ${C}" transform="rotate(-90 ${cx} ${cy})"/>`).join('');
+    const [nx1] = P(inner + 8, 0), [nx2] = P(R + arcW/2 + 4, 0);
     box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true" focusable="false">
       ${nodes}
-      <circle class="mf-glow" cx="${cx}" cy="${cy}" r="${R + 18}"/>
-      <circle class="mf-track" cx="${cx}" cy="${cy}" r="${R}" stroke-width="${ring}"/>
+      <circle class="mf-glow" cx="${cx}" cy="${cy}" r="${R - arcW/2 - 2}"/>
+      <path class="mf-track" d="${arc(R)}" stroke-width="${arcW}"/>
+      <path class="mf-arc" data-f="arc" d="${arc(R)}" stroke-width="${arcW}" pathLength="100" stroke-dasharray="0 100"/>
+      ${ticks}${labels}
+      <circle class="mf-inner-track" cx="${cx}" cy="${cy}" r="${inner}" stroke-width="5"/>
       ${segs}
-      <circle class="mf-core" cx="${cx}" cy="${cy}" r="${R - ring/2 - 8}"/>
-      <text class="mf-hub-label" x="${cx}" y="${cy - 30}" text-anchor="middle" data-f="hubLabel"></text>
+      <g class="mf-needle" data-f="needle" style="transform-origin:${cx}px ${cy}px;transform:rotate(135deg)"><line x1="${nx1.toFixed(1)}" y1="${cy}" x2="${nx2.toFixed(1)}" y2="${cy}"/><circle cx="${nx2.toFixed(1)}" cy="${cy}" r="4"/></g>
+      <text class="mf-hub-label" x="${cx}" y="${cy - 26}" text-anchor="middle" data-f="hubLabel"></text>
       <text class="mf-hub-value" x="${cx}" y="${cy + 14}" text-anchor="middle" data-f="hubValue"></text>
-      <text class="mf-hub-unit" x="${cx}" y="${cy + 36}" text-anchor="middle">Mbps down</text>
+      <text class="mf-hub-unit" x="${cx}" y="${cy + 34}" text-anchor="middle">Mbps down</text>
+      <text class="mf-tier" x="${cx}" y="${cy + R * .78}" text-anchor="middle" data-f="tier"></text>
+      <text class="mf-of" x="${cx}" y="${cy + R * .78 + 16}" text-anchor="middle">scale 0–${fmt(top).replace(/\.0+$/, '')} Mbps</text>
     </svg>`;
   }
   const svg = box.querySelector('svg'); if (!svg) return;
   const f = (root, k) => root.querySelector(`[data-f="${k}"]`);
   const total = shown.reduce((a, l) => a + (Number.isFinite(l.down) ? l.down : 0), 0);
-  const C = 2 * Math.PI * R, gap = shown.length > 1 ? 3 : 0;
+  const C = 2 * Math.PI * inner, gap = shown.length > 1 ? 3 : 0;
   let offset = 0;
   shown.forEach(l => {
     const share = total > 0 ? (l.down || 0) / total : 0;
@@ -89,8 +106,13 @@ function renderMergeFlow(sn, run){
     }
   });
   svg.classList.toggle('off', !run);
+  const p = run ? Math.max(0, Math.min(1, now / gaugeTop)) : 0, col = speedColor(p);
+  f(svg, 'arc').setAttribute('stroke-dasharray', `${(p * 100).toFixed(2)} 100`);
+  svg.style.setProperty('--speed', col);
+  f(svg, 'needle').style.transform = `rotate(${(135 + 270 * p).toFixed(1)}deg)`;
   f(svg, 'hubLabel').textContent = run ? 'COMBINED' : 'ADAPTERS';
   f(svg, 'hubValue').textContent = fmtM(sn.totalDown);
+  f(svg, 'tier').textContent = !run ? 'Merging off' : speedTier(p);
   const parts = shown.map(l => `${l.label || l.name} ${fmtM(l.down)}`).join(', ');
-  box.setAttribute('aria-label', `${run ? 'Combined' : 'Adapter'} download speed ${fmtM(sn.totalDown)} Mbps${parts ? '. ' + parts + ' Mbps' : ''}.`);
+  box.setAttribute('aria-label', `${run ? 'Combined' : 'Adapter'} download speed ${fmtM(sn.totalDown)} Mbps of a ${fmt(gaugeTop).replace(/\.0+$/, '')} Mbps scale${run ? ', ' + speedTier(p).toLowerCase() : ''}${parts ? '. ' + parts + ' Mbps' : ''}.`);
 }

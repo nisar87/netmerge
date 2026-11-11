@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.16.0
+
+- **A real speedometer on Overview.** The combined speed is now a gauge with a needle, tick marks and a scale. The arc fills and the needle moves with the real download speed, and the colour changes with it: grey when idle, amber for light use, yellow when busy, green near top speed. The scale follows this session's top speed, so it fits your connections. The thin inner ring still shows each line's share.
+- **A small gauge on every connection card**, coloured the same way, next to that line's speed.
+- Only the window changed: merging and everything else work exactly as before.
+
 ## 3.15.0
 
 The whole window now has the look of the new Overview. Only the window changed: merging, usage counting, settings and everything else work exactly as before.
