@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.16.2
+
+- **Allowed websites now follow your rules.** With blocking on, a website on an allow list used to skip every rule after it: an app sent to one line (or to skip NetMerge) was merged anyway for that site, a bank or login site you allowed could be spread over several lines, and an allowed call address left the steady call line. Now an allowed website is simply not blocked, and goes on to your app rules, call protection, "keep on one line" list and the built-in bank rule like any other site. This also covers the sites NetMerge always allows (GitHub, jsdelivr, gstatic and Microsoft's connection check). Checked with the same engine version NetMerge uses (mihomo 1.19.33): it accepts the new rule, refuses blocked sites and lets allowed ones continue; the "blocked today" counts read the engine's new log line.
+- **One list of blocked websites.** "Most blocked today" and "Blocked today" showed the same websites. They are now one list, most blocked first, with a bar next to each count and the Allow button.
+
 ## 3.16.1
 
 Every text in the window was checked against what NetMerge really does, and corrected where it did not match. Nothing else changed.

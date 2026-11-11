@@ -90,7 +90,9 @@ test('usage, apps, blocking and activity draw their pictures from the same readi
   await expect(page.locator('#appsStats')).toContainText('apps online');
   await expect(page.locator('#appsTbl .app-av')).toHaveCount(1);
   await navigate(page, 'protection/blocking');
-  await expect(page.locator('#blkTop .hbars li')).toHaveCount(1);
+  await expect(page.locator('#blkTop')).toHaveCount(0);
+  await expect(page.locator('#blkRecent .hb-track')).toHaveCount(1);
+  await expect(page.locator('#blkRecent')).toContainText('ads.example.test');
   await expect(page.locator('#blkToday')).toHaveText('12');
   await navigate(page, 'activity/events');
   await expect(page.locator('#hiStats')).toContainText('in total');

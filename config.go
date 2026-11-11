@@ -218,8 +218,9 @@ func buildConfig(s Settings) ([]byte, error) {
 	rules = append(rules, "DST-PORT,500,"+vpn, "DST-PORT,4500,"+vpn)
 	blocking := blockCfg(s).Enabled
 	if blocking {
-		// the allow list is checked first and just routes normally; everything else on the block list is refused
-		rules = append(rules, "RULE-SET,nm_allow,"+modeTarget, "RULE-SET,nm_block,REJECT")
+		// refused only if on a block list and not on the allow list; an allowed website is not routed here, so it
+		// carries on to the rules below (app rules, calls, websites kept on one line) like any other website
+		rules = append(rules, "AND,((RULE-SET,nm_block),(NOT,((RULE-SET,nm_allow)))),REJECT")
 	}
 	for _, r := range s.AppRules {
 		rules = append(rules, procRule(r.Process, target(r.Target)))

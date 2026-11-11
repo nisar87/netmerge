@@ -184,15 +184,10 @@
           <div id="blkPacks"></div>
         </div>
         <div class="card">
-          <h3>Most blocked today</h3>
-          <p class="d">Websites asked for most often, and refused.</p>
-          <div id="blkTop"></div>
+          <h3>Blocked today</h3>
+          <p class="d">The 20 most blocked websites, most first. If a website or app stops working, find it here and press Allow.</p>
+          <div class="scrollbox"><table class="tbl blk-tbl" id="blkRecent"></table></div>
         </div>
-      </div>
-      <div class="card" style="margin-top:16px">
-        <h3>Blocked today</h3>
-        <p class="d">The 20 most blocked websites. If a website or app stops working, find it here and press Allow.</p>
-        <div class="scrollbox"><table class="tbl" id="blkRecent"></table></div>
       </div>
       <div class="grid2" style="margin-top:16px">
         <div class="card">
@@ -203,7 +198,7 @@
         </div>
         <div class="card">
           <h3>My allow list</h3>
-          <p class="d">Never blocked, even if a list says so.</p>
+          <p class="d">Never blocked, even if a list says so. Allowed websites still follow your app rules and routing exceptions.</p>
           <textarea class="inp" id="blkAllow" spellcheck="false" placeholder="shop.example.com"></textarea>
           <div class="row" style="margin-top:10px"><button class="btn pri" id="blkSaveAllow">Save</button></div>
         </div>

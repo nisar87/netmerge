@@ -341,7 +341,9 @@ type blockStatsT struct {
 
 var bstats = &blockStatsT{top: map[string]int{}, recent: map[string]*BlockEvent{}}
 
-var blockedRe = regexp.MustCompile(`\[(?:TCP|UDP)\] \S+?\(([^)]*)\) --> (\S+) match RuleSet\(nm_block\)`)
+// The engine logs a refused connection as "match AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow))))) using
+// REJECT" (checked with mihomo 1.19.33); the plain "match RuleSet(nm_block)" form of older versions still counts.
+var blockedRe = regexp.MustCompile(`\[(?:TCP|UDP)\] \S+?\(([^)]*)\) --> (\S+) match (?:RuleSet\(nm_block\)|AND\(\(\(RuleSet,nm_block\))`)
 
 func (b *blockStatsT) rollLocked() {
 	d := time.Now().Format("2006-01-02")
