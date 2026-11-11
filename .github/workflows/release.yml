@@ -64,8 +64,11 @@ jobs:
       - name: Build
         if: steps.v.outputs.exists == 'false'
         run: |
+          # NetMerge's own engine carries wintun.dll (its virtual adapter driver); the engine only loads that exact file
+          WINTUN_SHA="$(python3 scripts/get-wintun.py)"
+          echo "wintun.dll ${WINTUN_SHA}"
           GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
-            -ldflags "-s -w -H=windowsgui -X main.appVersion=${{ steps.v.outputs.ver }} -X main.updateRepo=${GITHUB_REPOSITORY}" -o NetMerge.exe .
+            -ldflags "-s -w -H=windowsgui -X main.appVersion=${{ steps.v.outputs.ver }} -X main.updateRepo=${GITHUB_REPOSITORY} -X netmerge/engine.wintunSHA256=${WINTUN_SHA}" -o NetMerge.exe .
           python3 scripts/check-windows-icon.py NetMerge.exe
           sha256sum NetMerge.exe > NetMerge.exe.sha256
           cat NetMerge.exe.sha256

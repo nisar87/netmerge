@@ -13,7 +13,7 @@ export function createFixture(scenario = 'default') {
     links, mode: 'fast', appRules: [{ process: 'mstsc.exe', target: 'stable' }],
     bypassIPs: ['192.0.2.0/24'], stableDomains: ['accounts.example.test'], vpnLink: '',
     autoStart: false, mergeOnLaunch: true, builtinDNS: false, seenApps: ['browser.exe', 'mstsc.exe'],
-    secret: '', debugLog: false, tunStack: '', tunMTU: 1500,
+    secret: '', debugLog: false, tunStack: '', engine: '', tunMTU: 1500,
     block: { enabled: true, packs: { ads: true, pro: false, malware: false } }, stackChosen: false,
     share: { enabled: false, port: 1080, ssPort: 8388, user: 'fixture-user', pass: FAKE_PASSWORD },
     deviceNames: { '02:00:00:00:00:01': 'Fixture phone' }, quotaReset: 1, quotaAction: 'warn',

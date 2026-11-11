@@ -148,3 +148,16 @@ test('maintenance uses inert update actions and a sanitized backup download', as
   expect((await download).suggestedFilename()).toBe('netmerge-settings-2026-11-09.json');
   await expect.poll(async () => (await fixture.read('update')).checked).toBe(NOW);
 });
+
+test('network engine choice is saved and the running engine is named', async ({ page, fixture }) => {
+  await navigate(page, 'settings/advanced');
+  await expect(page.locator('#engSel')).toHaveValue('');
+  await expect(page.locator('#engineVer')).toHaveText('mihomo fixture-engine (running)');
+  const before = (await fixture.read('state')).settings;
+  await mutate(page, 'settings', { ...before, engine: 'netmerge' }, () => page.locator('#engSel').selectOption('netmerge'));
+  expect((await fixture.read('state')).settings.engine).toBe('netmerge');
+  await fixture.patch({ state: { snap: { version: 'nmengine-3.17.0', ownEngine: true } } });
+  await expect(page.locator('#engineVer')).toHaveText('NetMerge engine 3.17.0 (running)');
+  await fixture.patch({ state: { snap: { version: '1.19.33', ownEngine: false, fellBack: true } } });
+  await expect(page.locator('#engineVer')).toContainText('did not start');
+});

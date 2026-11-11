@@ -104,7 +104,7 @@ func learn(ring *[3]float64, n int, cap *float64, seen *bool, busyAll bool) {
 }
 
 func dispatchTick() {
-	running, _, started, _ := engine.Status()
+	running, _, _, _ := engine.Status()
 	s := getSettings()
 	if !running || s.ClassicBalance || s.Mode == "stable" || strings.HasPrefix(s.Mode, "link:") {
 		dispSeen = ""
@@ -127,7 +127,7 @@ func dispatchTick() {
 	}
 
 	// the engine was (re)loaded: its selectors start again from their first member, so assert every slot again
-	seen := fmt.Sprintf("%s|%d", engine.AppliedKey(), started.Unix())
+	seen := engine.LoadID()
 	force := seen != dispSeen
 	if force {
 		dispCall = ""

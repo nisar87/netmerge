@@ -19,7 +19,10 @@ import (
 type Engine struct {
 	mu            sync.Mutex
 	applyMu       sync.Mutex // serialises config reloads
+	startMu       sync.Mutex // one start at a time; never held by Status, so the window never waits for a start
 	cmd           *exec.Cmd
+	own           bool // the running engine is NetMerge's own (NetMerge.exe -engine), not mihomo
+	fellBack      bool // NetMerge's own engine was chosen but would not start, so mihomo runs
 	running       bool
 	startedAt     time.Time
 	lastError     string
@@ -27,6 +30,7 @@ type Engine struct {
 	restarts      int
 	restartWindow time.Time
 	appliedKey    string
+	reloads       int // config reloads; a reload resets the engine's selectors, so the dispatcher sets them again
 	apiFails      int
 }
 
@@ -87,10 +91,28 @@ func (e *Engine) Status() (bool, string, time.Time, string) {
 	return e.running, e.lastError, e.startedAt, e.version
 }
 
+type procOf struct{ pid int }
+
+func (p procOf) Pid() int { return p.pid }
+
+// Own tells whether NetMerge's own engine is the one running, and whether it was chosen but mihomo runs instead.
+func (e *Engine) Own() (own, fellBack bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.own && e.running, e.fellBack
+}
+
 func (e *Engine) AppliedKey() string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.appliedKey
+}
+
+// LoadID changes whenever the engine loaded its settings again (start or reload).
+func (e *Engine) LoadID() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return fmt.Sprintf("%s|%d|%d", e.appliedKey, e.startedAt.Unix(), e.reloads)
 }
 
 // Adopt an engine left running by a previous NetMerge session.
@@ -99,39 +121,81 @@ func (e *Engine) Adopt() {
 	defer e.mu.Unlock()
 	if v, ok := engineAlive(); ok {
 		e.running, e.version, e.startedAt = true, v, time.Now()
+		e.own = recordedIsOwn() || strings.HasPrefix(v, "nmengine")
 		logf("re-attached to running engine %s", v)
 		return
 	}
-	// a mihomo we cannot talk to (e.g. one left over from an old session) - remove it
-	killProcessByName("mihomo.exe")
+	// an engine of ours we cannot talk to (left over from an old session) - remove it; other programs' are left alone
+	stopOwnEngines()
 }
 
-func (e *Engine) Start() error {
+// engineCommand is the engine program to run: NetMerge's own (this same exe with -engine) or mihomo.
+func engineCommand(own bool) (string, []string) {
+	if own {
+		exe, _ := os.Executable()
+		return exe, []string{"-engine", "-d", configDir()}
+	}
+	return mihomoExe(), []string{"-d", configDir()}
+}
+
+func (e *Engine) setError(msg string) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.running {
+	e.lastError = msg
+	e.mu.Unlock()
+}
+
+// Start starts the chosen engine. The lock that Status uses is only taken for a moment, so the window keeps
+// answering while the engine starts (it used to wait up to 15 seconds).
+func (e *Engine) Start() error {
+	e.startMu.Lock()
+	defer e.startMu.Unlock()
+	e.mu.Lock()
+	running := e.running
+	e.mu.Unlock()
+	if running {
 		return nil
 	}
-	if _, err := os.Stat(mihomoExe()); err != nil {
-		e.lastError = "The network engine is not installed yet. NetMerge downloads it by itself - try again in a minute."
-		if st, _, _ := engineDownloadState(); st == "" {
-			go safely("engine download", downloadEngine)
+	own := getSettings().Engine == "netmerge"
+	err := e.startWith(own)
+	if err != nil && own {
+		// NetMerge's own engine is still being tested: if it will not start, use mihomo so the internet keeps working
+		logf("NetMerge engine did not start (%v) - using mihomo instead", err)
+		note("warn", "NetMerge's own engine did not start, so merging uses the standard engine (mihomo). See the engine log for why.")
+		if err2 := e.startWith(false); err2 == nil {
+			e.mu.Lock()
+			e.fellBack = true
+			e.mu.Unlock()
+			return nil
 		}
-		return fmt.Errorf("%s", e.lastError)
+	}
+	return err
+}
+
+func (e *Engine) startWith(own bool) error {
+	if !own {
+		if _, err := os.Stat(mihomoExe()); err != nil {
+			msg := "The network engine is not installed yet. NetMerge downloads it by itself - try again in a minute."
+			e.setError(msg)
+			if st, _, _ := engineDownloadState(); st == "" {
+				go safely("engine download", downloadEngine)
+			}
+			return fmt.Errorf("%s", msg)
+		}
 	}
 	if msg := detectConflictNow(); msg != "" {
-		e.lastError = msg
+		e.setError(msg)
 		logf("not starting: %s", msg)
 		return fmt.Errorf("%s", msg)
 	}
 	links := activeLinks(getSettings())
 	if len(links) == 0 {
-		e.lastError = "No internet connection found. Plug in or connect at least one, then try again."
-		return fmt.Errorf("%s", e.lastError)
+		msg := "No internet connection found. Plug in or connect at least one, then try again."
+		e.setError(msg)
+		return fmt.Errorf("%s", msg)
 	}
-	killProcessByName("mihomo.exe")
+	stopOwnEngines()
 	if err := writeConfig(); err != nil {
-		e.lastError = "Could not write config: " + err.Error()
+		e.setError("Could not write config: " + err.Error())
 		return err
 	}
 	syncShareFirewall()
@@ -140,7 +204,8 @@ func (e *Engine) Start() error {
 		_ = os.Rename(logPath, logPath+".old")
 	}
 	lf, _ := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	cmd := hiddenCmd(mihomoExe(), "-d", configDir())
+	exe, args := engineCommand(own)
+	cmd := hiddenCmd(exe, args...)
 	pr, pw, perr := os.Pipe()
 	if perr != nil {
 		cmd.Stdout, cmd.Stderr = lf, lf
@@ -155,14 +220,17 @@ func (e *Engine) Start() error {
 		if lf != nil {
 			lf.Close()
 		}
-		e.lastError = "Could not start engine: " + err.Error()
+		e.setError("Could not start engine: " + err.Error())
 		return err
 	}
 	if perr == nil {
 		pw.Close() // the engine holds its own copy; we read until it exits
 		go pumpEngineLog(pr, lf)
 	}
-	e.cmd = cmd
+	rememberEngine(cmd.Process.Pid, exe)
+	e.mu.Lock()
+	e.cmd, e.own = cmd, own
+	e.mu.Unlock()
 	exited := make(chan error, 1)
 	go func() {
 		exited <- cmd.Wait()
@@ -175,16 +243,21 @@ func (e *Engine) Start() error {
 	for time.Now().Before(deadline) {
 		select {
 		case err := <-exited:
-			e.lastError = "The engine stopped right after starting (" + fmt.Sprint(err) + "). " + tailFile(logPath, 6)
-			e.cmd = nil
-			dnsStartFailed(e.lastError)
-			logf("engine failed: %s", e.lastError)
-			return fmt.Errorf("%s", e.lastError)
+			msg := "The engine stopped right after starting (" + fmt.Sprint(err) + "). " + tailFile(logPath, 6)
+			e.mu.Lock()
+			e.lastError, e.cmd = msg, nil
+			e.mu.Unlock()
+			forgetEngine()
+			dnsStartFailed(msg)
+			logf("engine failed: %s", msg)
+			return fmt.Errorf("%s", msg)
 		default:
 		}
 		if v, ok := engineAlive(); ok {
-			e.running, e.version, e.startedAt, e.lastError, e.apiFails = true, v, time.Now(), "", 0
+			e.mu.Lock()
+			e.running, e.version, e.startedAt, e.lastError, e.apiFails, e.fellBack = true, v, time.Now(), "", 0, false
 			e.appliedKey = keyOf(links)
+			e.mu.Unlock()
 			logf("engine %s started with %d connection(s)", v, len(links))
 			note("good", "Merging started with %d connection(s)", len(links))
 			go e.watch(cmd, exited)
@@ -193,10 +266,13 @@ func (e *Engine) Start() error {
 		time.Sleep(300 * time.Millisecond)
 	}
 	_ = cmd.Process.Kill()
-	e.cmd = nil
-	e.lastError = "The engine did not respond. " + tailFile(logPath, 6)
-	dnsStartFailed(e.lastError)
-	return fmt.Errorf("%s", e.lastError)
+	msg := "The engine did not respond. " + tailFile(logPath, 6)
+	e.mu.Lock()
+	e.cmd, e.lastError = nil, msg
+	e.mu.Unlock()
+	forgetEngine()
+	dnsStartFailed(msg)
+	return fmt.Errorf("%s", msg)
 }
 
 func keyOf(links []activeLink) string {
@@ -238,7 +314,7 @@ func (e *Engine) restartAfter(why string) {
 	e.mu.Unlock()
 	if tooMany {
 		logf("%s - crashed repeatedly, giving up", why)
-		killProcessByName("mihomo.exe")
+		stopOwnEngines()
 		return
 	}
 	logf("%s - restarting", why)
@@ -278,21 +354,22 @@ func (e *Engine) Check() {
 	}
 	e.mu.Unlock()
 	if dead {
-		killProcessByName("mihomo.exe")
+		stopOwnEngines()
 		e.restartAfter("engine stopped answering")
 	}
 }
 
 func (e *Engine) Stop() {
 	e.mu.Lock()
-	cmd := e.cmd
+	cmd, own := e.cmd, e.own
 	was := e.running
 	e.running, e.cmd = false, nil
 	e.mu.Unlock()
 	if cmd != nil && cmd.Process != nil {
-		_ = cmd.Process.Kill()
+		stopEngineProcess(procOf{cmd.Process.Pid}, own)
 	}
-	killProcessByName("mihomo.exe")
+	stopOwnEngines()
+	forgetEngine()
 	logf("merging stopped")
 	if was {
 		note("info", "Merging stopped")
@@ -320,6 +397,7 @@ func (e *Engine) Apply() error {
 	}
 	e.mu.Lock()
 	e.appliedKey = activeKey()
+	e.reloads++
 	e.mu.Unlock()
 	logf("settings applied")
 	return nil

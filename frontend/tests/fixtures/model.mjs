@@ -53,6 +53,7 @@ export function createModel(scenario = 'default') {
     if (body.mode === 'fast' || body.mode === 'stable' || (!restore && (s.links || []).some(l => body.mode === `link:${l.name}`))) s.mode = body.mode;
     if (!restore) {
       s.setupDone ||= body.setupDone === true;
+      if (['', 'netmerge'].includes(body.engine)) s.engine = body.engine;
       if (['', 'mixed', 'system', 'gvisor'].includes(body.tunStack) && body.tunStack !== s.tunStack) {
         s.tunStack = body.tunStack; s.stackChosen = true;
       }

@@ -23,11 +23,12 @@ import (
 
 // Set at build time:  -ldflags "-X main.appVersion=2.2.0 -X main.updateRepo=owner/netmerge"
 var (
-	appVersion = "3.16.3"
+	appVersion = "3.17.0"
 	updateRepo = "nisar87/netmerge" // "owner/repo" of the GitHub project (the release build sets it too)
 )
 
 var updateAPI = "https://api.github.com" // overridden in tests by NETMERGE_UPDATE_API
+var updateWeb = "https://github.com"     // used when GitHub's API refuses (it allows 60 checks an hour per address)
 
 type UpdateState struct {
 	Current   string `json:"current"`
@@ -157,14 +158,25 @@ func checkUpdate(manual bool) {
 		fail("No release has been published yet.")
 		return
 	}
-	if resp.StatusCode != 200 {
+	var rel ghRelease
+	switch {
+	case resp.StatusCode == 403 || resp.StatusCode == 429:
+		// GitHub's API limits checks per internet address, and mobile networks share one address between
+		// many people: ask the normal release page instead
+		r, err := latestFromWeb(ctx)
+		if err != nil {
+			fail(fmt.Sprintf("GitHub answered HTTP %d and the release page could not be read (%v).", resp.StatusCode, err))
+			return
+		}
+		rel = r
+	case resp.StatusCode != 200:
 		fail(fmt.Sprintf("GitHub answered HTTP %d.", resp.StatusCode))
 		return
-	}
-	var rel ghRelease
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&rel); err != nil || rel.Tag == "" {
-		fail("Could not read the release information.")
-		return
+	default:
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&rel); err != nil || rel.Tag == "" {
+			fail("Could not read the release information.")
+			return
+		}
 	}
 	var asset, sha, shaURL string
 	for _, a := range rel.Assets {
@@ -204,6 +216,47 @@ func checkUpdate(manual bool) {
 		note("info", "NetMerge %s is available", ver)
 		trayBalloon("NetMerge update", "Version "+ver+" is available. Open NetMerge to install it.")
 	}
+}
+
+// latestFromWeb finds the newest release from github.com/<repo>/releases/latest, which redirects to the
+// release's own page, without using GitHub's API. The program and its checksum have fixed download addresses.
+func latestFromWeb(ctx context.Context) (ghRelease, error) {
+	var rel ghRelease
+	req, err := http.NewRequestWithContext(ctx, "GET", updateWeb+"/"+updateRepo+"/releases/latest", nil)
+	if err != nil {
+		return rel, err
+	}
+	req.Header.Set("User-Agent", "NetMerge/"+appVersion)
+	c := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := c.Do(req)
+	if err != nil {
+		return rel, err
+	}
+	resp.Body.Close()
+	loc := resp.Header.Get("Location")
+	i := strings.LastIndex(loc, "/releases/tag/")
+	if resp.StatusCode/100 != 3 || i < 0 {
+		return rel, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	tag, err := url.PathUnescape(loc[i+len("/releases/tag/"):])
+	if err != nil || tag == "" || strings.ContainsAny(tag, "/?#") {
+		return rel, fmt.Errorf("unexpected release address")
+	}
+	base := updateWeb + "/" + updateRepo + "/releases/download/" + url.PathEscape(tag) + "/"
+	rel.Tag, rel.Page = tag, updateWeb+"/"+updateRepo+"/releases/tag/"+url.PathEscape(tag)
+	rel.Body = "See the release page for what changed."
+	rel.Assets = append(rel.Assets,
+		struct {
+			Name   string `json:"name"`
+			URL    string `json:"browser_download_url"`
+			Digest string `json:"digest"`
+		}{Name: "NetMerge.exe", URL: base + "NetMerge.exe"},
+		struct {
+			Name   string `json:"name"`
+			URL    string `json:"browser_download_url"`
+			Digest string `json:"digest"`
+		}{Name: "NetMerge.exe.sha256", URL: base + "NetMerge.exe.sha256"})
+	return rel, nil
 }
 
 func okDownloadHost(raw string) bool {

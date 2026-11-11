@@ -34,6 +34,12 @@ func (e *Engine) startAPI(addr, secret string) error {
 	mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"version": "nmengine-" + Version, "meta": true})
 	})
+	// POST /quit stops the engine cleanly (NetMerge uses it instead of killing the process, so the PC's
+	// routes and DNS are always put back). mihomo has no such call; NetMerge only sends it to its own engine.
+	mux.HandleFunc("POST /quit", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go e.Stop()
+	})
 	mux.HandleFunc("GET /proxies", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"proxies": e.proxiesJSON()})
 	})
