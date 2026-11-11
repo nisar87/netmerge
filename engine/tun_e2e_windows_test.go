@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -68,6 +69,11 @@ func TestTunWindows(t *testing.T) {
 		}
 		t.Logf("engine log:\n%s", logs)
 	})
+	if out, err := exec.Command("netsh", "advfirewall", "firewall", "show", "rule", "name=NetMerge engine").CombinedOutput(); err == nil {
+		t.Logf("firewall rule:\n%s", out)
+	} else {
+		t.Logf("no firewall rule: %v %s", err, out)
+	}
 	client := &http.Client{Timeout: 15 * time.Second, Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}}
 
 	t.Run("a captured connection goes out over the real line, named with the program", func(t *testing.T) {

@@ -192,6 +192,26 @@ type winState struct {
 	stop     chan struct{}
 }
 
+// longPath turns a short (8.3) path such as C:\Users\RUNNER~1\... into the full one, which the firewall needs.
+func longPath(p string) string {
+	u, err := syscall.UTF16PtrFromString(p)
+	if err != nil {
+		return p
+	}
+	buf := make([]uint16, 1024)
+	if n, err := syscall.GetLongPathName(u, &buf[0], uint32(len(buf))); err == nil && n > 0 && int(n) < len(buf) {
+		return syscall.UTF16ToString(buf[:n])
+	}
+	return p
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
 func netsh(args ...string) error {
 	cmd := exec.Command("netsh", args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
@@ -232,11 +252,20 @@ func (t *tunStack) setupOS(c *Config) error {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	// the firewall must let rewritten connections in from the adapter
+	// The firewall must let rewritten connections in: they arrive from the adapter (a "public" network to Windows)
+	// at the engine's listener. The rule names the engine's program and the adapter's own addresses; if Windows
+	// cannot use the program path, the addresses alone are enough (only this adapter has them).
+	netsh("advfirewall", "firewall", "delete", "rule", "name=NetMerge engine")
+	local := "localip=" + tunGW4.String() + "," + tunGW6.String()
+	added := false
 	if exe, err := os.Executable(); err == nil {
-		netsh("advfirewall", "firewall", "delete", "rule", "name=NetMerge engine")
-		if err := netsh("advfirewall", "firewall", "add", "rule", "name=NetMerge engine", "dir=in", "action=allow", "program="+exe, "enable=yes", "profile=any"); err != nil {
-			t.e.log.Warnf("[TUN] firewall: %v", err)
+		added = netsh("advfirewall", "firewall", "add", "rule", "name=NetMerge engine", "dir=in", "action=allow",
+			"program="+longPath(exe), local, "enable=yes", "profile=any") == nil
+	}
+	if !added {
+		if err := netsh("advfirewall", "firewall", "add", "rule", "name=NetMerge engine", "dir=in", "action=allow",
+			local, "enable=yes", "profile=any"); err != nil {
+			t.e.log.Warnf("[TUN] firewall: %v", firstLine(err.Error()))
 		}
 	}
 	if t.hijack.Load() {
