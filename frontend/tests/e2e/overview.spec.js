@@ -11,10 +11,27 @@ test('overview shows live speed per connection, and the merge picture adds them 
   await expect(fibre.locator('[data-f=tshare]')).toHaveText('67%');
   await expect(fibre.locator('[data-f=ping]')).toHaveText('14 ms');
   await expect(fibre.locator('[data-f=line]')).toHaveAttribute('d', /^M/);
-  await expect(page.locator('#mergeFlow')).toHaveAttribute('aria-label', /Combined download speed 25\.2 Mbps\. Home fibre 16\.8, Backup Wi-Fi 8\.39 Mbps/);
+  await expect(page.locator('#mergeFlow')).toHaveAttribute('aria-label', /Combined download speed 25\.2 Mbps of a 80 Mbps scale, light use\. Home fibre 16\.8, Backup Wi-Fi 8\.39 Mbps/);
   await expect(page.locator('#mergeFlow [data-f="hubValue"]')).toHaveText('25.2');
   await expect(page.locator('#totalUp')).toContainText('3.15');
   await expect(page.locator('#statusLine')).toContainText('2 connections working together');
+});
+
+test('the speedometer needle, arc and colour follow the real speed', async ({ page, fixture }) => {
+  await navigate(page, 'overview');
+  const needle = page.locator('#mergeFlow [data-f="needle"]'), arc = page.locator('#mergeFlow [data-f="arc"]');
+  // 25.2 of an 80 Mbps scale (session peak 50.3 Mbps)
+  await expect(arc).toHaveAttribute('stroke-dasharray', /^31\.\d+ 100$/);
+  await expect(page.locator('#mergeFlow [data-f="tier"]')).toHaveText('Light use');
+  const links = (await fixture.read('state')).snap.links;
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { totalDown: 9e6, links: links.map(l => ({ ...l, down: 4.5e6 })) } } }));
+  await expect(page.locator('#mergeFlow [data-f="hubValue"]')).toHaveText('72.0');
+  await expect(page.locator('#mergeFlow [data-f="tier"]')).toHaveText('Near top speed');
+  // 72 Mbps passes the old peak, so the scale grows to 100 Mbps: 72% of the arc
+  await expect(arc).toHaveAttribute('stroke-dasharray', '72.00 100');
+  await expect(page.locator('#mergeFlow .mf-of')).toHaveText('scale 0–100 Mbps');
+  await expect.poll(() => needle.evaluate(n => n.style.transform)).toBe('rotate(329.4deg)');
+  await expect(page.locator('.lk[data-n="Ethernet"] .mini-gauge')).toHaveAttribute('data-tier', /.+/);
 });
 
 test('each connection is shown once: its card on Overview holds the live figures and its controls', async ({ page, fixture }) => {

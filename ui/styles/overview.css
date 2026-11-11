@@ -1,3 +1,6 @@
+/* speedometer colours: vivid amber for light use to green near the top speed, one pair per theme */
+:root{--gauge-low:#f59e0b;--gauge-high:#16a34a}
+:root[data-theme="dark"]{--gauge-low:#fbbf24;--gauge-high:#4ade80}
 /* Overview: one merge picture, live speed per connection, then history. Uses the shared tokens only. */
 
 /* ---------- hero ---------- */
@@ -44,15 +47,27 @@
 .mf-node.idle .mf-card{stroke-dasharray:4 4}
 .mf-node.idle .mf-rate{fill:var(--muted)}
 @keyframes mf-flow{to{stroke-dashoffset:-20}}
-.mf-track{fill:none;stroke:var(--raised)}
+.mf-track{fill:none;stroke:var(--raised);stroke-linecap:round}
+.mf-arc{fill:none;stroke:var(--speed,var(--accent));stroke-linecap:round;transition:stroke-dasharray .7s var(--ease-out),stroke .7s;filter:drop-shadow(0 0 6px color-mix(in srgb,var(--speed,var(--accent)) 45%,transparent))}
+.mf-tick{stroke:var(--control-line);stroke-width:1;opacity:.55}
+.mf-tick.major{stroke:var(--text);stroke-width:1.6;opacity:.7}
+.mf-scale{font:500 10px var(--font-mono);fill:var(--muted)}
+.mf-inner-track{fill:none;stroke:var(--raised)}
+.mf-needle{transform-box:view-box;transition:transform .7s var(--ease-out)}
+.mf-needle line{stroke:var(--text);stroke-width:3;stroke-linecap:round}
+.mf-needle circle{fill:var(--speed,var(--accent));stroke:var(--surface);stroke-width:2}
+.mf-tier{font:650 12px var(--font-ui);fill:var(--text);letter-spacing:.2px}
+.mf-of{font:500 10px var(--font-ui);fill:var(--muted)}
 .mf-seg{fill:none;stroke-linecap:butt;transition:stroke-dasharray .6s var(--ease-out),stroke-dashoffset .6s var(--ease-out)}
-.mf-glow{fill:color-mix(in srgb,var(--accent) 6%,transparent)}
+.mf-glow{fill:color-mix(in srgb,var(--speed,var(--accent)) 6%,var(--surface));stroke:var(--line);transition:fill .7s}
 .mf-core{fill:var(--surface);stroke:var(--line)}
 .mf-hub-label{font:650 10px var(--font-ui);letter-spacing:1.6px;fill:var(--muted)}
-.mf-hub-value{font:650 40px var(--font-mono);letter-spacing:-2px;fill:var(--accent)}
+.mf-hub-value{font:650 40px var(--font-mono);letter-spacing:-2px;fill:var(--text)}
 .mf-hub-unit{font:500 11px var(--font-ui);fill:var(--muted)}
 svg.off .mf-hub-value{fill:var(--text)}
 svg.off .mf-glow{fill:transparent}
+svg.off .mf-needle line{stroke:var(--muted)}
+svg.off .mf-tier{fill:var(--muted)}
 
 /* ---------- live speed by connection ---------- */
 .ov-links-section{margin-bottom:24px}
@@ -124,7 +139,7 @@ svg.off .mf-glow{fill:transparent}
 
 @media (prefers-reduced-motion:reduce){
   .mf-node.moving .mf-flow,.ov-pill.good .dot{animation:none}
-  .mf-ribbon,.mf-seg,.ov-bar i{transition:none}
+  .mf-ribbon,.mf-seg,.ov-bar i,.mf-arc,.mf-needle,.mg-val,.mg-needle{transition:none}
 }
 @media (max-width:1180px){
   .ov-hero-body{grid-template-columns:1fr}
@@ -151,3 +166,11 @@ svg.off .mf-glow{fill:transparent}
 .lk .meta{grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);margin-top:14px;align-items:center}
 .lk .meta .chip{width:auto;padding-inline:10px}
 @media (max-width:719px){.lk .meta{grid-template-columns:1fr 1fr}.lk .meta .chip{grid-column:1/-1;justify-self:start}}
+
+/* small speedometer on each connection card */
+.mini-gauge{width:52px;height:31px;flex:none;align-self:center;margin-right:4px;overflow:visible}
+.mg-track{fill:none;stroke:var(--raised);stroke-width:6;stroke-linecap:round}
+.mg-val{fill:none;stroke-width:6;stroke-linecap:round;transition:stroke-dasharray .7s var(--ease-out),stroke .7s}
+.mg-needle{stroke:var(--text);stroke-width:2;stroke-linecap:round;transform-box:view-box;transform-origin:32px 33px;transition:transform .7s var(--ease-out)}
+.mg-hub{fill:var(--text)}
+.lk.off .mg-needle,.lk.off .mg-hub{stroke:var(--muted);fill:var(--muted)}
