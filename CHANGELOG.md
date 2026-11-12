@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.17.4
+
+- **A struggling line no longer draws new connections.** In a speed test on the real PC the cable suddenly carried only 7 of its usual 64 Mbit/s while its response time rose from 90 ms to 430 ms; because NetMerge remembered how fast it can be, it kept giving it 4 to 6 of every 8 new connections. Now a line that carries far less than its usual speed while its response time has risen to several times its usual one counts as full: new connections go to the other lines until it recovers (shown as "congested" in the diagnostics). A line at full speed, a line with room to spare and a line that is merely a little slower are not affected (checked against the readings from the PC's log). This is decided by NetMerge itself, so it works the same with either engine. Connections that are already open stay where they are; a connection cannot move to another line.
+
 ## 3.17.3
 
 - **Wi-Fi took no part in a speed test (NetMerge engine).** Found in the PC's logs: 11 seconds before the test, nvidia's update server did not answer on Wi-Fi (it does not answer on either line, every hour). The engine then passed Wi-Fi over for 15 seconds, so all 8 of the speed test's connections went to the cable and Wi-Fi carried nothing. A line is now passed over only when another line made the same connection while it failed or hung, and then for 10 seconds; when every line fails the same connection (a server that is down), no line is blamed.

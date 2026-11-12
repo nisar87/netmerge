@@ -36,6 +36,31 @@ type dispLink struct {
 	ringRx, ringTx [3]float64
 	n              int
 	share          float64 // smoothed share of new connections
+	baseDelay      int     // the line's usual response time when it is not struggling (slowly forgotten)
+	congested      bool    // carrying far below its learned speed while its response time has blown up
+}
+
+// congestedNow tells whether a line is struggling right now: it carries traffic, but far less than it has
+// shown it can, and its response time has risen to several times its usual one. That is a line that is full at
+// a lower speed than usual (a congested ISP link, a router dropping packets), not a quiet line with room to spare:
+// its learned speed must not draw new connections to it. A healthy line at full speed is never affected (its spare
+// room is already near zero), and neither is a line whose response time stays normal.
+func congestedNow(rx, capRx, tx, capTx float64, delay, base int) bool {
+	return base > 0 && delay > 3*base && delay > base+150 &&
+		rx+tx > 62500 /* 0.5 Mbit/s */ && rx < 0.5*capRx && tx < 0.5*capTx
+}
+
+// trackDelay keeps the line's usual response time: it follows lower readings at once and higher ones only
+// slowly, so a few seconds of a struggling line do not become its "usual".
+func trackDelay(base, delay int) int {
+	switch {
+	case delay <= 0:
+		return base
+	case base == 0 || delay < base:
+		return delay
+	default:
+		return base + (delay-base)/50 + 1
+	}
 }
 
 var (
@@ -170,6 +195,11 @@ func dispatchTick() {
 		if d.capRx == 0 {
 			d.capRx, d.capTx = neutralCap, neutralCap
 		}
+		dl := health[l.Name].delay
+		d.congested = congestedNow(d.emaRx, d.capRx, d.emaTx, d.capTx, dl, d.baseDelay)
+		if !d.congested {
+			d.baseDelay = trackDelay(d.baseDelay, dl)
+		}
 		// no line carries more than its adapter can: this also repairs a remembered speed that a counter
 		// restart once inflated
 		if a, ok := adapterByName(l.Name); ok {
@@ -236,6 +266,10 @@ func dispatchTick() {
 			if w < 0.1*d.capRx {
 				w = 0.1 * d.capRx
 			}
+		}
+		if d.congested && rx+tx >= 100e3 {
+			// full at a lower speed than usual: no spare room, whatever it carried before
+			w = 0.1 * (d.capRx + d.capTx) / 2
 		}
 		w *= pen[i]
 		if callActive && d.proxy == callName && callName != "" {
@@ -455,6 +489,9 @@ func buildInfo(set []*dispLink, cur map[string]int) string {
 	sb.WriteString(" | auto")
 	for _, d := range set {
 		fmt.Fprintf(&sb, " %s=%d/%d(cap %.0f/%.0f)", d.name, cur[d.proxy], dispatchSlots, d.capRx*8/1e6, d.capTx*8/1e6)
+		if d.congested {
+			sb.WriteString("[congested]")
+		}
 	}
 	fmt.Fprintf(&sb, " mv=%d", dispSwitch)
 	dispSwitch = 0
