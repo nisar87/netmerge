@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.17.2
+
+Fixes from five hours of the NetMerge engine on the real PC (3.17.1, both lines, 2,650 connections, 289 blocks counted):
+
+- **No IPv6 through the NetMerge engine when IPv6 is off** (NetMerge's setting, as with mihomo). The virtual adapter offered an IPv6 path, so Windows tried IPv6 first (Teams did) through lines that have none, and those attempts waited until they failed.
+- **Merging shows as on only once traffic really flows through the NetMerge engine.** Its first start on the PC took 3 seconds to get capture ready (the firewall permission is added once; later starts skip it), while NetMerge already said it had started.
+- **Adapters are listed with Windows' own function instead of PowerShell**: about a millisecond instead of seconds, and no more "adapter scan failed" (seen 7 times in the PC's log). Checked against PowerShell's list on a Windows machine in CI.
+
+What the PC's log showed about the NetMerge engine itself: every connection was named with its program, websites with their names; connections that failed: 7 in 5 hours (mihomo, the 1.5 hours before on the same PC: 25), of which 5 were nvidia's server not answering on either engine; 7 connections were rescued by moving to the other line within about a second.
+
 ## 3.17.1
 
 - **The NetMerge engine now really starts.** In 3.17.0 it refused NetMerge's own settings file (the file starts with a comment line, which mihomo accepts and the new engine did not), so NetMerge went back to mihomo after a few seconds. Found in the logs of the first test on a real PC; the engine test now writes the settings file exactly as NetMerge does.

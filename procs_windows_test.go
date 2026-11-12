@@ -74,3 +74,35 @@ func TestCounters64(t *testing.T) {
 		t.Fatalf("boot time %v", b)
 	}
 }
+
+// The quick adapter list must match what PowerShell reports.
+func TestAdaptersAPIMatchesPowerShell(t *testing.T) {
+	start := time.Now()
+	api, err := listAdaptersAPI()
+	took := time.Since(start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps, err := listAdaptersPowerShell()
+	if err != nil {
+		t.Skip("PowerShell scan failed:", err)
+	}
+	t.Logf("API (%v): %+v", took, api)
+	t.Logf("PowerShell: %+v", ps)
+	if len(api) != len(ps) {
+		t.Fatalf("API found %d adapters, PowerShell %d", len(api), len(ps))
+	}
+	byName := map[string]Adapter{}
+	for _, p := range ps {
+		byName[p.Name] = p
+	}
+	for i := range api {
+		a, p := api[i], byName[api[i].Name]
+		if a.Name != p.Name || a.Index != p.Index || a.IP != p.IP || a.Gateway != p.Gateway || a.Desc != p.Desc {
+			t.Fatalf("adapter %d: API %+v, PowerShell %+v", i, a, p)
+		}
+		if linkRateBytes(a.LinkRate) == 0 && linkRateBytes(p.LinkRate) != 0 {
+			t.Fatalf("link speed %q vs %q", a.LinkRate, p.LinkRate)
+		}
+	}
+}

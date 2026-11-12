@@ -38,6 +38,13 @@ func powershell(script string) ([]byte, error) {
 }
 
 func listAdapters() ([]Adapter, error) {
+	if list, err := listAdaptersAPI(); err == nil {
+		return list, nil
+	}
+	return listAdaptersPowerShell()
+}
+
+func listAdaptersPowerShell() ([]Adapter, error) {
 	script := `$ErrorActionPreference='SilentlyContinue'
 $r = @(Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null -and $_.NetAdapter.Status -eq 'Up' } | ForEach-Object {
  [pscustomobject]@{ name=$_.InterfaceAlias; index=[int]$_.InterfaceIndex; desc=[string]$_.InterfaceDescription;
