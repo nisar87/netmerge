@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"os/exec"
 	"syscall"
 	"time"
 	"unsafe"
@@ -62,3 +63,6 @@ func defaultInterface() (string, error) {
 	}
 	return ifi.Name, nil
 }
+
+func setupLocal() (func(), error) { return nil, fmt.Errorf("-local needs Linux") }
+func interrupt(c *exec.Cmd)       {}
