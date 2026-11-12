@@ -25,7 +25,7 @@ var (
 )
 
 var virtualHints = []string{"virtual", "hyper-v", "vmware", "virtualbox", "vpn", "sonicwall", "tap-", "wintun",
-	"wireguard", "meta", "loopback", "pseudo", "fortinet", "cisco anyconnect", "zerotier", "tailscale", "npcap", "teredo"}
+	"wireguard", "meta", "netmerge", "loopback", "pseudo", "fortinet", "cisco anyconnect", "zerotier", "tailscale", "npcap", "teredo"}
 
 func isVirtual(name, desc string) bool {
 	s := strings.ToLower(name + " " + desc)
