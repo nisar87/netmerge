@@ -100,6 +100,12 @@ func registerDiagnosticsRoutes(mux *http.ServeMux) {
 		add("engine.log", tailBytes(filepath.Join(d, "engine.log"), 200<<10))
 		add("rates.log", tailBytes(filepath.Join(d, "rates.log"), 200<<10))
 		add("go-crash.log", tailBytes(filepath.Join(d, "go-crash.log"), 100<<10))
+		// what each line carried second by second over the last minutes (kept even without the debug log), and the
+		// connections open right now with the line each one uses
+		add("recent-rates.txt", recentRatesText())
+		if b, code, err := apiReq("GET", "/connections", nil); err == nil && code == 200 {
+			add("connections.json", b)
+		}
 		_ = zw.Close()
 	}))
 }

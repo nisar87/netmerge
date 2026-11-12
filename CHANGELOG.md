@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.17.5
+
+- **Diagnostics now show what each line carried.** The diagnostics zip includes the last minutes of per-line speeds, connections and slots (kept even when the debug log is off) and the list of open connections with the line each one uses. A friend's zip about an unused hotspot could not show this before: the per-second record was only written with the debug log on.
+
 ## 3.17.4
 
 - **A struggling line no longer draws new connections.** In a speed test on the real PC the cable suddenly carried only 7 of its usual 64 Mbit/s while its response time rose from 90 ms to 430 ms; because NetMerge remembered how fast it can be, it kept giving it 4 to 6 of every 8 new connections. Now a line that carries far less than its usual speed while its response time has risen to several times its usual one counts as full: new connections go to the other lines until it recovers (shown as "congested" in the diagnostics). A line at full speed, a line with room to spare and a line that is merely a little slower are not affected (checked against the readings from the PC's log). This is decided by NetMerge itself, so it works the same with either engine. Connections that are already open stay where they are; a connection cannot move to another line.
