@@ -29,7 +29,11 @@ Not part of NetMerge any more:
 | File | What it does |
 | --- | --- |
 | `main.go` | Start-up, single instance (port 9196), admin relaunch, tray, crash log |
-| `engine.go`, `enginedl.go` | Starts/stops mihomo; downloads the pinned engine (v1.19.33, SHA-256 pinned in code) |
+| `engine.go`, `enginedl.go` | Starts/stops the engine (mihomo, or NetMerge's own when Settings → Advanced → Network engine says so, with fallback to mihomo); downloads the pinned mihomo (v1.19.33, SHA-256 pinned in code) |
+| `engine_procs.go`, `procs_*.go` | Closes only NetMerge's own engine processes (`data/engine.pid` + program path); the own engine is asked to stop via `POST /quit` |
+| `engine/` | NetMerge's own engine, a separate Go module (standard library only), run as `NetMerge.exe -engine -d <dir>`. See `engine/README.md` |
+| `engine_contract_test.go` | What any engine must do for NetMerge; CI runs it against mihomo, `nmengine` and `NetMerge -engine` |
+| `usage_offline.go` | Counts data used while NetMerge was closed (64-bit adapter counters, same Windows boot only) |
 | `config.go` | Writes the mihomo config: one proxy per line bound to its adapter, TUN, rules, bypass lists |
 | `dispatch.go` | The heart: decides which line new connections use (smooth weighted slots, 8 slots, learned capacities with ~15-minute half-life, "slow" flags, call protection) |
 | `ratecap.go` | Rejects impossible byte-counter readings (USB adapter counters restart; 32-bit wrap) and readings across a long gap (sleep) |
@@ -47,8 +51,12 @@ Not part of NetMerge any more:
 
 - Local: `go vet ./... && go test ./...` (also `GOOS=windows go vet ./...`). The window: `cd frontend && npm run
   test:unit && npm run test:fixtures` (Playwright e2e runs in CI).
-- CI (`.github/workflows/ci.yml`) runs on pull requests: Go tests + Windows build, and the window's Playwright suite
-  (88+ tests).
+- CI (`.github/workflows/ci.yml`) runs on pull requests: Go tests + Windows build, the window's Playwright suite
+  (99 tests), the engine contract, the own engine's tests incl. a Linux capture test (root), and a **windows-latest**
+  job: process/counter tests and the own engine capturing real traffic through Wintun (`engine/tun_e2e_windows_test.go`).
+- `scripts/get-wintun.py` fetches wintun-0.14.1.zip (zip SHA-256 pinned), puts the DLL in `engine/wintun/amd64/`;
+  the release passes the DLL's SHA-256 (`e5da8447…dafce`) to the engine with `-X netmerge/engine.wintunSHA256=`.
+  This sandbox cannot reach wintun.net or proxy.golang.org; CI can.
 - Release: change `VERSION` **and** `appVersion` in `update.go`, add a `CHANGELOG.md` entry at the top, push to main.
   `release.yml` builds `NetMerge.exe` + `.sha256` and publishes the release (6-10 minutes). A push without a
   `VERSION` change does not release.
@@ -82,11 +90,15 @@ first real update after it will show it on the PC).
 ## 7. Open items
 
 1. **IPv6 is not merged** (`"ipv6": false` in the engine config). If a line gives the PC IPv6, that traffic bypasses
-   NetMerge. Not the case on the owner's PC; matters for other users.
-2. Starting the engine kills **any** process named `mihomo.exe`, also one of another tool. Should kill only its own.
-3. The window can freeze briefly (up to 15 s if it fails) while the engine starts: `engine.Start` holds a lock.
-4. Usage is not counted while NetMerge is closed.
-5. Not yet done: code signing (SignPath application pending; "Windows protected your PC" warning), a 24-hour run,
+   NetMerge. Not the case on the owner's PC; matters for other users. (The own engine can capture IPv6; the app
+   does not turn it on yet.)
+2. **The own engine (3.17.0) has not run on the owner's PC.** Tested in CI only (Linux capture with root; a Windows
+   runner with Wintun: capture, fake DNS, UDP, blocking, program names, ~700-850 Mbit/s on one line). Still to do
+   there: several real lines, speed against mihomo, a 24-hour run, sleep/wake, unplugging lines. Then stage 4
+   (removing mihomo) when the owner is satisfied.
+3. Fixed in 3.17.0: closing other tools' mihomo.exe, the window freeze during engine start, usage while closed,
+   "sampler was held up", "slot check" after reloads, update check 403. Not yet confirmed on the PC.
+4. Not yet done: code signing (SignPath application pending; "Windows protected your PC" warning), a 24-hour run,
    running as a standard user, a trademark check of the name "NetMerge" (a similar `net-merge` project exists).
 
 ## 8. Lessons
