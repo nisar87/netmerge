@@ -3,7 +3,7 @@
 ## 3.17.1
 
 - **The NetMerge engine now really starts.** In 3.17.0 it refused NetMerge's own settings file (the file starts with a comment line, which mihomo accepts and the new engine did not), so NetMerge went back to mihomo after a few seconds. Found in the logs of the first test on a real PC; the engine test now writes the settings file exactly as NetMerge does.
-- **Compared with mihomo, side by side, every time the engine changes.** A new check runs both engines in turns with the same settings, on a Windows machine (internet) and on a private test network (no internet noise, a 350,000-name block list like the real one). In the latest runs the NetMerge engine was ahead of mihomo or level with it on every measurement (HTTPS and UDP on the internet came out level); the latest results:
+- **Compared with mihomo, side by side, every time the engine changes.** A new check runs both engines in turns with the same settings, on a Windows machine (internet) and on a private test network (no internet noise, a 350,000-name block list like the real one). In the latest runs the NetMerge engine was ahead of mihomo or level with it on every measurement (on the internet, HTTPS, UDP and the Cloudflare download came out level, within the variation between runs); the latest results:
 
   | | mihomo | NetMerge engine |
   |---|---|---|
