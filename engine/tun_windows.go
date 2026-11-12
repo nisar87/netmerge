@@ -234,11 +234,15 @@ func (t *tunStack) setupOS(c *Config) error {
 	if err := setInterface(d.luid, false, t.mtu, 1); err != nil {
 		t.e.log.Warnf("[TUN] adapter settings: %v", err)
 	}
-	// IPv6 too (best effort: some PCs have IPv6 switched off)
-	if err := addAddress(d.luid, netip.PrefixFrom(tunGW6, 126)); err == nil {
-		_ = setInterface(d.luid, true, max(t.mtu, 1280), 1)
-	} else {
-		t.e.log.Warnf("[TUN] IPv6 address: %v", err)
+	// IPv6 only when the settings ask for it ("ipv6": true). Without it the adapter must not look like an IPv6
+	// path at all: apps would try IPv6 first through it and wait for those attempts to fail (seen with Teams on a
+	// real PC whose lines have no IPv6).
+	if c.IPv6 {
+		if err := addAddress(d.luid, netip.PrefixFrom(tunGW6, 126)); err == nil {
+			_ = setInterface(d.luid, true, max(t.mtu, 1280), 1)
+		} else {
+			t.e.log.Warnf("[TUN] IPv6 address: %v", err)
+		}
 	}
 	tAddr := time.Now()
 	t.ensureFirewall()
@@ -260,12 +264,18 @@ func (t *tunStack) setupOS(c *Config) error {
 	if c.Tun.AutoRoute {
 		routes := c.Tun.RouteAddress
 		if len(routes) == 0 {
-			routes = []string{"0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"}
+			routes = []string{"0.0.0.0/1", "128.0.0.0/1"}
+			if c.IPv6 {
+				routes = append(routes, "::/1", "8000::/1")
+			}
 		}
 		for _, r := range routes {
 			p, err := netip.ParsePrefix(r)
 			if err != nil {
 				return fmt.Errorf("route %q: %v", r, err)
+			}
+			if !p.Addr().Is4() && !c.IPv6 {
+				continue
 			}
 			// every route lives on the adapter, so it disappears with it
 			if err := addRoute(d.luid, d.index, p, netip.Addr{}, 1); err != nil && p.Addr().Is4() {

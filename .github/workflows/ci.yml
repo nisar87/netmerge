@@ -63,7 +63,7 @@ jobs:
       - name: Get wintun.dll (checked against its published fingerprint)
         run: python scripts/get-wintun.py
       - run: go vet ./...
-      - run: go test -count=1 -run "TestProcessesByPath|TestCounters64|TestUpdate|TestOfflineUsage" -v .
+      - run: go test -count=1 -run "TestProcessesByPath|TestCounters64|TestUpdate|TestOfflineUsage|TestAdaptersAPIMatchesPowerShell" -v .
       - run: go build -o NetMerge.exe .
       - working-directory: engine
         run: go vet ./...

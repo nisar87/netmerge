@@ -76,6 +76,19 @@ func TestTunWindows(t *testing.T) {
 	}
 	client := &http.Client{Timeout: 15 * time.Second, Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}}
 
+	t.Run("no IPv6 path through the adapter when IPv6 is off", func(t *testing.T) {
+		ifi, err := net.InterfaceByName("NetMerge")
+		if err != nil {
+			t.Fatal(err)
+		}
+		addrs, _ := ifi.Addrs()
+		for _, a := range addrs {
+			if p, err := netip.ParsePrefix(a.String()); err == nil && p.Addr().Is6() && !p.Addr().IsLinkLocalUnicast() {
+				t.Fatalf("IPv6 address %v on the adapter", a)
+			}
+		}
+	})
+
 	t.Run("a captured connection goes out over the real line, named with the program", func(t *testing.T) {
 		resp, err := client.Get("http://1.1.1.1/")
 		if err != nil {

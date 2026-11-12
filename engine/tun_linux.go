@@ -79,7 +79,9 @@ func (t *tunStack) setupOS(c *Config) error {
 	if err := ipCmd("addr", "add", tunGW4.String()+"/16", "dev", n); err != nil {
 		return err
 	}
-	_ = ipCmd("-6", "addr", "add", tunGW6.String()+"/126", "dev", n, "nodad")
+	if c.IPv6 {
+		_ = ipCmd("-6", "addr", "add", tunGW6.String()+"/126", "dev", n, "nodad")
+	}
 	if err := ipCmd("link", "set", n, "up", "mtu", itoa(t.mtu)); err != nil {
 		return err
 	}
@@ -91,6 +93,9 @@ func (t *tunStack) setupOS(c *Config) error {
 		}
 		for _, r := range routes {
 			args := []string{"route", "add", r, "dev", n}
+			if strings.Contains(r, ":") && !c.IPv6 {
+				continue
+			}
 			if strings.Contains(r, ":") {
 				args = append([]string{"-6"}, args...)
 			}

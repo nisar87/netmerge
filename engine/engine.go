@@ -42,6 +42,7 @@ type Engine struct {
 	api        *http_server
 	tun        any            // *tunStack while capturing
 	pendingTun chan tunOpened // the adapter being created in advance (first start)
+	ready      atomic.Bool    // Start has finished: capture (if any) is in place
 	dns        *dnsService
 	defIface   atomic.Value // string: the adapter for DIRECT while the PC's traffic is captured
 	procCache  *processFinder
@@ -111,6 +112,7 @@ func (e *Engine) Start(path string) error {
 		e.dropPendingTun()
 		return err
 	}
+	e.ready.Store(true)
 	e.log.Infof("NetMerge engine %s started", Version)
 	return nil
 }

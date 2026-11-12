@@ -32,6 +32,12 @@ func (e *Engine) startAPI(addr, secret string) error {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
+		// "started" only once traffic really flows through the engine (the virtual adapter and its routes are
+		// in place): NetMerge shows merging as on when this answers
+		if !e.ready.Load() {
+			writeJSON(w, 503, map[string]any{"message": "starting"})
+			return
+		}
 		writeJSON(w, 200, map[string]any{"version": "nmengine-" + Version, "meta": true})
 	})
 	// POST /quit stops the engine cleanly (NetMerge uses it instead of killing the process, so the PC's
