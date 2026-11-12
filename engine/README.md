@@ -42,6 +42,14 @@ what works today.
    Still to do on the real PC: speed comparisons, a 24-hour run, sleep/wake and unplugging lines.
 4. **Removing mihomo**, only when the new engine has been at least as good in daily use.
 
+## Compared with mihomo
+
+`cmd/enginebench` runs mihomo and this engine in turns with the same settings and measures start time, new
+connections (HTTP, HTTPS, UDP), downloads, block accuracy, a line that silently stops answering, memory and CPU.
+The workflow "Engine comparison" runs it on a Windows machine (internet) and on a private test network on Linux
+(`-local`: its own web, HTTPS, UDP and DNS servers, a 350,000-name block list). Results are in each run's
+summary; the engine is only changed when it stays ahead.
+
 ## Built to grow (not used yet)
 
 - "Where a connection goes out" is one interface, so something besides "this adapter" could be added later.

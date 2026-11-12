@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"unsafe"
 )
@@ -13,8 +14,9 @@ import (
 // device; addresses and routes are set with the ip tool.
 
 type linuxTun struct {
-	f    *os.File
-	name string
+	fd     int
+	name   string
+	closed atomic.Bool
 }
 
 func openTun(name string, mtu int) (tunDevice, error) {
@@ -31,17 +33,38 @@ func openTun(name string, mtu int) (tunDevice, error) {
 		syscall.Close(fd)
 		return nil, fmt.Errorf("TUNSETIFF: %v", e)
 	}
-	if err := syscall.SetNonblock(fd, true); err != nil {
-		syscall.Close(fd)
-		return nil, err
-	}
-	return &linuxTun{f: os.NewFile(uintptr(fd), "/dev/net/tun"), name: name}, nil
+	return &linuxTun{fd: fd, name: name}, nil
 }
 
-func (t *linuxTun) Name() string               { return t.name }
-func (t *linuxTun) Read(b []byte) (int, error) { return t.f.Read(b) }
-func (t *linuxTun) Write(p []byte) error       { _, err := t.f.Write(p); return err }
-func (t *linuxTun) Close() error               { return t.f.Close() }
+// Reads and writes are plain system calls on a blocking descriptor (the read loop has its own thread): no poller
+// round trips per packet. Close takes the device away, which ends a waiting read.
+func (t *linuxTun) Name() string { return t.name }
+func (t *linuxTun) Read(b []byte) (int, error) {
+	for {
+		n, err := syscall.Read(t.fd, b)
+		if err == syscall.EINTR {
+			continue
+		}
+		if err != nil || t.closed.Load() {
+			if t.closed.Load() {
+				return 0, os.ErrClosed
+			}
+			return 0, err
+		}
+		return n, nil
+	}
+}
+func (t *linuxTun) Write(p []byte) error {
+	_, err := syscall.Write(t.fd, p)
+	return err
+}
+func (t *linuxTun) Close() error {
+	if t.closed.Swap(true) {
+		return nil
+	}
+	_ = exec.Command("ip", "link", "del", t.name).Run() // wakes the blocked read
+	return syscall.Close(t.fd)
+}
 
 func ipCmd(args ...string) error {
 	out, err := exec.Command("ip", args...).CombinedOutput()

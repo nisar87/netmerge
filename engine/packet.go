@@ -137,20 +137,67 @@ func fixL4(p ipPacket) {
 // setAddrs rewrites source/destination addresses and ports in place and fixes the checksums.
 func setAddrs(p *ipPacket, src netip.AddrPort, dst netip.AddrPort) {
 	b := p.b
+	// The checksums are updated for the changed words only (RFC 1624) instead of being summed again over the
+	// whole packet: the packet path stays light however large the packets are.
+	var oldW, newW [36]byte // addresses (2 x 4 or 2 x 16 bytes) and the two ports
+	n := 0
 	if p.v6 {
+		n = copy(oldW[:], b[8:40])
 		s16, d16 := src.Addr().As16(), dst.Addr().As16()
+		copy(newW[0:16], s16[:])
+		copy(newW[16:32], d16[:])
 		copy(b[8:24], s16[:])
 		copy(b[24:40], d16[:])
 	} else {
+		n = copy(oldW[:], b[12:20])
 		s4, d4 := src.Addr().As4(), dst.Addr().As4()
-		copy(b[12:16], s4[:])
-		copy(b[16:20], d4[:])
-		fixIPv4Header(b)
+		copy(newW[0:4], s4[:])
+		copy(newW[4:8], d4[:])
+		copy(b[12:20], newW[0:8])
+		binary.BigEndian.PutUint16(b[10:12], csumUpdate(binary.BigEndian.Uint16(b[10:12]), oldW[:8], newW[:8]))
 	}
+	copy(oldW[n:n+4], p.payload[0:4])
+	binary.BigEndian.PutUint16(newW[n:], src.Port())
+	binary.BigEndian.PutUint16(newW[n+2:], dst.Port())
+	copy(p.payload[0:4], newW[n:n+4])
 	p.src, p.dst = src.Addr(), dst.Addr()
-	binary.BigEndian.PutUint16(p.payload[0:2], src.Port())
-	binary.BigEndian.PutUint16(p.payload[2:4], dst.Port())
-	fixL4(*p)
+	var off int
+	switch p.proto {
+	case protoTCP:
+		if len(p.payload) < 20 {
+			return
+		}
+		off = 16
+	case protoUDP:
+		if len(p.payload) < 8 {
+			return
+		}
+		off = 6
+	default:
+		return
+	}
+	old := binary.BigEndian.Uint16(p.payload[off:])
+	if old == 0 && p.proto == protoUDP {
+		if p.v6 {
+			fixL4(*p) // IPv6 UDP must carry a checksum
+		}
+		return // IPv4 UDP without a checksum stays without one
+	}
+	c := csumUpdate(old, oldW[:n+4], newW[:n+4])
+	if c == 0 && p.proto == protoUDP {
+		c = 0xffff
+	}
+	binary.BigEndian.PutUint16(p.payload[off:], c)
+}
+
+// csumUpdate adjusts checksum old for 16-bit words that changed from oldB to newB (same length, even).
+func csumUpdate(old uint16, oldB, newB []byte) uint16 {
+	sum := uint32(^old)
+	for i := 0; i+1 < len(oldB); i += 2 {
+		sum += uint32(^(uint16(oldB[i])<<8 | uint16(oldB[i+1])))
+		sum += uint32(uint16(newB[i])<<8 | uint16(newB[i+1]))
+	}
+	return csumFold(sum)
 }
 
 func l4Ports(p ipPacket) (uint16, uint16, bool) {

@@ -116,7 +116,8 @@ func startContractEngine(t *testing.T, bin string) *contractEngine {
 	e.proxy, e.ss = fmt.Sprintf("127.0.0.1:%d", pp), fmt.Sprintf("127.0.0.1:%d", sp)
 	out, _ := json.MarshalIndent(cfg, "", "  ")
 	_ = os.MkdirAll(filepath.Join(e.dir, "filters"), 0o755)
-	if err := os.WriteFile(filepath.Join(e.dir, "config.yaml"), out, 0o644); err != nil {
+	// exactly as NetMerge writes it, header line included
+	if err := os.WriteFile(filepath.Join(e.dir, "config.yaml"), append([]byte(configHeader), out...), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// block list: blocked.test and allowed.test; allow list: allowed.test (so it must NOT be refused)

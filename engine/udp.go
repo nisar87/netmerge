@@ -177,7 +177,9 @@ func (t *udpTable) openFlow(f *udpFlow, m *Metadata, client string, reply replyF
 			}
 		}
 	}
+	t0 := time.Now()
 	rule, p, err := e.decide(m)
+	t1 := time.Now()
 	f.host = m.Host
 	if err != nil {
 		e.log.Warnf("[UDP] %s --> %s: %v", srcText(m), m.RemoteAddress(), err)
@@ -258,6 +260,9 @@ func (t *udpTable) openFlow(f *udpFlow, m *Metadata, client string, reply replyF
 	sess.flows[remote] = f
 	sess.mu.Unlock()
 	t.finish(f, true)
+	if traceOn {
+		e.log.Infof("[TRACE] udp %s decide+program=%dus socket=%dus", m.RemoteAddress(), t1.Sub(t0).Microseconds(), time.Since(t1).Microseconds())
+	}
 }
 
 func (t *udpTable) readLoop(s *udpSession) {

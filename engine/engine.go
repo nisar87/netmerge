@@ -38,15 +38,16 @@ type Engine struct {
 	authOK  map[string]bool // "user:pass"
 	lanNets []netip.Prefix
 
-	inbounds  map[string]io.Closer // by a key describing the listener; kept across reloads when unchanged
-	api       *http_server
-	tun       any // *tunStack while capturing
-	dns       *dnsService
-	defIface  atomic.Value // string: the adapter for DIRECT while the PC's traffic is captured
-	procCache *processFinder
-	stopOnce  sync.Once
-	stopped   chan struct{}
-	udp       *udpTable
+	inbounds   map[string]io.Closer // by a key describing the listener; kept across reloads when unchanged
+	api        *http_server
+	tun        any            // *tunStack while capturing
+	pendingTun chan tunOpened // the adapter being created in advance (first start)
+	dns        *dnsService
+	defIface   atomic.Value // string: the adapter for DIRECT while the PC's traffic is captured
+	procCache  *processFinder
+	stopOnce   sync.Once
+	stopped    chan struct{}
+	udp        *udpTable
 }
 
 type sniffPorts struct {
@@ -107,6 +108,7 @@ func New(dir string, out io.Writer) *Engine {
 // Start loads the settings and opens everything they ask for.
 func (e *Engine) Start(path string) error {
 	if err := e.Load(path); err != nil {
+		e.dropPendingTun()
 		return err
 	}
 	e.log.Infof("NetMerge engine %s started", Version)
@@ -120,6 +122,7 @@ func (e *Engine) Load(path string) error {
 	if err != nil {
 		return err
 	}
+	e.preopenTun(c)
 	sets := map[string]*DomainSet{}
 	for name, p := range c.RuleProviders {
 		if p.Behavior != "" && p.Behavior != "domain" {
@@ -204,6 +207,7 @@ func (e *Engine) Stop() {
 		for _, c := range ins {
 			_ = c.Close()
 		}
+		e.dropPendingTun()
 		e.stopTun()
 		if e.dns != nil {
 			e.dns.close()
@@ -306,6 +310,9 @@ func (e *Engine) lookup(ctx context.Context, host string, l *Line) ([]netip.Addr
 
 // ---- handling a TCP connection (from any way in) ----
 
+// traceOn (NM_TRACE=1) logs how long each step of a new connection took.
+var traceOn = os.Getenv("NM_TRACE") != ""
+
 // handleTCP decides, connects and relays one connection. conn is the side towards the app.
 func (e *Engine) handleTCP(conn net.Conn, m *Metadata) { e.handleTCPReady(conn, m, nil) }
 
@@ -313,8 +320,24 @@ func (e *Engine) handleTCP(conn net.Conn, m *Metadata) { e.handleTCPReady(conn, 
 // ready is called once the outcome is known; returning false ends the connection.
 func (e *Engine) handleTCPReady(conn net.Conn, m *Metadata, ready func(err error, rejected bool) bool) {
 	m.Network = "tcp"
+	t0 := time.Now()
+	// the program's name is looked up while the app's first bytes (for the website's name) are awaited
+	var proc chan [2]string
+	if !m.processDone && e.config().FindProcessMode == "always" && m.SrcIP.IsValid() && e.isLocalSource(m.SrcIP) {
+		proc = make(chan [2]string, 1)
+		go func(n string, ip netip.Addr, port uint16) {
+			a, b := e.procCache.find(n, ip, port)
+			proc <- [2]string{a, b}
+		}(m.Network, m.SrcIP, m.SrcPort)
+	}
 	conn = e.maybeSniff(conn, m)
+	if proc != nil {
+		r := <-proc
+		m.Process, m.ProcessPath, m.processDone = r[0], r[1], true
+	}
+	t1 := time.Now()
 	rule, p, err := e.decide(m)
+	t2 := time.Now()
 	if err != nil {
 		e.log.Warnf("[TCP] %s --> %s: %v", srcText(m), m.RemoteAddress(), err)
 		if ready != nil {
@@ -334,6 +357,14 @@ func (e *Engine) handleTCPReady(conn net.Conn, m *Metadata, ready func(err error
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	out, used, err := e.dial.dialTCP(ctx, p, m)
 	cancel()
+	if traceOn && err == nil {
+		accept := time.Duration(0)
+		if !m.born.IsZero() {
+			accept = t0.Sub(m.born)
+		}
+		e.log.Infof("[TRACE] tcp %s accept=%dus sniff+program=%dus decide=%dus dial=%dus", m.RemoteAddress(),
+			accept.Microseconds(), t1.Sub(t0).Microseconds(), t2.Sub(t1).Microseconds(), time.Since(t2).Microseconds())
+	}
 	if err != nil {
 		e.log.Warnf("[TCP] dial %s (match %s/%s) %s --> %s error: %v", usingText(p, nil), rule.Name(), rule.Payload(), srcText(m), m.RemoteAddress(), err)
 		if ready != nil {

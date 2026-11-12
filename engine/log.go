@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -14,7 +15,7 @@ import (
 type Logger struct {
 	mu    sync.Mutex
 	w     io.Writer
-	level int // 0 debug, 1 info, 2 warning, 3 error, 4 silent
+	level atomic.Int32 // 0 debug, 1 info, 2 warning, 3 error, 4 silent
 }
 
 func levelOf(s string) int {
@@ -33,19 +34,17 @@ func levelOf(s string) int {
 	return 1
 }
 
-func NewLogger(w io.Writer, level string) *Logger { return &Logger{w: w, level: levelOf(level)} }
+func NewLogger(w io.Writer, level string) *Logger {
+	l := &Logger{w: w}
+	l.level.Store(int32(levelOf(level)))
+	return l
+}
 
 func (l *Logger) SetLevel(level string) {
-	l.mu.Lock()
-	l.level = levelOf(level)
-	l.mu.Unlock()
+	l.level.Store(int32(levelOf(level)))
 }
 
-func (l *Logger) enabled(lv int) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return lv >= l.level
-}
+func (l *Logger) enabled(lv int) bool { return int32(lv) >= l.level.Load() }
 
 func (l *Logger) write(lv int, name, format string, a ...any) {
 	if l == nil || !l.enabled(lv) {

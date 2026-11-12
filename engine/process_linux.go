@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Linux (tests and development): the socket's inode from /proc/net/*, then the process holding it.
@@ -47,21 +48,47 @@ func lookupOwner(network string, ip netip.Addr, port uint16) (uint32, bool) {
 		return 0, false
 	}
 	target := "socket:[" + inode + "]"
+	holds := func(pid string) bool {
+		fds, _ := os.ReadDir(filepath.Join("/proc", pid, "fd"))
+		for _, fd := range fds {
+			if l, err := os.Readlink(filepath.Join("/proc", pid, "fd", fd.Name())); err == nil && l == target {
+				return true
+			}
+		}
+		return false
+	}
+	// programs that opened connections recently usually open the next ones too: look at them first
+	recentMu.Lock()
+	recent := append([]int(nil), recentPids...)
+	recentMu.Unlock()
+	for _, pid := range recent {
+		if holds(strconv.Itoa(pid)) {
+			return uint32(pid), true
+		}
+	}
 	procs, _ := os.ReadDir("/proc")
 	for _, d := range procs {
 		pid, err := strconv.Atoi(d.Name())
 		if err != nil {
 			continue
 		}
-		fds, _ := os.ReadDir(filepath.Join("/proc", d.Name(), "fd"))
-		for _, fd := range fds {
-			if l, err := os.Readlink(filepath.Join("/proc", d.Name(), "fd", fd.Name())); err == nil && l == target {
-				return uint32(pid), true
+		if holds(d.Name()) {
+			recentMu.Lock()
+			recentPids = append([]int{pid}, recentPids...)
+			if len(recentPids) > 8 {
+				recentPids = recentPids[:8]
 			}
+			recentMu.Unlock()
+			return uint32(pid), true
 		}
 	}
 	return 0, false
 }
+
+var (
+	recentMu   sync.Mutex
+	recentPids []int
+)
 
 func procHexAddr(h string) netip.Addr {
 	b, err := hex.DecodeString(h)

@@ -208,3 +208,37 @@ func TestTunWindows(t *testing.T) {
 		resp.Body.Close()
 	})
 }
+
+func TestIfIndexByName(t *testing.T) {
+	ifs, _ := net.Interfaces()
+	for _, i := range ifs {
+		start := time.Now()
+		idx, err := ifIndex(i.Name)
+		if err != nil || idx != i.Index {
+			t.Fatalf("%s: got %d %v, want %d", i.Name, idx, err, i.Index)
+		}
+		t.Logf("%s -> %d in %v", i.Name, idx, time.Since(start))
+	}
+}
+
+// After the rule is added once, the engine must recognise it (and not run netsh again on every start).
+func TestFirewallRuleRecognised(t *testing.T) {
+	if os.Getenv("NM_WIN_TUN_E2E") == "" {
+		t.Skip("set NM_WIN_TUN_E2E=1 on a Windows machine with administrator rights")
+	}
+	ts := &tunStack{e: New(t.TempDir(), nil)}
+	ts.ensureFirewall()
+	start := time.Now()
+	exe, _ := os.Executable()
+	ok := firewallRuleOK(longPath(exe))
+	t.Logf("check took %v", time.Since(start))
+	if !ok {
+		out, _ := exec.Command("reg", "query", `HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules`, "/f", "NetMerge", "/d").CombinedOutput()
+		t.Fatalf("rule not recognised (exe %s); registry:\n%s", longPath(exe), out)
+	}
+	start = time.Now()
+	ts.ensureFirewall()
+	if d := time.Since(start); d > 200*time.Millisecond {
+		t.Fatalf("second check took %v", d)
+	}
+}

@@ -58,6 +58,45 @@ func (e *Engine) tunPrefix() netip.Prefix {
 	return netip.Prefix{}
 }
 
+type tunOpened struct {
+	dev tunDevice
+	mtu int
+	err error
+}
+
+func tunMTU(c *Config) int {
+	if m := c.Tun.MTU; m >= 1280 && m <= 65000 {
+		return m
+	}
+	return 9000
+}
+
+// preopenTun starts creating the virtual adapter (the slowest step of starting, a few tenths of a second on
+// Windows) while the settings and block lists are still being read.
+func (e *Engine) preopenTun(c *Config) {
+	if !c.Tun.Enable || e.tun != nil || e.pendingTun != nil {
+		return
+	}
+	ch := make(chan tunOpened, 1)
+	e.pendingTun = ch
+	mtu := tunMTU(c)
+	go func() {
+		d, err := openTun("NetMerge", mtu)
+		ch <- tunOpened{d, mtu, err}
+	}()
+}
+
+// dropPendingTun closes an adapter that was opened early but not used (the start failed).
+func (e *Engine) dropPendingTun() {
+	if e.pendingTun == nil {
+		return
+	}
+	if r := <-e.pendingTun; r.err == nil {
+		r.dev.Close()
+	}
+	e.pendingTun = nil
+}
+
 // applyTun starts capturing when the settings ask for it, and stops when they no longer do.
 func (e *Engine) applyTun(c *Config) error {
 	if !c.Tun.Enable {
@@ -69,13 +108,26 @@ func (e *Engine) applyTun(c *Config) error {
 		t.updateExcludes(c.Tun.RouteExcludeAddress)
 		return nil
 	}
-	mtu := c.Tun.MTU
-	if mtu < 1280 || mtu > 65000 {
-		mtu = 9000
+	mtu := tunMTU(c)
+	began := time.Now()
+	var dev tunDevice
+	var err error
+	if e.pendingTun != nil { // opened while the settings and lists were being read
+		r := <-e.pendingTun
+		e.pendingTun = nil
+		dev, err = r.dev, r.err
+		if err == nil && r.mtu != mtu {
+			dev.Close()
+			dev, err = openTun("NetMerge", mtu)
+		}
+	} else {
+		dev, err = openTun("NetMerge", mtu)
 	}
-	dev, err := openTun("NetMerge", mtu)
 	if err != nil {
 		return err
+	}
+	if traceOn {
+		e.log.Infof("[TRACE] setup adapter=%dus", time.Since(began).Microseconds())
 	}
 	t := &tunStack{e: e, dev: dev, mtu: mtu, nat: newNATTable(), done: make(chan struct{})}
 	t.hijack.Store(c.DNS.Enable && len(c.Tun.DNSHijack) > 0)
@@ -103,7 +155,7 @@ func (e *Engine) applyTun(c *Config) error {
 		go t.accept(t.ln6)
 	}
 	go t.janitor()
-	e.log.Infof("[TUN] capturing traffic on %s (MTU %d)", dev.Name(), mtu)
+	e.log.Infof("[TUN] capturing traffic on %s (MTU %d), ready in %d ms", dev.Name(), mtu, time.Since(began).Milliseconds())
 	return nil
 }
 
@@ -155,7 +207,6 @@ func (t *tunStack) readLoop() {
 			t.e.log.Debugf("[TUN] unreadable packet (%d bytes)", n)
 			continue
 		}
-		t.e.log.Debugf("[TUN] packet %s -> %s proto %d len %d", p.src, p.dst, p.proto, len(p.b))
 		switch p.proto {
 		case protoTCP:
 			t.tcpPacket(p)
@@ -239,7 +290,7 @@ func (t *tunStack) accept(l *net.TCPListener) {
 func (t *tunStack) serveTCP(c *net.TCPConn, en *natEntry) {
 	defer t.nat.release(en)
 	_ = c.SetNoDelay(true)
-	m := &Metadata{Type: "Tun", SrcIP: en.app.Addr(), SrcPort: en.app.Port(), DstIP: en.dst.Addr().Unmap(), DstPort: en.dst.Port()}
+	m := &Metadata{Type: "Tun", SrcIP: en.app.Addr(), SrcPort: en.app.Port(), DstIP: en.dst.Addr().Unmap(), DstPort: en.dst.Port(), born: en.born}
 	if h, ok := t.e.fakeHost(m.DstIP); ok {
 		m.Host = h
 	}
@@ -320,6 +371,7 @@ type natEntry struct {
 	dst  netip.AddrPort // where the app wanted to go
 	last atomic.Int64
 	open atomic.Int32 // 1 while the engine serves the connection
+	born time.Time    // when the app's first packet (SYN) arrived
 }
 
 func (n *natEntry) touch() { n.last.Store(time.Now().UnixNano()) }
@@ -363,7 +415,7 @@ func (t *natTable) lookup(app, dst netip.AddrPort, syn bool) *natEntry {
 		if _, used := t.ports[p]; used {
 			continue
 		}
-		en := &natEntry{port: p, app: app, dst: dst}
+		en := &natEntry{port: p, app: app, dst: dst, born: time.Now()}
 		en.touch()
 		en.open.Store(1)
 		t.ports[p] = en

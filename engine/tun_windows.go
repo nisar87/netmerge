@@ -20,9 +20,9 @@ import (
 	"unsafe"
 )
 
-// Windows: the virtual adapter is Wintun (wintun.dll, shipped inside NetMerge.exe). Addresses, routes, DNS and the
-// firewall permission are set with netsh; every route lives on the adapter itself (so it disappears with it),
-// except the "keep local addresses out" routes, which point at the real default gateway and are removed on stop.
+// Windows: the virtual adapter is Wintun (wintun.dll, shipped inside NetMerge.exe). Addresses, settings and routes
+// are set with the IP Helper API (winnet_windows.go); every route lives on the adapter itself (so it disappears with
+// it), except the "keep local addresses out" routes, which point at the real default gateway and are removed on stop.
 
 //go:embed wintun
 var wintunFS embed.FS
@@ -89,6 +89,7 @@ type wintunDev struct {
 	event   uintptr
 	name    string
 	index   int
+	luid    uint64
 	closed  bool
 	mu      sync.Mutex
 }
@@ -122,7 +123,7 @@ func openTun(name string, mtu int) (tunDevice, error) {
 		return nil, fmt.Errorf("cannot start the virtual adapter: %v", err)
 	}
 	ev, _, _ := wtEvent.Call(s)
-	return &wintunDev{adapter: h, session: s, event: ev, name: name, index: int(idx)}, nil
+	return &wintunDev{adapter: h, session: s, event: ev, name: name, index: int(idx), luid: luid}, nil
 }
 
 func (d *wintunDev) Name() string { return d.name }
@@ -185,7 +186,8 @@ func (d *wintunDev) Close() error {
 
 type winState struct {
 	idx      int
-	excludes []string // prefixes kept out of the capture
+	luid     uint64
+	excludes []netip.Prefix // ranges kept out of the capture (routes on the real line)
 	exGW     netip.Addr
 	exIdx    int
 	mu       sync.Mutex
@@ -224,70 +226,56 @@ func netsh(args ...string) error {
 
 func (t *tunStack) setupOS(c *Config) error {
 	d := t.dev.(*wintunDev)
-	ws := &winState{idx: d.index, stop: make(chan struct{})}
+	ws := &winState{idx: d.index, luid: d.luid, stop: make(chan struct{})}
 	t.osState = ws
-	idx := itoa(d.index)
-	steps := [][]string{
-		{"interface", "ipv4", "set", "address", "name=" + idx, "source=static", "address=" + tunGW4.String(), "mask=255.255.0.0"},
-		{"interface", "ipv4", "set", "subinterface", idx, "mtu=" + itoa(t.mtu), "store=active"},
-		{"interface", "ipv4", "set", "interface", idx, "metric=1"},
+	if err := addAddress(d.luid, netip.PrefixFrom(tunGW4, tunNet4.Bits())); err != nil {
+		return err
 	}
-	for _, s := range steps {
-		if err := netsh(s...); err != nil {
-			return err
-		}
+	if err := setInterface(d.luid, false, t.mtu, 1); err != nil {
+		t.e.log.Warnf("[TUN] adapter settings: %v", err)
 	}
 	// IPv6 too (best effort: some PCs have IPv6 switched off)
-	if err := netsh("interface", "ipv6", "add", "address", "interface="+idx, "address="+tunGW6.String()+"/126", "store=active"); err == nil {
-		netsh("interface", "ipv6", "set", "subinterface", idx, "mtu="+itoa(max(t.mtu, 1280)), "store=active")
-		netsh("interface", "ipv6", "set", "interface", idx, "metric=1")
+	if err := addAddress(d.luid, netip.PrefixFrom(tunGW6, 126)); err == nil {
+		_ = setInterface(d.luid, true, max(t.mtu, 1280), 1)
 	} else {
 		t.e.log.Warnf("[TUN] IPv6 address: %v", err)
 	}
+	tAddr := time.Now()
+	t.ensureFirewall()
+	tFw := time.Now()
 	// wait until Windows really has the address (the listener binds to it)
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 100; i++ {
 		if c, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: tunGW4.AsSlice()}); err == nil {
 			c.Close()
 			break
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
-	// The firewall must let rewritten connections in: they arrive from the adapter (a "public" network to Windows)
-	// at the engine's listener. The rule names the engine's program and the adapter's own addresses; if Windows
-	// cannot use the program path, the addresses alone are enough (only this adapter has them).
-	netsh("advfirewall", "firewall", "delete", "rule", "name=NetMerge engine")
-	local := "localip=" + tunGW4.String() + "," + tunGW6.String()
-	added := false
-	if exe, err := os.Executable(); err == nil {
-		added = netsh("advfirewall", "firewall", "add", "rule", "name=NetMerge engine", "dir=in", "action=allow",
-			"program="+longPath(exe), local, "enable=yes", "profile=any") == nil
-	}
-	if !added {
-		if err := netsh("advfirewall", "firewall", "add", "rule", "name=NetMerge engine", "dir=in", "action=allow",
-			local, "enable=yes", "profile=any"); err != nil {
-			t.e.log.Warnf("[TUN] firewall: %v", firstLine(err.Error()))
-		}
-	}
+	tReady := time.Now()
 	if t.hijack.Load() {
-		netsh("interface", "ipv4", "set", "dnsservers", "name="+idx, "source=static", "address="+tunDNS4.String(), "register=none", "validate=no")
+		go netsh("interface", "ipv4", "set", "dnsservers", "name="+itoa(d.index), "source=static", "address="+tunDNS4.String(), "register=none", "validate=no")
 	}
 	// the PC's default line, for DIRECT and for keeping local addresses out
 	t.watchOS()
 	if c.Tun.AutoRoute {
-		routes4 := c.Tun.RouteAddress
-		if len(routes4) == 0 {
-			routes4 = []string{"0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"}
+		routes := c.Tun.RouteAddress
+		if len(routes) == 0 {
+			routes = []string{"0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"}
 		}
-		for _, r := range routes4 {
-			fam, hop := "ipv4", "0.0.0.0"
-			if strings.Contains(r, ":") {
-				fam, hop = "ipv6", "::"
+		for _, r := range routes {
+			p, err := netip.ParsePrefix(r)
+			if err != nil {
+				return fmt.Errorf("route %q: %v", r, err)
 			}
-			if err := netsh("interface", fam, "add", "route", "prefix="+r, "interface="+idx, "nexthop="+hop, "metric=1", "store=active"); err != nil && fam == "ipv4" {
-				return err
+			// every route lives on the adapter, so it disappears with it
+			if err := addRoute(d.luid, d.index, p, netip.Addr{}, 1); err != nil && p.Addr().Is4() {
+				return fmt.Errorf("route %s: %v", r, err)
 			}
 		}
 		t.updateExcludes(c.Tun.RouteExcludeAddress)
+	}
+	if traceOn {
+		t.e.log.Infof("[TRACE] setup firewall=%dus address-ready=%dus routes=%dus", tFw.Sub(tAddr).Microseconds(), tReady.Sub(tFw).Microseconds(), time.Since(tReady).Microseconds())
 	}
 	go t.watchLoop(ws)
 	return nil
@@ -304,7 +292,7 @@ func (t *tunStack) teardownOS() {
 	ws.excludes = nil
 	ws.mu.Unlock()
 	for _, p := range ex {
-		netsh("interface", "ipv4", "delete", "route", "prefix="+p, "interface="+itoa(ix), "nexthop="+gw.String(), "store=active")
+		delRoute(luidOf(ix), ix, p, gw)
 	}
 }
 
@@ -315,27 +303,35 @@ func (t *tunStack) updateExcludes(list []string) {
 		return
 	}
 	_, gw, ix := defaultRoute(ws.idx)
+	var want []netip.Prefix
+	for _, s := range list {
+		if strings.Contains(s, ":") {
+			continue
+		}
+		if !strings.Contains(s, "/") {
+			s += "/32"
+		}
+		if p, err := netip.ParsePrefix(s); err == nil {
+			want = append(want, p.Masked())
+		}
+	}
 	ws.mu.Lock()
 	old, oldGW, oldIdx := ws.excludes, ws.exGW, ws.exIdx
 	ws.mu.Unlock()
-	same := gw == oldGW && ix == oldIdx && strings.Join(old, ",") == strings.Join(list, ",")
-	if same {
+	if gw == oldGW && ix == oldIdx && fmt.Sprint(old) == fmt.Sprint(want) {
 		return
 	}
 	for _, p := range old {
-		netsh("interface", "ipv4", "delete", "route", "prefix="+p, "interface="+itoa(oldIdx), "nexthop="+oldGW.String(), "store=active")
+		delRoute(luidOf(oldIdx), oldIdx, p, oldGW)
 	}
-	var now []string
+	var now []netip.Prefix
 	if gw.IsValid() && ix > 0 {
-		for _, p := range list {
-			if strings.Contains(p, ":") {
-				continue
-			}
-			if !strings.Contains(p, "/") {
-				p += "/32"
-			}
-			if netsh("interface", "ipv4", "add", "route", "prefix="+p, "interface="+itoa(ix), "nexthop="+gw.String(), "metric=1", "store=active") == nil {
+		l := luidOf(ix)
+		for _, p := range want {
+			if err := addRoute(l, ix, p, gw, 1); err == nil {
 				now = append(now, p)
+			} else {
+				t.e.log.Warnf("[TUN] keeping %s out: %v", p, err)
 			}
 		}
 	}

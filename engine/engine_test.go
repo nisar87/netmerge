@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
+	"math/rand"
 	"net"
 	"net/netip"
 	"strings"
@@ -323,5 +324,73 @@ func TestRouterPlanAndFallbackOrder(t *testing.T) {
 	}
 	if !r2.outs["SLOT1"].(*Selector).Set("LINK2") || r2.outs["SLOT1"].(*Selector).Set("NOPE") {
 		t.Fatal("selector accepts only its members")
+	}
+}
+
+// The quick (incremental) checksum update must give exactly what a full sum gives, for TCP and UDP, IPv4 and IPv6,
+// any packet size.
+func TestIncrementalChecksums(t *testing.T) {
+	rnd := rand.New(rand.NewSource(1))
+	mk := func(v6 bool, proto uint8, n int) []byte {
+		hl := 20
+		if v6 {
+			hl = 40
+		}
+		l4 := 8
+		if proto == protoTCP {
+			l4 = 20
+		}
+		b := make([]byte, hl+l4+n)
+		rnd.Read(b[hl:])
+		if v6 {
+			b[0] = 0x60
+			binary.BigEndian.PutUint16(b[4:6], uint16(l4+n))
+			b[6], b[7] = proto, 64
+			rnd.Read(b[8:40])
+		} else {
+			b[0] = 0x45
+			binary.BigEndian.PutUint16(b[2:4], uint16(len(b)))
+			b[8], b[9] = 64, proto
+			rnd.Read(b[12:20])
+			fixIPv4Header(b)
+		}
+		if proto == protoTCP {
+			b[hl+12] = 0x50
+		} else {
+			binary.BigEndian.PutUint16(b[hl+4:hl+6], uint16(8+n))
+		}
+		p, ok := parseIP(b)
+		if !ok {
+			t.Fatal("parse")
+		}
+		fixL4(p) // a correct starting checksum
+		return b
+	}
+	for i := 0; i < 2000; i++ {
+		v6, proto := i%2 == 1, uint8(protoTCP)
+		if i%4 >= 2 {
+			proto = protoUDP
+		}
+		b := mk(v6, proto, rnd.Intn(9000))
+		p, _ := parseIP(b)
+		var na, nb netip.Addr
+		if v6 {
+			var x, y [16]byte
+			rnd.Read(x[:])
+			rnd.Read(y[:])
+			na, nb = netip.AddrFrom16(x), netip.AddrFrom16(y)
+		} else {
+			var x, y [4]byte
+			rnd.Read(x[:])
+			rnd.Read(y[:])
+			na, nb = netip.AddrFrom4(x), netip.AddrFrom4(y)
+		}
+		setAddrs(&p, netip.AddrPortFrom(na, uint16(rnd.Intn(65536))), netip.AddrPortFrom(nb, uint16(rnd.Intn(65536))))
+		if !v6 && csumFold(csumAdd(0, p.b[:20])) != 0 {
+			t.Fatalf("packet %d: IPv4 header checksum", i)
+		}
+		if csumFold(csumAdd(pseudoSum(p.src, p.dst, proto, len(p.payload)), p.payload)) != 0 {
+			t.Fatalf("packet %d (v6 %v proto %d len %d): checksum wrong after the update", i, v6, proto, len(p.payload))
+		}
 	}
 }
