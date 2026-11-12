@@ -284,18 +284,28 @@ func (d *dnsService) udpQuery(ctx context.Context, server string, q []byte, ifac
 	if !ok || time.Until(dl) > 3*time.Second {
 		dl = time.Now().Add(3 * time.Second)
 	}
-	_ = c.SetDeadline(dl)
-	if _, err := c.WriteToUDP(q, ra); err != nil {
-		return nil, err
-	}
+	// a lost packet is asked again after 700 ms (as the system's own resolver does), until the deadline
 	buf := make([]byte, 4096)
 	for {
-		n, from, err := c.ReadFromUDP(buf)
-		if err != nil {
+		if _, err := c.WriteToUDP(q, ra); err != nil {
 			return nil, err
 		}
-		if from.IP.Equal(ra.IP) && n >= 12 && buf[0] == q[0] && buf[1] == q[1] {
-			return append([]byte(nil), buf[:n]...), nil
+		next := time.Now().Add(700 * time.Millisecond)
+		if next.After(dl) {
+			next = dl
+		}
+		_ = c.SetReadDeadline(next)
+		for {
+			n, from, err := c.ReadFromUDP(buf)
+			if err != nil {
+				if ne, ok := err.(net.Error); ok && ne.Timeout() && time.Now().Before(dl) {
+					break // ask again
+				}
+				return nil, err
+			}
+			if from.IP.Equal(ra.IP) && n >= 12 && buf[0] == q[0] && buf[1] == q[1] {
+				return append([]byte(nil), buf[:n]...), nil
+			}
 		}
 	}
 }
