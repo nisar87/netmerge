@@ -4,6 +4,16 @@ Combine two or three internet connections (for example a LAN cable and Wi-Fi fro
 
 NetMerge wraps the open-source [mihomo](https://github.com/MetaCubeX/mihomo) engine in a small app with a friendly window. NetMerge also carries its own, lighter engine (see `engine/`), which can be tried under Settings → Advanced → Network engine; mihomo stays the default while it is being tested.
 
+## Screenshots
+
+| Overview | Overview (dark) |
+|---|---|
+| ![Overview: both lines merged, the combined speed gauge, live traffic and the last 24 hours](docs/screenshots/overview-light.png) | ![The same page in the dark theme](docs/screenshots/overview-dark.png) |
+| **Usage** | **Ad and tracker blocking** |
+| ![Usage: data per line, allowance forecast and 31 days of daily use](docs/screenshots/usage-light.png) | ![Blocking: block lists, the sites blocked today, own block and allow lists](docs/screenshots/protection-blocking-light.png) |
+
+More pages (connections, speed test, apps, sharing, settings, narrow window) are in [docs/screenshots](docs/screenshots). They show made-up test data, not a real PC.
+
 ## What it does
 
 - **Merges your connections.** In the default mode every new connection a program opens is handed to the line with the most spare speed right now (or, if you prefer, each website stays on one line, or everything uses one line with the others as backup), so downloads, uploads and many-connection programs (browsers, torrent clients, game launchers) use all lines at once.
