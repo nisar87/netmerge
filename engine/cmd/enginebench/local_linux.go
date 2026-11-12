@@ -67,7 +67,7 @@ func setupLocal() (func(), error) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	tg = targets{ifName: "nmveth-h", noBaseline: true, routes: []string{"203.0.113.0/24"},
+	tg = targets{ifName: "nmveth-h", noBaseline: true, blockCheck: true, routes: []string{"203.0.113.0/24"},
 		small: "http://203.0.113.10:8080/small", dnsServer: "10.200.0.2:53", dnsControl: bindTo("nmveth-h"),
 		tlsURL: "https://tls.bench.test/small", udpAddr: "203.0.113.10:5353", insecure: true,
 		downloads: []dl{

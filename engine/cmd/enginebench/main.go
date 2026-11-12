@@ -54,6 +54,7 @@ type targets struct {
 	downloads  []dl
 	insecure   bool
 	noBaseline bool // the test servers are reachable only through an engine
+	blockCheck bool // the test DNS answers every name, so blocking by name can be checked
 	dnsControl func(string, string, syscall.RawConn) error
 }
 
@@ -79,6 +80,7 @@ var baseMetrics = []metric{
 }
 
 var tailMetrics = []metric{
+	{"block_right", "Right block decisions, of 40 (blocked names refused, allowed ones not)", "count", true},
 	{"mem", "Engine memory at the end (working set)", "MB", false},
 	{"mem_peak", "Engine memory, peak", "MB", false},
 	{"cpu", "Engine CPU time for the whole round", "s", false},
@@ -192,7 +194,11 @@ func config(name string) []byte {
 			{"name": "SLOT1", "type": "select", "proxies": []string{"LINK1"}},
 			{"name": "AUTO", "type": "load-balance", "strategy": "round-robin", "proxies": []string{"SLOT1"}},
 		},
-		"rules": []string{"DOMAIN-SUFFIX,blocked.example,REJECT", "MATCH,AUTO"},
+		"rule-providers": map[string]any{
+			"nm_block": map[string]any{"type": "file", "behavior": "domain", "format": "text", "path": "./filters/nm_block.txt"},
+			"nm_allow": map[string]any{"type": "file", "behavior": "domain", "format": "text", "path": "./filters/nm_allow.txt"},
+		},
+		"rules": realRules(),
 		"sniffer": map[string]any{"enable": true, "force-dns-mapping": true, "parse-pure-ip": true, "override-destination": false,
 			"sniff": map[string]any{"HTTP": map[string]any{"ports": []any{80, "8080-8880"}}, "TLS": map[string]any{"ports": []any{443}}}},
 	}
@@ -204,6 +210,9 @@ func runRound(name, path string) (map[string]float64, error) {
 	dir, _ := os.MkdirTemp("", "bench-"+name)
 	defer os.RemoveAll(dir)
 	os.WriteFile(filepath.Join(dir, "config.yaml"), config(name), 0o644)
+	os.MkdirAll(filepath.Join(dir, "filters"), 0o755)
+	os.WriteFile(filepath.Join(dir, "filters", "nm_block.txt"), blockList(), 0o644)
+	os.WriteFile(filepath.Join(dir, "filters", "nm_allow.txt"), []byte("+.github.com\n+.allowed.example\n"), 0o644)
 	logf, _ := os.Create(filepath.Join(os.TempDir(), "bench-"+name+".log"))
 	defer logf.Close()
 	start := time.Now()
@@ -265,6 +274,24 @@ func runRound(name, path string) (map[string]float64, error) {
 		}
 	}
 	res["udp"] = median(udp)
+
+	if tg.blockCheck {
+		// accuracy: names on the block list are refused (HTTP and HTTPS), names also on the allow list are not
+		right := 0
+		for i := 0; i < 10; i++ {
+			for _, u := range []string{fmt.Sprintf("http://a%d.blocked.example:8080/small", i), fmt.Sprintf("https://b%d.blocked.example/small", i)} {
+				if _, err := timeGetT(c, u, 3*time.Second); err != nil {
+					right++
+				}
+			}
+			for _, u := range []string{fmt.Sprintf("http://a%d.allowed.example:8080/small", i), fmt.Sprintf("https://b%d.allowed.example/small", i)} {
+				if _, err := timeGetT(c, u, 3*time.Second); err == nil {
+					right++
+				}
+			}
+		}
+		res["block_right"] = float64(right)
+	}
 
 	for _, d := range tg.downloads {
 		var prof chan []byte
@@ -594,4 +621,33 @@ func envOr(k, d string) string {
 		return v
 	}
 	return d
+}
+
+// realRules: the shape of the rules NetMerge writes (program rules, VPN ports, the block list with its allow
+// list, call programs, sign-in sites, then everything else merged)
+func realRules() []string {
+	var r []string
+	for _, p := range []string{"swgvc", "neservice", "negui", "openvpn", "wireguard", "forticlient", "nordvpn", "expressvpn", "anydesk", "mstsc", "ms-teams", "Teams", "Zoom", "Discord", "Skype", "slack", "WhatsApp", "webex"} {
+		r = append(r, "PROCESS-NAME-REGEX,(?i)^"+p+"\\.exe$,LINK1")
+	}
+	r = append(r, "DST-PORT,500,LINK1", "DST-PORT,4500,LINK1",
+		"AND,((RULE-SET,nm_block),(NOT,((RULE-SET,nm_allow)))),REJECT",
+		"DOMAIN-SUFFIX,accounts.google.com,AUTO", "DOMAIN-SUFFIX,login.live.com,AUTO", "DOMAIN-SUFFIX,paypal.com,AUTO",
+		"DOMAIN-KEYWORD,bank,AUTO", "IP-CIDR,10.0.0.0/8,DIRECT,no-resolve", "IP-CIDR,192.168.0.0/16,DIRECT,no-resolve", "MATCH,AUTO")
+	return r
+}
+
+var blockOnce []byte
+
+// blockList: a block list the size of NetMerge's real one (about 350,000 names)
+func blockList() []byte {
+	if blockOnce == nil {
+		var b strings.Builder
+		for i := 0; i < 350000; i++ {
+			fmt.Fprintf(&b, "+.ad%d.tracker%d.example\n", i, i%977)
+		}
+		b.WriteString("+.blocked.example\n+.allowed.example\n")
+		blockOnce = []byte(b.String())
+	}
+	return blockOnce
 }
