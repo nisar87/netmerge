@@ -53,8 +53,9 @@ type targets struct {
 	udpNTP     bool // udpAddr is an NTP server (else: an echo server)
 	downloads  []dl
 	insecure   bool
-	noBaseline bool // the test servers are reachable only through an engine
-	blockCheck bool // the test DNS answers every name, so blocking by name can be checked
+	noBaseline bool   // the test servers are reachable only through an engine
+	deadIf     string // a second line whose packets go nowhere (for the dead-line test)
+	blockCheck bool   // the test DNS answers every name, so blocking by name can be checked
 	dnsControl func(string, string, syscall.RawConn) error
 }
 
@@ -81,6 +82,8 @@ var baseMetrics = []metric{
 }
 
 var tailMetrics = []metric{
+	{"dead_ok", "One of two lines silently dead: new connections that worked, of 20", "count", true},
+	{"dead_time", "One of two lines silently dead: time per new connection (median, failures count 6 s)", "ms", false},
 	{"block_right", "Right block decisions, of 40 (blocked names refused, allowed ones not)", "count", true},
 	{"mem", "Engine memory at the end (working set)", "MB", false},
 	{"mem_peak", "Engine memory, peak", "MB", false},
@@ -176,7 +179,11 @@ func baseline() map[string]float64 {
 
 // config mirrors what NetMerge writes (see config.go in the app): DNS is left to the PC (the engine's own DNS is
 // off), names come from the TLS/HTTP sniffer, only the test addresses are captured.
-func config(name string) []byte {
+func config(name string) []byte { return configWith(name, false) }
+
+// configWith: withDead adds a second line that has silently stopped working (its packets go nowhere), with the
+// same slot layout NetMerge uses (each slot points at a line, AUTO takes the slots in turn)
+func configWith(name string, withDead bool) []byte {
 	tun := map[string]any{"enable": true, "auto-route": true, "auto-detect-interface": true, "route-address": tg.routes, "mtu": 9000}
 	if name != "netmerge" {
 		tun["stack"] = "mixed" // what NetMerge uses with mihomo by default
@@ -187,14 +194,11 @@ func config(name string) []byte {
 	cfg := map[string]any{
 		"mode": "rule", "log-level": "info", "ipv6": false, "allow-lan": false, "find-process-mode": envOr("BENCH_FIND", "always"),
 		"unified-delay": true, "tcp-concurrent": false, "external-controller": apiAddr, "secret": secret,
-		"profile": map[string]any{"store-selected": false, "store-fake-ip": false},
-		"tun":     tun,
-		"dns":     map[string]any{"enable": false},
-		"proxies": []map[string]any{{"name": "LINK1", "type": "direct", "interface-name": tg.ifName, "udp": true}},
-		"proxy-groups": []map[string]any{
-			{"name": "SLOT1", "type": "select", "proxies": []string{"LINK1"}},
-			{"name": "AUTO", "type": "load-balance", "strategy": "round-robin", "proxies": []string{"SLOT1"}},
-		},
+		"profile":      map[string]any{"store-selected": false, "store-fake-ip": false},
+		"tun":          tun,
+		"dns":          map[string]any{"enable": false},
+		"proxies":      proxies(withDead),
+		"proxy-groups": groups(withDead),
 		"rule-providers": map[string]any{
 			"nm_block": map[string]any{"type": "file", "behavior": "domain", "format": "text", "path": "./filters/nm_block.txt"},
 			"nm_allow": map[string]any{"type": "file", "behavior": "domain", "format": "text", "path": "./filters/nm_allow.txt"},
@@ -317,6 +321,12 @@ func runRound(name, path string) (map[string]float64, error) {
 			}
 		}
 	}
+	if tg.deadIf != "" {
+		ok, total, med := deadLine(name, dir)
+		res["dead_ok"], res["dead_time"] = ok, med
+		_ = total
+	}
+
 	// how many connections the engine logged (a check that the measured traffic really went through it)
 	if b, err := os.ReadFile(logf.Name()); err == nil {
 		res["logged_tcp"] = float64(strings.Count(string(b), "[TCP]"))
@@ -594,6 +604,9 @@ func report(names []string, res map[string]result, base map[string]float64) {
 			vals = append(vals, v)
 			row += fmt.Sprintf(" %.2f |", v)
 		}
+		if allZero(vals) {
+			continue // not measured in this setting
+		}
 		best := ""
 		if len(vals) == 2 && vals[0] > 0 && vals[1] > 0 {
 			i, j := 0, 1
@@ -657,4 +670,68 @@ func blockList() []byte {
 		blockOnce = []byte(b.String())
 	}
 	return blockOnce
+}
+
+func proxies(withDead bool) []map[string]any {
+	p := []map[string]any{{"name": "LINK1", "type": "direct", "interface-name": tg.ifName, "udp": true}}
+	if withDead {
+		p = append(p, map[string]any{"name": "LINK2", "type": "direct", "interface-name": tg.deadIf, "udp": true})
+	}
+	return p
+}
+
+func groups(withDead bool) []map[string]any {
+	if !withDead {
+		return []map[string]any{
+			{"name": "SLOT1", "type": "select", "proxies": []string{"LINK1"}},
+			{"name": "AUTO", "type": "load-balance", "strategy": "round-robin", "proxies": []string{"SLOT1"}},
+		}
+	}
+	return []map[string]any{
+		{"name": "SLOT1", "type": "select", "proxies": []string{"LINK1", "LINK2"}},
+		{"name": "SLOT2", "type": "select", "proxies": []string{"LINK2", "LINK1"}},
+		{"name": "AUTO", "type": "load-balance", "strategy": "round-robin", "proxies": []string{"SLOT1", "SLOT2"}},
+	}
+}
+
+// deadLine: one of two lines stops answering (no error, packets just vanish), as when a phone's data runs out
+// or a router hangs. Until NetMerge notices (tens of seconds), new connections keep being given to it.
+func deadLine(path, dir string) (okCount, total float64, med float64) {
+	os.WriteFile(filepath.Join(dir, "config.yaml"), configWith(filepath.Base(path), true), 0o644)
+	req, _ := http.NewRequest("PUT", "http://"+apiAddr+"/configs?force=true", strings.NewReader(`{"path":"`+strings.ReplaceAll(filepath.Join(dir, "config.yaml"), `\`, `\\`)+`"}`))
+	req.Header.Set("Authorization", "Bearer "+secret)
+	if resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req); err == nil {
+		resp.Body.Close()
+	}
+	// point the slots the way NetMerge does (one at each line)
+	for slot, line := range map[string]string{"SLOT1": "LINK1", "SLOT2": "LINK2"} {
+		b, _ := json.Marshal(map[string]string{"name": line})
+		r, _ := http.NewRequest("PUT", "http://"+apiAddr+"/proxies/"+slot, strings.NewReader(string(b)))
+		r.Header.Set("Authorization", "Bearer "+secret)
+		if resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(r); err == nil {
+			resp.Body.Close()
+		}
+	}
+	time.Sleep(500 * time.Millisecond)
+	c := newClient()
+	var times []float64
+	for i := 0; i < 20; i++ {
+		total++
+		if d, err := timeGetT(c, tg.small, 6*time.Second); err == nil {
+			okCount++
+			times = append(times, d)
+		} else {
+			times = append(times, 6000)
+		}
+	}
+	return okCount, total, median(times)
+}
+
+func allZero(v []float64) bool {
+	for _, x := range v {
+		if x != 0 {
+			return false
+		}
+	}
+	return true
 }

@@ -22,8 +22,11 @@ func sh(args ...string) error {
 // servers inside, reachable from here over the cable (the engines' line).
 func setupLocal() (func(), error) {
 	exec.Command("ip", "rule", "del", "pref", "100").Run()
+	exec.Command("ip", "rule", "del", "pref", "101").Run()
 	exec.Command("ip", "netns", "del", "nmbench").Run()
+	exec.Command("ip", "netns", "del", "nmdead").Run()
 	exec.Command("ip", "link", "del", "nmveth-h").Run()
+	exec.Command("ip", "link", "del", "nmdead-h").Run()
 	steps := [][]string{
 		{"ip", "netns", "add", "nmbench"},
 		{"ip", "link", "add", "nmveth-h", "type", "veth", "peer", "name", "nmveth-f"},
@@ -40,9 +43,22 @@ func setupLocal() (func(), error) {
 		// (a route in the main table would let mihomo's routing rules skip its adapter)
 		{"ip", "route", "add", "203.0.113.0/24", "via", "10.200.0.2", "dev", "nmveth-h", "table", "4242"},
 		{"ip", "rule", "add", "oif", "nmveth-h", "lookup", "4242", "pref", "100"},
+		// a second line that has silently died: its packets reach a namespace that forwards nothing
+		{"ip", "netns", "add", "nmdead"},
+		{"ip", "link", "add", "nmdead-h", "type", "veth", "peer", "name", "nmdead-f"},
+		{"ip", "link", "set", "nmdead-f", "netns", "nmdead"},
+		{"ip", "addr", "add", "10.201.0.1/24", "dev", "nmdead-h"},
+		{"ip", "link", "set", "nmdead-h", "up"},
+		{"ip", "netns", "exec", "nmdead", "ip", "addr", "add", "10.201.0.2/24", "dev", "nmdead-f"},
+		{"ip", "netns", "exec", "nmdead", "ip", "link", "set", "nmdead-f", "up"},
+		{"ip", "route", "add", "203.0.113.0/24", "via", "10.201.0.2", "dev", "nmdead-h", "table", "4243"},
+		{"ip", "rule", "add", "oif", "nmdead-h", "lookup", "4243", "pref", "101"},
 	}
 	cleanup := func() {
 		exec.Command("ip", "rule", "del", "pref", "100").Run()
+		exec.Command("ip", "rule", "del", "pref", "101").Run()
+		exec.Command("ip", "netns", "del", "nmdead").Run()
+		exec.Command("ip", "link", "del", "nmdead-h").Run()
 		exec.Command("ip", "netns", "del", "nmbench").Run()
 		exec.Command("ip", "link", "del", "nmveth-h").Run()
 	}
@@ -67,7 +83,7 @@ func setupLocal() (func(), error) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	tg = targets{ifName: "nmveth-h", noBaseline: true, blockCheck: true, routes: []string{"203.0.113.0/24"},
+	tg = targets{ifName: "nmveth-h", noBaseline: true, blockCheck: true, deadIf: "nmdead-h", routes: []string{"203.0.113.0/24"},
 		small: "http://203.0.113.10:8080/small", dnsServer: "10.200.0.2:53", dnsControl: bindTo("nmveth-h"),
 		tlsURL: "https://tls.bench.test/small", udpAddr: "203.0.113.10:5353", insecure: true,
 		downloads: []dl{
