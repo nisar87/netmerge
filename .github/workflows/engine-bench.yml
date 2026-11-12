@@ -31,10 +31,24 @@ jobs:
           go build -o "$env:RUNNER_TEMP\nmengine.exe" ./cmd/nmengine
           go build -o "$env:RUNNER_TEMP\enginebench.exe" ./cmd/enginebench
       - name: Compare
-        run: '& "$env:RUNNER_TEMP\enginebench.exe" -rounds 3 -engine "mihomo=$env:RUNNER_TEMP\mihomo.exe" -engine "netmerge=$env:RUNNER_TEMP\nmengine.exe"'
+        env:
+          BENCH_PPROF: "1"
+        run: |
+          $env:TEMP = $env:RUNNER_TEMP; $env:TMP = $env:RUNNER_TEMP
+          & "$env:RUNNER_TEMP\enginebench.exe" -rounds 3 -engine "mihomo=$env:RUNNER_TEMP\mihomo.exe" -engine "netmerge=$env:RUNNER_TEMP\nmengine.exe"
+      - name: Where NetMerge's engine spent its time during the 8 downloads
+        if: always()
+        working-directory: engine
+        run: |
+          Get-ChildItem $env:RUNNER_TEMP -Filter netmerge-cpu-*.pprof | ForEach-Object {
+            Write-Output "== $($_.Name)"
+            go tool pprof -top -nodecount=40 "$env:RUNNER_TEMP\nmengine.exe" $_.FullName
+          }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: engine-logs
-          path: ${{ runner.temp }}/bench-*.log
+          path: |
+            ${{ runner.temp }}/bench-*.log
+            ${{ runner.temp }}/netmerge-cpu-*.pprof
           retention-days: 7

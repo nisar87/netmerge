@@ -6,7 +6,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/binary"
@@ -32,11 +31,17 @@ func (e *engineFlag) String() string     { return strings.Join(*e, ",") }
 func (e *engineFlag) Set(v string) error { *e = append(*e, v); return nil }
 
 const (
-	apiAddr   = "127.0.0.1:9797"
-	secret    = "bench"
-	bigBytes  = 100_000_000
-	partBytes = 25_000_000
+	apiAddr = "127.0.0.1:9797"
+	secret  = "bench"
+	hetzner = "https://ash-speed.hetzner.com/100MB.bin"
+	cfURL   = "https://speed.cloudflare.com/__down?bytes=25000000"
 )
+
+// names for the DNS measurement: real websites, each asked once per round
+var dnsNames = []string{"example.com", "example.org", "example.net", "wikipedia.org", "github.com", "microsoft.com",
+	"apple.com", "amazon.com", "bing.com", "yahoo.com", "reddit.com", "netflix.com", "zoom.us", "slack.com",
+	"dropbox.com", "adobe.com", "mozilla.org", "python.org", "golang.org", "nodejs.org", "debian.org", "ubuntu.com",
+	"cloudflare.com", "fastly.com", "akamai.com", "nytimes.com", "bbc.co.uk", "cnn.com", "imdb.com", "stackoverflow.com"}
 
 type result map[string][]float64 // metric -> values over rounds
 
@@ -50,8 +55,10 @@ var metrics = []struct {
 	{"dns", "DNS answer (median of 30)", "ms", false},
 	{"tls", "HTTPS first byte, new connection each time (median of 20)", "ms", false},
 	{"udp", "UDP round trip, NTP (median of 20)", "ms", false},
-	{"single", "One download, 100 MB", "Mbit/s", true},
-	{"parallel", "8 downloads at once, 8 x 25 MB", "Mbit/s", true},
+	{"single", "One download, 100 MB (Hetzner)", "Mbit/s", true},
+	{"parallel", "8 downloads at once, 8 x 100 MB (Hetzner)", "Mbit/s", true},
+	{"single_cf", "One download, 25 MB (Cloudflare)", "Mbit/s", true},
+	{"parallel_cf", "8 downloads at once, 8 x 25 MB (Cloudflare)", "Mbit/s", true},
 	{"mem", "Engine memory at the end (working set)", "MB", false},
 	{"mem_peak", "Engine memory, peak", "MB", false},
 	{"cpu", "Engine CPU time for the whole round", "s", false},
@@ -103,7 +110,7 @@ func fail(f string, a ...any) { fmt.Fprintf(os.Stderr, f+"\n", a...); os.Exit(1)
 
 // baseline: the same small requests without any engine, to show what the internet itself takes
 func baseline() map[string]float64 {
-	c := newClient(nil)
+	c := newClient()
 	var conn []float64
 	for i := 0; i < 15; i++ {
 		if d, err := timeGet(c, "http://1.1.1.1/cdn-cgi/trace"); err == nil {
@@ -148,6 +155,7 @@ func runRound(name, path, ifName string) (map[string]float64, error) {
 	defer logf.Close()
 	start := time.Now()
 	cmd := exec.Command(path, "-d", dir)
+	cmd.Env = append(os.Environ(), "NM_PPROF=127.0.0.1:6060")
 	cmd.Stdout, cmd.Stderr = logf, logf
 	if err := cmd.Start(); err != nil {
 		return nil, err
@@ -157,7 +165,7 @@ func runRound(name, path, ifName string) (map[string]float64, error) {
 		time.Sleep(2 * time.Second) // let the adapter go away before the next engine
 	}()
 	res := map[string]float64{}
-	c := newClient(nil)
+	c := newClient()
 	ok := false
 	for time.Since(start) < 30*time.Second {
 		if _, err := timeGetT(c, "http://1.1.1.1/cdn-cgi/trace", 2*time.Second); err == nil {
@@ -181,22 +189,14 @@ func runRound(name, path, ifName string) (map[string]float64, error) {
 	res["conn"], res["conn_p90"] = median(conn), pct(conn, 0.9)
 
 	var dns []float64
-	var fake netip.Addr
-	for i := 0; i < 30; i++ {
-		d, a, err := dnsQuery(fmt.Sprintf("bench%d-%d.example.com", i, time.Now().UnixNano()%1e6))
-		if err == nil {
+	for _, n := range dnsNames {
+		if d, a, err := dnsQuery(n); err == nil && a.IsValid() {
 			dns = append(dns, d)
 		}
-		_ = a
 	}
 	res["dns"] = median(dns)
-	if _, a, err := dnsQuery("speed.cloudflare.com"); err == nil {
-		fake = a
-	} else {
-		return res, fmt.Errorf("dns: %v", err)
-	}
 
-	sc := newClient(&fake)
+	sc := newClient()
 	var tl []float64
 	for i := 0; i < 20; i++ {
 		if d, err := timeGet(sc, "https://speed.cloudflare.com/__down?bytes=1000"); err == nil {
@@ -213,15 +213,26 @@ func runRound(name, path, ifName string) (map[string]float64, error) {
 	}
 	res["udp"] = median(udp)
 
-	if mbps, err := download(&fake, 1, bigBytes); err == nil {
-		res["single"] = mbps
-	} else {
-		fmt.Println("  single download:", err)
-	}
-	if mbps, err := download(&fake, 8, partBytes); err == nil {
-		res["parallel"] = mbps
-	} else {
-		fmt.Println("  parallel download:", err)
+	for _, d := range []struct {
+		key, url string
+		n        int
+		size     int64
+	}{{"single", hetzner, 1, 100 << 20}, {"parallel", hetzner, 8, 100 << 20}, {"single_cf", cfURL, 1, 25e6}, {"parallel_cf", cfURL, 8, 25e6}} {
+		var prof chan []byte
+		if d.key == "parallel" && name == "netmerge" && os.Getenv("BENCH_PPROF") != "" {
+			prof = make(chan []byte, 1)
+			go func() { prof <- fetch("http://127.0.0.1:6060/debug/pprof/profile?seconds=6") }()
+		}
+		if mbps, err := download(d.url, d.n, d.size); err == nil {
+			res[d.key] = mbps
+		} else {
+			fmt.Printf("  %s: %v\n", d.key, err)
+		}
+		if prof != nil {
+			if b := <-prof; len(b) > 0 {
+				os.WriteFile(filepath.Join(os.TempDir(), fmt.Sprintf("netmerge-cpu-%d.pprof", time.Now().Unix())), b, 0o644)
+			}
+		}
 	}
 	if ws, peak, cpu, err := procStats(cmd.Process.Pid); err == nil {
 		res["mem"], res["mem_peak"], res["cpu"] = float64(ws)/1e6, float64(peak)/1e6, cpu.Seconds()
@@ -246,17 +257,32 @@ func stop(cmd *exec.Cmd) {
 	<-done
 }
 
-func newClient(fake *netip.Addr) *http.Client {
-	tr := &http.Transport{Proxy: nil, DisableKeepAlives: true, ForceAttemptHTTP2: false,
-		TLSClientConfig: &tls.Config{ServerName: "speed.cloudflare.com"}}
-	if fake != nil {
-		a := *fake
-		tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			_, port, _ := net.SplitHostPort(addr)
-			return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(a.String(), port))
-		}
+// newClient opens a new connection per request; names are looked up through the captured DNS server (1.1.1.1),
+// which the engine answers itself with a fake address, so every connection goes through the engine.
+func newClient() *http.Client {
+	tr := &http.Transport{Proxy: nil, DisableKeepAlives: true, ForceAttemptHTTP2: false, TLSClientConfig: &tls.Config{},
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, _ := net.SplitHostPort(addr)
+			if _, err := netip.ParseAddr(host); err != nil {
+				_, a, err := dnsQuery(host)
+				if err != nil || !a.IsValid() {
+					return nil, fmt.Errorf("lookup %s through the engine failed: %v", host, err)
+				}
+				host = a.String()
+			}
+			return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(host, port))
+		}}
+	return &http.Client{Timeout: 180 * time.Second, Transport: tr}
+}
+
+func fetch(u string) []byte {
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Get(u)
+	if err != nil {
+		return nil
 	}
-	return &http.Client{Timeout: 120 * time.Second, Transport: tr}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return b
 }
 
 func timeGet(c *http.Client, u string) (float64, error) { return timeGetT(c, u, 10*time.Second) }
@@ -277,8 +303,8 @@ func timeGetT(c *http.Client, u string, to time.Duration) (float64, error) {
 	return d, nil
 }
 
-func download(fake *netip.Addr, n, size int) (float64, error) {
-	c := newClient(fake)
+func download(u string, n int, size int64) (float64, error) {
+	c := newClient()
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var total int64
@@ -288,7 +314,7 @@ func download(fake *netip.Addr, n, size int) (float64, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			resp, err := c.Get(fmt.Sprintf("https://speed.cloudflare.com/__down?bytes=%d", size))
+			resp, err := c.Get(u)
 			if err == nil {
 				var got int64
 				got, err = io.Copy(io.Discard, resp.Body)
@@ -305,8 +331,8 @@ func download(fake *netip.Addr, n, size int) (float64, error) {
 		}()
 	}
 	wg.Wait()
-	if firstErr != nil || total < int64(n*size) {
-		return 0, fmt.Errorf("got %d of %d bytes: %v", total, n*size, firstErr)
+	if firstErr != nil || total < int64(n)*size {
+		return 0, fmt.Errorf("got %d of %d bytes: %v", total, int64(n)*size, firstErr)
 	}
 	return float64(total) * 8 / time.Since(t).Seconds() / 1e6, nil
 }
@@ -336,12 +362,53 @@ func dnsQuery(name string) (float64, netip.Addr, error) {
 	}
 	d := ms(time.Since(t))
 	r = r[:n]
-	// the first A record at the end of the answer
-	if n >= 4 && bytes.Contains(r, []byte{0, 1, 0, 1}) && binary.BigEndian.Uint16(r[6:8]) > 0 {
-		a, _ := netip.AddrFromSlice(r[n-4:])
-		return d, a, nil
+	return d, firstA(r), nil
+}
+
+// firstA returns the first A record of a DNS answer.
+func firstA(r []byte) netip.Addr {
+	if len(r) < 12 {
+		return netip.Addr{}
 	}
-	return d, netip.Addr{}, nil
+	qd, an := int(binary.BigEndian.Uint16(r[4:6])), int(binary.BigEndian.Uint16(r[6:8]))
+	p := 12
+	skip := func() bool {
+		for p < len(r) {
+			l := int(r[p])
+			if l == 0 {
+				p++
+				return true
+			}
+			if l&0xc0 == 0xc0 {
+				p += 2
+				return true
+			}
+			p += 1 + l
+		}
+		return false
+	}
+	for i := 0; i < qd; i++ {
+		if !skip() {
+			return netip.Addr{}
+		}
+		p += 4
+	}
+	for i := 0; i < an; i++ {
+		if !skip() || p+10 > len(r) {
+			return netip.Addr{}
+		}
+		typ, rdlen := binary.BigEndian.Uint16(r[p:]), int(binary.BigEndian.Uint16(r[p+8:]))
+		p += 10
+		if p+rdlen > len(r) {
+			return netip.Addr{}
+		}
+		if typ == 1 && rdlen == 4 {
+			a, _ := netip.AddrFromSlice(r[p : p+4])
+			return a
+		}
+		p += rdlen
+	}
+	return netip.Addr{}
 }
 
 func ntp() (float64, error) {

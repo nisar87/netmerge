@@ -155,7 +155,6 @@ func (t *tunStack) readLoop() {
 			t.e.log.Debugf("[TUN] unreadable packet (%d bytes)", n)
 			continue
 		}
-		t.e.log.Debugf("[TUN] packet %s -> %s proto %d len %d", p.src, p.dst, p.proto, len(p.b))
 		switch p.proto {
 		case protoTCP:
 			t.tcpPacket(p)

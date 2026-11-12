@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -101,7 +102,7 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 	var c Config
-	if err := json.Unmarshal(b, &c); err != nil {
+	if err := json.Unmarshal(stripComments(b), &c); err != nil {
 		return nil, fmt.Errorf("the settings file is not valid JSON: %w", err)
 	}
 	if c.Mode == "" {
@@ -111,6 +112,18 @@ func LoadConfig(path string) (*Config, error) {
 		c.LogLevel = "info"
 	}
 	return &c, nil
+}
+
+// stripComments blanks whole-line "#" comments (NetMerge writes one at the top; YAML allows them, JSON does not).
+// Line numbers stay the same, so a JSON error still points at the right place.
+func stripComments(b []byte) []byte {
+	lines := bytes.Split(b, []byte("\n"))
+	for i, l := range lines {
+		if t := bytes.TrimSpace(l); len(t) > 0 && t[0] == '#' {
+			lines[i] = nil
+		}
+	}
+	return bytes.Join(lines, []byte("\n"))
 }
 
 // resolvePath turns a provider path ("./filters/x.txt") into a file under the config folder; paths may not leave it.

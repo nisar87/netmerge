@@ -204,6 +204,10 @@ func (e *Engine) startWith(own bool) error {
 		_ = os.Rename(logPath, logPath+".old")
 	}
 	lf, _ := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	var logStart int64
+	if st, err := os.Stat(logPath); err == nil {
+		logStart = st.Size() // error messages quote only what this start wrote, not the previous engine's lines
+	}
 	exe, args := engineCommand(own)
 	cmd := hiddenCmd(exe, args...)
 	pr, pw, perr := os.Pipe()
@@ -243,7 +247,7 @@ func (e *Engine) startWith(own bool) error {
 	for time.Now().Before(deadline) {
 		select {
 		case err := <-exited:
-			msg := "The engine stopped right after starting (" + fmt.Sprint(err) + "). " + tailFile(logPath, 6)
+			msg := "The engine stopped right after starting (" + fmt.Sprint(err) + "). " + tailSince(logPath, logStart, 4)
 			e.mu.Lock()
 			e.lastError, e.cmd = msg, nil
 			e.mu.Unlock()
@@ -266,7 +270,7 @@ func (e *Engine) startWith(own bool) error {
 		time.Sleep(300 * time.Millisecond)
 	}
 	_ = cmd.Process.Kill()
-	msg := "The engine did not respond. " + tailFile(logPath, 6)
+	msg := "The engine did not respond. " + tailSince(logPath, logStart, 4)
 	e.mu.Lock()
 	e.cmd, e.lastError = nil, msg
 	e.mu.Unlock()
@@ -401,6 +405,29 @@ func (e *Engine) Apply() error {
 	e.mu.Unlock()
 	logf("settings applied")
 	return nil
+}
+
+// tailSince returns the last n lines written to p after offset.
+func tailSince(p string, offset int64, n int) string {
+	f, err := os.Open(p)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	if _, err := f.Seek(offset, 0); err != nil {
+		return ""
+	}
+	b, _ := io.ReadAll(io.LimitReader(f, 1<<20))
+	var lines []string
+	for _, l := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		if l = strings.TrimSpace(l); l != "" && !strings.Contains(l, "level=info") {
+			lines = append(lines, l)
+		}
+	}
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
 }
 
 func tailFile(p string, n int) string {
