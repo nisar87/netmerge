@@ -346,7 +346,7 @@ func sample(slow bool) {
 			a.Links[ln]++
 			linkConns[ln]++
 		}
-		if s.DebugLog && d > 12500 {
+		if d > 12500 {
 			dst := c.Metadata.Host
 			if dst == "" {
 				dst = c.Metadata.DestIP
@@ -485,7 +485,9 @@ func sample(slow bool) {
 		appList = appList[:40]
 	}
 
-	if s.DebugLog && (totDown > 62500 || totUp > 62500) {
+	// the per-second line is always kept for the last few minutes (for diagnostics), and also written to
+	// rates.log when the debug log is on
+	if totDown > 62500 || totUp > 62500 {
 		var sb strings.Builder
 		fmt.Fprintf(&sb, "%s total dn=%.1f up=%.1f Mbps", time.Now().Format("15:04:05"), totDown*8/1e6, totUp*8/1e6)
 		for _, l := range links {
@@ -502,7 +504,7 @@ func sample(slow bool) {
 				fmt.Fprintf(&sb, "%s:%d ", labelFor(s, n), c)
 			}
 		}
-		appendRates(sb.String())
+		keepRate(sb.String(), s.DebugLog)
 		if len(dbgRows) > 0 && totDown > 2.5e6 {
 			sort.Slice(dbgRows, func(i, j int) bool { return dbgRows[i].down > dbgRows[j].down })
 			if len(dbgRows) > 16 {
@@ -513,7 +515,7 @@ func sample(slow bool) {
 			for _, r := range dbgRows {
 				fmt.Fprintf(&cb, " %s %.1f %s;", r.link, r.down*8/1e6, r.dst)
 			}
-			appendRates(cb.String())
+			keepRate(cb.String(), s.DebugLog)
 		}
 	}
 
@@ -571,6 +573,29 @@ func labelFor(s Settings, name string) string {
 		}
 	}
 	return name
+}
+
+var (
+	recentMu    sync.Mutex
+	recentRates []string // the last 600 rate lines (about 5 to 10 minutes of traffic)
+)
+
+func keepRate(line string, toFile bool) {
+	recentMu.Lock()
+	recentRates = append(recentRates, line)
+	if len(recentRates) > 600 {
+		recentRates = recentRates[len(recentRates)-600:]
+	}
+	recentMu.Unlock()
+	if toFile {
+		appendRates(line)
+	}
+}
+
+func recentRatesText() []byte {
+	recentMu.Lock()
+	defer recentMu.Unlock()
+	return []byte(strings.Join(recentRates, "\n"))
 }
 
 // rates.log: one line per second while traffic flows, so slow links can be diagnosed afterwards.
