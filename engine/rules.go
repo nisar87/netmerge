@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"time"
 	"bufio"
 	"fmt"
 	"net/netip"
@@ -9,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Metadata describes one connection while the engine decides where it goes.
