@@ -73,6 +73,7 @@ func (e *Engine) applyTun(c *Config) error {
 	if mtu < 1280 || mtu > 65000 {
 		mtu = 9000
 	}
+	began := time.Now()
 	dev, err := openTun("NetMerge", mtu)
 	if err != nil {
 		return err
@@ -103,7 +104,7 @@ func (e *Engine) applyTun(c *Config) error {
 		go t.accept(t.ln6)
 	}
 	go t.janitor()
-	e.log.Infof("[TUN] capturing traffic on %s (MTU %d)", dev.Name(), mtu)
+	e.log.Infof("[TUN] capturing traffic on %s (MTU %d), ready in %d ms", dev.Name(), mtu, time.Since(began).Milliseconds())
 	return nil
 }
 

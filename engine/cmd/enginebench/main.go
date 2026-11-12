@@ -18,6 +18,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -218,12 +219,21 @@ func runRound(name, path string) (map[string]float64, error) {
 	res := map[string]float64{}
 	c := newClient()
 	ok := false
+	// started = a connection that really went through the engine (it is in the engine's log); one that went
+	// past it (before its routes were in place) does not count
+	u, _ := url.Parse(tg.small)
+	mark := u.Host
+	if u.Port() == "" {
+		mark += ":80"
+	}
 	for time.Since(start) < 30*time.Second {
 		if _, err := timeGetT(c, tg.small, 2*time.Second); err == nil {
-			ok = true
-			break
+			if b, _ := os.ReadFile(logf.Name()); strings.Contains(string(b), "--> "+mark) {
+				ok = true
+				break
+			}
 		}
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 	if !ok {
 		return nil, fmt.Errorf("no captured connection within 30 s")
