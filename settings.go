@@ -37,6 +37,7 @@ type Settings struct {
 	Secret         string            `json:"secret"`
 	DebugLog       bool              `json:"debugLog"`
 	TunStack       string            `json:"tunStack"`
+	Engine         string            `json:"engine"` // "" = mihomo, "netmerge" = NetMerge's own engine (being tested)
 	TunMTU         int               `json:"tunMTU"`
 	Block          *BlockSettings    `json:"block"`
 	StackChosen    bool              `json:"stackChosen"` // the user picked the engine mode themselves

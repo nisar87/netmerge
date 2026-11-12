@@ -264,6 +264,7 @@ func registerUsageRoutes(mux *http.ServeMux) {
 func usageSave() {
 	usageMu.Lock()
 	defer usageMu.Unlock()
+	defer saveCountersLocked()
 	if !usageDirty {
 		return
 	}

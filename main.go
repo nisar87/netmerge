@@ -10,11 +10,18 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"time"
+
+	nmengine "netmerge/engine"
 )
 
 const uiPort = 9196
 
 func main() {
+	// "NetMerge.exe -engine -d <folder>": run as NetMerge's own network engine (started by NetMerge itself)
+	if len(os.Args) > 1 && os.Args[1] == "-engine" {
+		nmengine.Version = appVersion
+		os.Exit(nmengine.Run(os.Args[2:], os.Stdout))
+	}
 	background := flag.Bool("background", false, "start without opening the window")
 	autotest := flag.Bool("autotest", false, "run the speed test automatically after start")
 	dev := flag.String("root", "", "root folder (development)")
@@ -116,6 +123,9 @@ func main() {
 	go safely("tray", func() { runTray(url) })
 	if v := os.Getenv("NETMERGE_UPDATE_API"); v != "" {
 		updateAPI = v
+	}
+	if v := os.Getenv("NETMERGE_UPDATE_WEB"); v != "" {
+		updateWeb = v
 	}
 	go safely("updates", updateLoop)
 	go safely("providers", providerLoop)

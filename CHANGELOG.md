@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.17.0
+
+- **NetMerge's own network engine, to try.** Settings → Advanced → Network engine now offers "NetMerge engine (testing)" next to the standard engine (mihomo). It is written for NetMerge only, is part of NetMerge.exe (nothing extra to download) and does what NetMerge uses: merging over your lines, app and website rules, blocking, call protection, sharing with phones (proxy and Shadowsocks), and capturing the PC's traffic. New connections that would wait on a line that does not answer are moved to another line within about a second. If it cannot start, NetMerge uses the standard engine by itself and says so; Settings → Advanced → Engine shows which one runs. The standard engine stays the default.
+  - Tested: every check NetMerge has for an engine passes in CI with the new engine, the capture test runs on Linux and on a Windows machine (Wintun) in CI. **Not yet tested on a real PC with several lines**: please try it there and switch back if anything misbehaves.
+- **The window no longer freezes while merging starts.** Starting the engine used to hold the window for up to 15 seconds.
+- **NetMerge only closes its own engine.** It used to close every mihomo.exe on the PC, including other programs' copies.
+- **Speeds keep updating while the engine is checked.** The engine check every 5 seconds could hold up the speed reading for several seconds (seen 40 times in a real log as "sampler was held up").
+- **Line choices are set again right after settings change.** Saving a setting reloads the engine, which forgot which line each slot used until the next check ("slot check" lines in the log).
+- **Data used while NetMerge is closed is counted.** On the next start NetMerge adds what each adapter carried in between (to that day), unless Windows restarted meanwhile. Adapters' 64-bit counters are used for this, so more than 4 GB is counted right.
+- **Update check works when GitHub's API refuses** (it allows 60 checks an hour per internet address, which mobile networks share): NetMerge then reads the release page instead.
+
 ## 3.16.3
 
 - **Blocked ads from shared phones are now counted.** Ads were already blocked for a phone using Sharing, but "blocked today", the total and the "Blocked today" list missed them: NetMerge looked for a program name in the engine's log line, and a phone's line has none. On a real PC's log the old count caught 97 of 3,183 blocked connections (the other 3,086 came from a phone); now all are counted. A phone's entries show as "Shared device (its address)". Its websites may appear as an address instead of a name, because that is what the engine reports for them.

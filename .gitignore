@@ -9,3 +9,4 @@
 /netmerge
 *.syso
 versioninfo.json
+engine/wintun/amd64/wintun.dll

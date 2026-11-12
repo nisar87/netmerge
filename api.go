@@ -146,6 +146,9 @@ func routes() http.Handler {
 					s.TunStack, s.StackChosen = in.TunStack, true
 				}
 			}
+			if in.Engine == "" || in.Engine == "netmerge" {
+				s.Engine = in.Engine
+			}
 		})
 		go safely("quota check", quotaCheck)
 		if ns.AutoStart != old.AutoStart {
@@ -156,8 +159,8 @@ func routes() http.Handler {
 				return
 			}
 		}
-		if ns.TunStack != old.TunStack {
-			// the virtual adapter has to be rebuilt for a different network mode
+		if ns.TunStack != old.TunStack || ns.Engine != old.Engine {
+			// the virtual adapter has to be rebuilt for a different network mode or engine
 			if running, _, _, _ := engine.Status(); running {
 				engine.Stop()
 				time.Sleep(time.Second)

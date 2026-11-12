@@ -78,3 +78,15 @@ func publicNetworks() []string { return nil }
 func startUpdater(newExe, curExe, prevExe string) error {
 	return fmt.Errorf("updating is only available on Windows")
 }
+
+var fakeBoot = time.Now().Add(-time.Hour)
+
+func ifCounters64() map[int][2]uint64 {
+	out := map[int][2]uint64{}
+	for idx, v := range fakeTot {
+		out[idx] = [2]uint64{uint64(v[0]), uint64(v[1])}
+	}
+	return out
+}
+
+func bootTime() time.Time { return fakeBoot }

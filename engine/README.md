@@ -1,10 +1,11 @@
-# nmengine — NetMerge's own network engine (in development)
+# NetMerge's own network engine (being tested)
 
 NetMerge runs a network engine underneath it: today that is **mihomo** (downloaded at first start, see `enginedl.go`).
-This folder will hold NetMerge's own engine, `nmengine.exe`: a small engine that does exactly what NetMerge needs and
-nothing else. It is a separate Go module (`netmerge/engine`), so it shares no code with the app and cannot affect it.
-The app keeps using mihomo until a switch in **Settings → Advanced** turns the new engine on, and falls back to
-mihomo by itself if the new engine fails to start.
+This folder holds NetMerge's own engine: a small engine that does exactly what NetMerge needs and nothing else. It
+is a separate Go module (`netmerge/engine`, standard library only) that shares no code with the app. NetMerge.exe
+carries it and runs it as `NetMerge.exe -engine -d <config folder>` (`cmd/nmengine` builds it on its own, for tests).
+The app keeps using mihomo until **Settings → Advanced → Network engine** is set to "NetMerge engine (testing)",
+and falls back to mihomo by itself if the new engine does not start.
 
 ## The contract
 
@@ -23,32 +24,32 @@ NetMerge's real configuration, starts an engine binary and checks:
 | Each connection sent out on the adapter of the line it was given (`interface-name`) | yes (on loopback) |
 | Refused connections logged as `[TCP] src(app) --> host:port match … using REJECT` at the `info` level, so the counter in `blocking.go` sees them | yes, with NetMerge's own log reader |
 | Sharing: HTTP/SOCKS proxy port with password (407 without), Shadowsocks (aes-128-gcm) port | yes |
-| Capturing all traffic of the PC (virtual adapter, routes, DNS) | Windows only: checked on the real PC in stage 2 |
+| Capturing all traffic of the PC (virtual adapter, routes, DNS) | own engine: `tun_e2e_linux_test.go` (CI, root) and `tun_e2e_windows_test.go` (CI, a Windows machine with Wintun) |
 
 The CI job `engine-contract` runs this against mihomo 1.19.33 on every change, so the contract always describes
 what works today.
 
 ## Stages
 
-0. **Contract** (this): the test above, passing against mihomo.
-1. **Proxy-only engine**: config reading, rules, groups and line choice, binding to adapters, API, log, sharing
-   ports (HTTP/SOCKS, Shadowsocks). Must pass the contract in CI. Can be tried on the PC beside mihomo by pointing
-   one browser or a phone at its port.
-2. **Capturing traffic**: Wintun adapter and routes, a user-space TCP/IP stack (gVisor), finding the program of a
-   connection, website names from TLS/HTTP/QUIC, UDP, DNS (only for the custom DNS option). Tested on the real PC.
-3. **The switch**: Settings → Advanced → Engine, with automatic fallback to mihomo; speed comparisons, a 24-hour run,
-   sleep/wake and unplugging lines.
+0. **Contract**: the test above, passing against mihomo. Done.
+1. **Proxy part**: config, rules, groups and line choice, binding to adapters, API, log, sharing ports
+   (HTTP/SOCKS, Shadowsocks). Passes the contract in CI. Done.
+2. **Capturing traffic**: Wintun (Windows) or /dev/net/tun (Linux), routes and DNS, its own small TCP/IP handling
+   (the system's TCP does the heavy work: connections are rewritten to a local listener, no user-space TCP stack),
+   UDP sessions, the program of each connection, website names from TLS/HTTP/QUIC, fake-address DNS. Done; tested
+   in CI on Linux and on a Windows machine, not yet on a real PC with several lines.
+3. **The switch**: Settings → Advanced → Network engine, with automatic fallback to mihomo. Done (3.17.0).
+   Still to do on the real PC: speed comparisons, a 24-hour run, sleep/wake and unplugging lines.
 4. **Removing mihomo**, only when the new engine has been at least as good in daily use.
 
 ## Built to grow (not used yet)
 
-- IPv6 throughout.
 - "Where a connection goes out" is one interface, so something besides "this adapter" could be added later.
 - The line for a new connection can be chosen inside the engine (instead of NetMerge switching slots from outside).
 - Traffic arriving from the local network is handled like the PC's own.
 
 ## Rules for this code
 
-- Written from scratch; no code copied from mihomo (GPL-3.0). Libraries only with permissive licences (Go's own,
-  gVisor: Apache-2.0, Wintun: prebuilt DLL licensed for redistribution).
+- Written from scratch; no code copied from mihomo (GPL-3.0). Only Go's own library, plus Wintun (a prebuilt DLL
+  licensed for redistribution; `scripts/get-wintun.py` fetches it and checks its fingerprint).
 - Lighter than mihomo: only what the contract needs.

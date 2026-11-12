@@ -2,7 +2,7 @@
 
 Combine two or three internet connections (for example a LAN cable and Wi-Fi from two different providers) into one faster connection on **Windows 11**, with no extra hardware, no paid service and no relay server.
 
-NetMerge wraps the open-source [mihomo](https://github.com/MetaCubeX/mihomo) engine in a small app with a friendly window.
+NetMerge wraps the open-source [mihomo](https://github.com/MetaCubeX/mihomo) engine in a small app with a friendly window. NetMerge also carries its own, lighter engine (see `engine/`), which can be tried under Settings → Advanced → Network engine; mihomo stays the default while it is being tested.
 
 ## What it does
 

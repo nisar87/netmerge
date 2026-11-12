@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -63,7 +64,9 @@ type AppStat struct {
 type Snapshot struct {
 	Running   bool            `json:"running"`
 	Version   string          `json:"version"`
-	App       string          `json:"app"` // NetMerge version (the window reloads itself when it changes)
+	OwnEngine bool            `json:"ownEngine"` // NetMerge's own engine is running (not mihomo)
+	FellBack  bool            `json:"fellBack"`  // NetMerge's own engine was chosen but would not start, so mihomo runs
+	App       string          `json:"app"`       // NetMerge version (the window reloads itself when it changes)
 	Error     string          `json:"error"`
 	Uptime    int64           `json:"uptime"`
 	Links     []LinkStat      `json:"links"`
@@ -118,9 +121,14 @@ func push(h []float64, v float64) []float64 {
 	return h
 }
 
+var (
+	checkBusy    atomic.Bool
+	checkChanged int // touched only by the running engine check
+)
+
 func statsLoop() {
 	t := time.NewTicker(time.Second)
-	n, changed := 0, 0
+	n := 0
 	var last time.Time
 	for range t.C {
 		if now := time.Now(); resumeDetected(last, now) {
@@ -128,21 +136,25 @@ func statsLoop() {
 		}
 		last = time.Now()
 		safely("sampler", func() { sample(n%5 == 0) })
-		if n%5 == 0 {
-			safely("engine check", func() {
-				engine.Check()
-				// a connection was plugged in / removed / re-weighted: reload the engine (after it stays that way 10 s)
-				if running, _, _, _ := engine.Status(); running && engine.AppliedKey() != activeKey() {
-					changed++
-					if changed >= 2 {
-						changed = 0
-						logf("connections changed - updating the engine")
-						go safely("apply", func() { _ = engine.Apply() })
+		if n%5 == 0 && checkBusy.CompareAndSwap(false, true) {
+			// the engine check can wait seconds (an engine that does not answer, a restart): it runs beside the
+			// sampler, so the speeds keep updating every second meanwhile
+			go func() {
+				defer checkBusy.Store(false)
+				safely("engine check", func() {
+					engine.Check()
+					// a connection was plugged in / removed / re-weighted: reload the engine (after it stays that way 10 s)
+					if running, _, _, _ := engine.Status(); running && engine.AppliedKey() != activeKey() {
+						if checkChanged++; checkChanged >= 2 {
+							checkChanged = 0
+							logf("connections changed - updating the engine")
+							go safely("apply", func() { _ = engine.Apply() })
+						}
+					} else {
+						checkChanged = 0
 					}
-				} else {
-					changed = 0
-				}
-			})
+				})
+			}()
 		}
 		n++
 	}
@@ -207,6 +219,9 @@ func sample(slow bool) {
 		s = getSettings()
 	}
 	counters := ifCounters()
+	c64 := ifCounters64()
+	countOfflineUsage(byName, c64)
+	ctrs := map[string]ctrLink{}
 	// the byte counters were read just now: their interval is measured between reads, not from the start of the
 	// sample (a slow engine reply in between used to stretch one interval and shrink the next: false 200+ Mbps spikes)
 	cNow := time.Now()
@@ -410,6 +425,9 @@ func sample(slow bool) {
 					usageAdd(l.Name, uint64(dr), uint64(dtx))
 				}
 				tr.lastRx, tr.lastTx, tr.have = c[0], c[1], true
+				if c8, ok := c64[a.Index]; ok {
+					ctrs[l.Name] = ctrLink{Idx: a.Index, Desc: a.Desc, Rx: c8[0], Tx: c8[1]}
+				}
 			}
 		} else {
 			tr.have, tr.rx, tr.tx = false, 0, 0
@@ -442,6 +460,7 @@ func sample(slow bool) {
 		}
 		links = append(links, ls)
 	}
+	usageSetCounters(ctrs)
 	totalHist = push(totalHist, totDown)
 	if totDown > peak {
 		peak = totDown
@@ -502,7 +521,8 @@ func sample(slow bool) {
 	if running {
 		up = int64(time.Since(started).Seconds())
 	}
-	snap = Snapshot{Running: running, Version: version, App: appVersion, Error: errMsg, Uptime: up, Links: links, Apps: appList,
+	ownEng, fellBack := engine.Own()
+	snap = Snapshot{Running: running, Version: version, OwnEngine: ownEng, FellBack: fellBack, App: appVersion, Error: errMsg, Uptime: up, Links: links, Apps: appList,
 		TotalDown: totDown, TotalUp: totUp, PeakDown: peak, Conns: len(mc.Connections),
 		Total: append([]float64(nil), totalHist...)}
 	_, snap.Smart = dispatchSlotsOf("")

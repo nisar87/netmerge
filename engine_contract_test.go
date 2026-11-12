@@ -2,6 +2,7 @@ package main
 
 // The engine contract: everything NetMerge needs from the network engine, checked against a real engine binary.
 // Run with NM_ENGINE_BIN=/path/to/engine go test -run TestEngineContract -v
+// (NetMerge itself as the engine: NM_ENGINE_BIN=./netmerge NM_ENGINE_ARGS=-engine)
 // It runs against mihomo today; NetMerge's own engine (engine/) has to pass the same checks before it can replace it.
 // The virtual adapter (TUN) needs Windows and admin rights, so here traffic enters through the sharing ports
 // (HTTP/SOCKS proxy and Shadowsocks) - the rules, line choice, API and log are the same for both ways in.
@@ -122,7 +123,11 @@ func startContractEngine(t *testing.T, bin string) *contractEngine {
 	_ = os.WriteFile(filepath.Join(e.dir, "filters", "nm_block.txt"), []byte("+.blocked.test\n+.allowed.test\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(e.dir, "filters", "nm_allow.txt"), []byte("+.allowed.test\n"), 0o644)
 
-	e.cmd = exec.Command(bin, "-d", e.dir)
+	var pre []string
+	if v := os.Getenv("NM_ENGINE_ARGS"); v != "" { // e.g. "-engine" to run NetMerge.exe itself as the engine
+		pre = strings.Fields(v)
+	}
+	e.cmd = exec.Command(bin, append(pre, "-d", e.dir)...)
 	pr, pw, _ := os.Pipe()
 	e.cmd.Stdout, e.cmd.Stderr = pw, pw
 	if err := e.cmd.Start(); err != nil {

@@ -33,6 +33,47 @@ jobs:
           echo "132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz" | sha256sum -c
           gunzip -c /tmp/mihomo.gz > /tmp/mihomo && chmod +x /tmp/mihomo
       - run: NM_ENGINE_BIN=/tmp/mihomo go test -count=1 -run TestEngineContract -v .
+  engine:
+    # NetMerge's own engine (engine/): its tests, the capture test (needs root: virtual adapter, network namespaces)
+    # and the same contract mihomo passes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: cd engine && gofmt -l . | (! grep .)
+      - run: cd engine && go vet ./... && GOOS=windows go vet ./...
+      - run: cd engine && go test -count=1 -v ./...
+      - name: Capture test (root)
+        run: cd engine && sudo -E env "PATH=$PATH" "GOCACHE=$(go env GOCACHE)" "GOMODCACHE=$(go env GOMODCACHE)" go test -count=1 -run TestTunEndToEnd -v .
+      - run: cd engine && go build -o /tmp/nmengine ./cmd/nmengine
+      - run: NM_ENGINE_BIN=/tmp/nmengine go test -count=1 -run TestEngineContract -v .
+      - name: The same contract with NetMerge itself running as the engine (what the app's switch starts)
+        run: go build -o /tmp/netmerge . && NM_ENGINE_BIN=/tmp/netmerge NM_ENGINE_ARGS=-engine go test -count=1 -run TestEngineContract -v .
+  windows:
+    # a real Windows machine (with administrator rights): the Windows-only parts of the app, and NetMerge's own
+    # engine capturing real traffic through Wintun
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Get wintun.dll (checked against its published fingerprint)
+        run: python scripts/get-wintun.py
+      - run: go vet ./...
+      - run: go test -count=1 -run "TestProcessesByPath|TestCounters64|TestUpdate|TestOfflineUsage" -v .
+      - run: go build -o NetMerge.exe .
+      - working-directory: engine
+        run: go vet ./...
+      - working-directory: engine
+        run: go test -count=1 -v ./...
+      - name: Capture test on Windows (Wintun)
+        working-directory: engine
+        env:
+          NM_WIN_TUN_E2E: "1"
+        run: go test -count=1 -run TestTunWindows -v .
   frontend:
     # the window's own tests: a fixture server that imitates NetMerge's API, driven by a real Chromium
     runs-on: ubuntu-latest
