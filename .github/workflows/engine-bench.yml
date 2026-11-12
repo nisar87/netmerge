@@ -1,0 +1,40 @@
+name: Engine comparison
+# mihomo (what NetMerge ships) and NetMerge's own engine, side by side on a Windows machine: each captures traffic
+# through its virtual adapter with the same settings, and the same measurements are taken (cmd/enginebench).
+# The table is in the run's summary. Informational: it does not block anything.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ["engine/**", ".github/workflows/engine-bench.yml"]
+jobs:
+  compare:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Get wintun.dll (checked against its published fingerprint)
+        run: python scripts/get-wintun.py
+      - name: Get mihomo 1.19.33 (checked against its known fingerprint, as NetMerge does)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-windows-amd64-v1.19.33.zip -OutFile mihomo.zip
+          $h = (Get-FileHash mihomo.zip -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne "6ab2180875f9f6fff8b19386d760daec257f66b45f72b3afc650634272fa837a") { throw "mihomo zip fingerprint $h" }
+          Expand-Archive mihomo.zip -DestinationPath mihomo
+          $exe = Get-ChildItem mihomo -Filter *.exe -Recurse | Select-Object -First 1
+          Copy-Item $exe.FullName "$env:RUNNER_TEMP\mihomo.exe"
+      - name: Build NetMerge's engine and the comparison
+        working-directory: engine
+        run: |
+          go build -o "$env:RUNNER_TEMP\nmengine.exe" ./cmd/nmengine
+          go build -o "$env:RUNNER_TEMP\enginebench.exe" ./cmd/enginebench
+      - name: Compare
+        run: '& "$env:RUNNER_TEMP\enginebench.exe" -rounds 3 -engine "mihomo=$env:RUNNER_TEMP\mihomo.exe" -engine "netmerge=$env:RUNNER_TEMP\nmengine.exe"'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: engine-logs
+          path: ${{ runner.temp }}/bench-*.log
+          retention-days: 7
