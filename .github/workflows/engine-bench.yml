@@ -50,3 +50,22 @@ jobs:
             ${{ runner.temp }}/bench-*.log
             ${{ runner.temp }}/netmerge-cpu-*.pprof
           retention-days: 7
+  compare-local:
+    # the same comparison on a private test network with its own servers (Linux, root): no internet noise, a
+    # 350,000-name block list, block accuracy and a line that silently stops answering
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Get mihomo 1.19.33 (checked against its known fingerprint)
+        run: |
+          curl -sSL -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
+          echo "132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz" | sha256sum -c
+          gunzip -c /tmp/mihomo.gz > /tmp/mihomo && chmod +x /tmp/mihomo
+      - name: Build
+        working-directory: engine
+        run: go build -o /tmp/nmengine ./cmd/nmengine && go build -o /tmp/enginebench ./cmd/enginebench
+      - name: Compare
+        run: cd /tmp && sudo -E ./enginebench -local -rounds 3 -engine mihomo=/tmp/mihomo -engine netmerge=/tmp/nmengine
