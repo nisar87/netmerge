@@ -71,10 +71,10 @@ func setupLocal() (func(), error) {
 		small: "http://203.0.113.10:8080/small", dnsServer: "10.200.0.2:53", dnsControl: bindTo("nmveth-h"),
 		tlsURL: "https://tls.bench.test/small", udpAddr: "203.0.113.10:5353", insecure: true,
 		downloads: []dl{
-			{"single", "One download, 2 GB (HTTP)", "http://dl.bench.test:8080/bytes?n=2147483648", 1, 2147483648},
-			{"single_tls", "One download, 1 GB (HTTPS)", "https://dl.bench.test/bytes?n=1073741824", 1, 1073741824},
-			{"parallel", "8 downloads at once, 8 x 512 MB (HTTP)", "http://dl.bench.test:8080/bytes?n=536870912", 8, 536870912},
-			{"many", "64 downloads at once, 64 x 16 MB (HTTP)", "http://dl.bench.test:8080/bytes?n=16777216", 64, 16777216},
+			{"single", "One download, 2 GB (HTTP)", "http://dl.bench.test:8080/bytes?n=2147483648", 1, 2147483648, 1},
+			{"single_tls", "One download, 1 GB (HTTPS)", "https://dl.bench.test/bytes?n=1073741824", 1, 1073741824, 1},
+			{"parallel", "8 downloads at once, 8 x 512 MB (HTTP)", "http://dl.bench.test:8080/bytes?n=536870912", 8, 536870912, 1},
+			{"many", "64 downloads at once, 64 x 16 MB (HTTP)", "http://dl.bench.test:8080/bytes?n=16777216", 64, 16777216, 1},
 		}}
 	return func() { srv.Process.Kill(); srv.Wait(); cleanup() }, nil
 }

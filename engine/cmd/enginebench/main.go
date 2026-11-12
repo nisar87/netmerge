@@ -62,6 +62,7 @@ type dl struct {
 	key, label, url string
 	n               int
 	size            int64
+	repeat          int // measure this many times per round and keep the median (for noisy servers)
 }
 
 type result map[string][]float64
@@ -115,9 +116,9 @@ func main() {
 		tg = targets{ifName: ifName, routes: []string{"1.1.1.1/32", "162.159.200.0/24", "104.16.0.0/12", "142.250.0.0/15", "172.217.0.0/16", "216.58.192.0/19", "74.125.0.0/16", "34.0.0.0/8", "35.0.0.0/8"},
 			small: "http://1.1.1.1/cdn-cgi/trace", tlsURL: "https://www.google.com/generate_204", udpAddr: "162.159.200.1:123", udpNTP: true,
 			downloads: []dl{
-				{"single", "One download, Go for Windows zip (Google)", goZip, 1, 0},
-				{"parallel", "8 downloads at once, Go zip x 8 (Google)", goZip, 8, 0},
-				{"single_cf", "One download, 25 MB (Cloudflare)", "https://speed.cloudflare.com/__down?bytes=25000000", 1, 25e6},
+				{"single", "One download, Go for Windows zip (Google)", goZip, 1, 0, 1},
+				{"parallel", "8 downloads at once, Go zip x 8 (Google)", goZip, 8, 0, 1},
+				{"single_cf", "One download, 25 MB (Cloudflare, median of 3)", "https://speed.cloudflare.com/__down?bytes=25000000", 1, 25e6, 3},
 			}}
 	}
 	fmt.Printf("line: %s\n", tg.ifName)
@@ -299,10 +300,16 @@ func runRound(name, path string) (map[string]float64, error) {
 			prof = make(chan []byte, 1)
 			go func() { prof <- fetch("http://127.0.0.1:6060/debug/pprof/profile?seconds=5") }()
 		}
-		if mbps, err := download(d.url, d.n, d.size); err == nil {
-			res[d.key] = mbps
-		} else {
-			fmt.Printf("  %s: %v\n", d.key, err)
+		var got []float64
+		for i := 0; i < max(d.repeat, 1); i++ {
+			if mbps, err := download(d.url, d.n, d.size); err == nil {
+				got = append(got, mbps)
+			} else {
+				fmt.Printf("  %s: %v\n", d.key, err)
+			}
+		}
+		if len(got) > 0 {
+			res[d.key] = median(got)
 		}
 		if prof != nil {
 			if b := <-prof; len(b) > 0 {

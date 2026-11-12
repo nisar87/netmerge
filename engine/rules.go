@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"hash/maphash"
 	"net/netip"
 	"os"
 	"regexp"
@@ -440,13 +441,20 @@ func matchingParen(s string, open int) int {
 
 // DomainSet holds a domain list in mihomo's text form: "+.x" (x and below), ".x" (below x only), "*.x" (one level
 // below x) and "x" (exactly x). Looking up a name costs one map lookup per label.
+// DomainSet keeps a 64-bit fingerprint of each name instead of the name itself: a block list of hundreds of
+// thousands of names takes a few megabytes, and the file's text is not kept. (Two different names sharing a
+// fingerprint is a one in billions of billions chance.)
 type DomainSet struct {
-	exact, tree, sub, wild map[string]struct{}
+	exact, tree, sub, wild map[uint64]struct{}
 	n                      int
 }
 
+var domainSeed = maphash.MakeSeed()
+
+func dh(s string) uint64 { return maphash.String(domainSeed, s) }
+
 func NewDomainSet() *DomainSet {
-	return &DomainSet{exact: map[string]struct{}{}, tree: map[string]struct{}{}, sub: map[string]struct{}{}, wild: map[string]struct{}{}}
+	return &DomainSet{exact: map[uint64]struct{}{}, tree: map[uint64]struct{}{}, sub: map[uint64]struct{}{}, wild: map[uint64]struct{}{}}
 }
 
 func (d *DomainSet) Add(line string) {
@@ -456,13 +464,13 @@ func (d *DomainSet) Add(line string) {
 	}
 	switch {
 	case strings.HasPrefix(line, "+."):
-		d.tree[line[2:]] = struct{}{}
+		d.tree[dh(line[2:])] = struct{}{}
 	case strings.HasPrefix(line, "*."):
-		d.wild[line[2:]] = struct{}{}
+		d.wild[dh(line[2:])] = struct{}{}
 	case strings.HasPrefix(line, "."):
-		d.sub[line[1:]] = struct{}{}
+		d.sub[dh(line[1:])] = struct{}{}
 	default:
-		d.exact[line] = struct{}{}
+		d.exact[dh(line)] = struct{}{}
 	}
 	d.n++
 }
@@ -474,16 +482,16 @@ func (d *DomainSet) Has(host string) bool {
 		return false
 	}
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
-	if _, ok := d.exact[host]; ok {
+	if _, ok := d.exact[dh(host)]; ok {
 		return true
 	}
 	s, first := host, true
 	for {
-		if _, ok := d.tree[s]; ok {
+		if _, ok := d.tree[dh(s)]; ok {
 			return true
 		}
 		if !first {
-			if _, ok := d.sub[s]; ok {
+			if _, ok := d.sub[dh(s)]; ok {
 				return true
 			}
 		}
@@ -493,7 +501,7 @@ func (d *DomainSet) Has(host string) bool {
 		}
 		if first {
 			// "*.x" matches exactly one label in front of x
-			if _, ok := d.wild[s[i+1:]]; ok {
+			if _, ok := d.wild[dh(s[i+1:])]; ok {
 				return true
 			}
 		}
@@ -502,8 +510,8 @@ func (d *DomainSet) Has(host string) bool {
 }
 
 // LoadDomainSet reads a text domain list from a file.
-// LoadDomainSet reads a list file in one go. The names share the file's one string (no copy per name) and the
-// tables are sized up front, so a list of hundreds of thousands of names loads quickly.
+// LoadDomainSet reads a list file in one go into tables sized up front, so a list of hundreds of thousands of
+// names loads quickly.
 func LoadDomainSet(path string) (*DomainSet, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -512,8 +520,8 @@ func LoadDomainSet(path string) (*DomainSet, error) {
 	all := string(b)
 	n := strings.Count(all, "\n") + 1
 	plus := strings.Count(all, "+.")
-	d := &DomainSet{exact: make(map[string]struct{}, n-min(plus, n)), tree: make(map[string]struct{}, plus),
-		sub: map[string]struct{}{}, wild: map[string]struct{}{}}
+	d := &DomainSet{exact: make(map[uint64]struct{}, n-min(plus, n)), tree: make(map[uint64]struct{}, plus),
+		sub: map[uint64]struct{}{}, wild: map[uint64]struct{}{}}
 	for len(all) > 0 {
 		line := all
 		if i := strings.IndexByte(all, '\n'); i >= 0 {

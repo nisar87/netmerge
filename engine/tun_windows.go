@@ -91,7 +91,6 @@ type wintunDev struct {
 	index   int
 	luid    uint64
 	closed  bool
-	lastPkt time.Time // when the last packet was read (only the read loop touches it)
 	mu      sync.Mutex
 }
 
@@ -130,7 +129,6 @@ func openTun(name string, mtu int) (tunDevice, error) {
 func (d *wintunDev) Name() string { return d.name }
 
 func (d *wintunDev) Read(b []byte) (int, error) {
-	var spinStart time.Time
 	for {
 		d.mu.Lock()
 		if d.closed {
@@ -143,25 +141,11 @@ func (d *wintunDev) Read(b []byte) (int, error) {
 			n := copy(b, unsafe.Slice((*byte)(unsafe.Add(nil, p)), size)) // memory owned by wintun until released
 			wtRelease.Call(d.session, p)
 			d.mu.Unlock()
-			d.lastPkt = time.Now()
 			return n, nil
 		}
 		d.mu.Unlock()
-		if errno, ok := err.(syscall.Errno); ok && errno == 259 { // ERROR_NO_MORE_ITEMS
-			// While packets are flowing the next one is usually microseconds away: look again for a short
-			// moment before going to sleep on the event (waking up from it costs more than the wait itself).
-			// The same is done by WireGuard's own Wintun reader.
-			now := time.Now()
-			if now.Sub(d.lastPkt) < 5*time.Millisecond {
-				if spinStart.IsZero() {
-					spinStart = now
-				}
-				if now.Sub(spinStart) < 50*time.Microsecond {
-					continue
-				}
-			}
+		if errno, ok := err.(syscall.Errno); ok && errno == 259 { // ERROR_NO_MORE_ITEMS: wait for packets
 			procWaitForSingle.Call(d.event, 250)
-			spinStart = time.Time{}
 			continue
 		}
 		if errno, ok := err.(syscall.Errno); ok && errno == 38 { // ERROR_HANDLE_EOF: the adapter went away
