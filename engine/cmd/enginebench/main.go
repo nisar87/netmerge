@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -181,7 +182,7 @@ func config(name string) []byte {
 		}
 	}
 	cfg := map[string]any{
-		"mode": "rule", "log-level": "info", "ipv6": false, "allow-lan": false, "find-process-mode": "always",
+		"mode": "rule", "log-level": "info", "ipv6": false, "allow-lan": false, "find-process-mode": envOr("BENCH_FIND", "always"),
 		"unified-delay": true, "tcp-concurrent": false, "external-controller": apiAddr, "secret": secret,
 		"profile": map[string]any{"store-selected": false, "store-fake-ip": false},
 		"tun":     tun,
@@ -207,7 +208,7 @@ func runRound(name, path string) (map[string]float64, error) {
 	defer logf.Close()
 	start := time.Now()
 	cmd := exec.Command(path, "-d", dir)
-	cmd.Env = append(os.Environ(), "NM_PPROF=127.0.0.1:6060")
+	cmd.Env = append(os.Environ(), "NM_PPROF=127.0.0.1:6060", "NM_TRACE=1")
 	cmd.Stdout, cmd.Stderr = logf, logf
 	if err := cmd.Start(); err != nil {
 		return nil, err
@@ -295,6 +296,30 @@ func runRound(name, path string) (map[string]float64, error) {
 			}
 		}
 		fmt.Printf("  connections logged by destination: %v\n", dests)
+		// NetMerge's engine: how long each step of a new connection took (median)
+		steps := map[string][]float64{}
+		for _, l := range strings.Split(string(b), "\n") {
+			i := strings.Index(l, "[TRACE] ")
+			if i < 0 {
+				continue
+			}
+			f := strings.Fields(strings.TrimSuffix(l[i:], "\""))
+			for _, kv := range f[3:] {
+				if k, v, ok := strings.Cut(kv, "="); ok {
+					if us, err := strconv.ParseFloat(strings.TrimSuffix(v, "us"), 64); err == nil {
+						steps[f[1]+" "+k] = append(steps[f[1]+" "+k], us/1000)
+					}
+				}
+			}
+		}
+		keys := make([]string, 0, len(steps))
+		for k := range steps {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Printf("  step %-22s median %.2f ms, 90%% %.2f ms (%d)\n", k, median(steps[k]), pct(steps[k], 0.9), len(steps[k]))
+		}
 	}
 	if ws, peak, cpu, err := procStats(cmd.Process.Pid); err == nil {
 		res["mem"], res["mem_peak"], res["cpu"] = float64(ws)/1e6, float64(peak)/1e6, cpu.Seconds()
@@ -562,4 +587,11 @@ func report(names []string, res map[string]result, base map[string]float64) {
 			fh.Close()
 		}
 	}
+}
+
+func envOr(k, d string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return d
 }

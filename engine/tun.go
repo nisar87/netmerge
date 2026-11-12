@@ -239,7 +239,7 @@ func (t *tunStack) accept(l *net.TCPListener) {
 func (t *tunStack) serveTCP(c *net.TCPConn, en *natEntry) {
 	defer t.nat.release(en)
 	_ = c.SetNoDelay(true)
-	m := &Metadata{Type: "Tun", SrcIP: en.app.Addr(), SrcPort: en.app.Port(), DstIP: en.dst.Addr().Unmap(), DstPort: en.dst.Port()}
+	m := &Metadata{Type: "Tun", SrcIP: en.app.Addr(), SrcPort: en.app.Port(), DstIP: en.dst.Addr().Unmap(), DstPort: en.dst.Port(), born: en.born}
 	if h, ok := t.e.fakeHost(m.DstIP); ok {
 		m.Host = h
 	}
@@ -320,6 +320,7 @@ type natEntry struct {
 	dst  netip.AddrPort // where the app wanted to go
 	last atomic.Int64
 	open atomic.Int32 // 1 while the engine serves the connection
+	born time.Time    // when the app's first packet (SYN) arrived
 }
 
 func (n *natEntry) touch() { n.last.Store(time.Now().UnixNano()) }
@@ -363,7 +364,7 @@ func (t *natTable) lookup(app, dst netip.AddrPort, syn bool) *natEntry {
 		if _, used := t.ports[p]; used {
 			continue
 		}
-		en := &natEntry{port: p, app: app, dst: dst}
+		en := &natEntry{port: p, app: app, dst: dst, born: time.Now()}
 		en.touch()
 		en.open.Store(1)
 		t.ports[p] = en

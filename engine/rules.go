@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"time"
 	"bufio"
 	"fmt"
 	"net/netip"
@@ -23,6 +24,7 @@ type Metadata struct {
 	Process     string // program name on this PC, e.g. chrome.exe
 	ProcessPath string
 	processDone bool
+	born        time.Time // when the engine first saw the connection (for NM_TRACE timings)
 }
 
 // RemoteAddress is "host:port" as written in the log: the website's name when it is known (asked for, or found
