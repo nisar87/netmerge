@@ -291,7 +291,7 @@ func runRound(name, path string) (map[string]float64, error) {
 			if i := strings.Index(l, "--> "); i > 0 && strings.Contains(l, "[TCP]") {
 				d := strings.Fields(l[i+4:])[0]
 				dests[d]++
-			} else if strings.Contains(l, "level=warning") || strings.Contains(l, "level=error") {
+			} else if strings.Contains(l, "level=warning") || strings.Contains(l, "level=error") || strings.Contains(l, "[TRACE] setup") || strings.Contains(l, "ready in") {
 				fmt.Println("  log:", l)
 			}
 		}

@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"bufio"
 	"fmt"
 	"net/netip"
 	"os"
@@ -503,17 +502,26 @@ func (d *DomainSet) Has(host string) bool {
 }
 
 // LoadDomainSet reads a text domain list from a file.
+// LoadDomainSet reads a list file in one go. The names share the file's one string (no copy per name) and the
+// tables are sized up front, so a list of hundreds of thousands of names loads quickly.
 func LoadDomainSet(path string) (*DomainSet, error) {
-	f, err := os.Open(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	d := NewDomainSet()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 64*1024), 1<<20)
-	for sc.Scan() {
-		d.Add(sc.Text())
+	all := string(b)
+	n := strings.Count(all, "\n") + 1
+	plus := strings.Count(all, "+.")
+	d := &DomainSet{exact: make(map[string]struct{}, n-min(plus, n)), tree: make(map[string]struct{}, plus),
+		sub: map[string]struct{}{}, wild: map[string]struct{}{}}
+	for len(all) > 0 {
+		line := all
+		if i := strings.IndexByte(all, '\n'); i >= 0 {
+			line, all = all[:i], all[i+1:]
+		} else {
+			all = ""
+		}
+		d.Add(line)
 	}
-	return d, sc.Err()
+	return d, nil
 }

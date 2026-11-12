@@ -58,6 +58,45 @@ func (e *Engine) tunPrefix() netip.Prefix {
 	return netip.Prefix{}
 }
 
+type tunOpened struct {
+	dev tunDevice
+	mtu int
+	err error
+}
+
+func tunMTU(c *Config) int {
+	if m := c.Tun.MTU; m >= 1280 && m <= 65000 {
+		return m
+	}
+	return 9000
+}
+
+// preopenTun starts creating the virtual adapter (the slowest step of starting, a few tenths of a second on
+// Windows) while the settings and block lists are still being read.
+func (e *Engine) preopenTun(c *Config) {
+	if !c.Tun.Enable || e.tun != nil || e.pendingTun != nil {
+		return
+	}
+	ch := make(chan tunOpened, 1)
+	e.pendingTun = ch
+	mtu := tunMTU(c)
+	go func() {
+		d, err := openTun("NetMerge", mtu)
+		ch <- tunOpened{d, mtu, err}
+	}()
+}
+
+// dropPendingTun closes an adapter that was opened early but not used (the start failed).
+func (e *Engine) dropPendingTun() {
+	if e.pendingTun == nil {
+		return
+	}
+	if r := <-e.pendingTun; r.err == nil {
+		r.dev.Close()
+	}
+	e.pendingTun = nil
+}
+
 // applyTun starts capturing when the settings ask for it, and stops when they no longer do.
 func (e *Engine) applyTun(c *Config) error {
 	if !c.Tun.Enable {
@@ -69,14 +108,26 @@ func (e *Engine) applyTun(c *Config) error {
 		t.updateExcludes(c.Tun.RouteExcludeAddress)
 		return nil
 	}
-	mtu := c.Tun.MTU
-	if mtu < 1280 || mtu > 65000 {
-		mtu = 9000
-	}
+	mtu := tunMTU(c)
 	began := time.Now()
-	dev, err := openTun("NetMerge", mtu)
+	var dev tunDevice
+	var err error
+	if e.pendingTun != nil { // opened while the settings and lists were being read
+		r := <-e.pendingTun
+		e.pendingTun = nil
+		dev, err = r.dev, r.err
+		if err == nil && r.mtu != mtu {
+			dev.Close()
+			dev, err = openTun("NetMerge", mtu)
+		}
+	} else {
+		dev, err = openTun("NetMerge", mtu)
+	}
 	if err != nil {
 		return err
+	}
+	if traceOn {
+		e.log.Infof("[TRACE] setup adapter=%dus", time.Since(began).Microseconds())
 	}
 	t := &tunStack{e: e, dev: dev, mtu: mtu, nat: newNATTable(), done: make(chan struct{})}
 	t.hijack.Store(c.DNS.Enable && len(c.Tun.DNSHijack) > 0)

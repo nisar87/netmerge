@@ -240,7 +240,9 @@ func (t *tunStack) setupOS(c *Config) error {
 	} else {
 		t.e.log.Warnf("[TUN] IPv6 address: %v", err)
 	}
+	tAddr := time.Now()
 	t.ensureFirewall()
+	tFw := time.Now()
 	// wait until Windows really has the address (the listener binds to it)
 	for i := 0; i < 100; i++ {
 		if c, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: tunGW4.AsSlice()}); err == nil {
@@ -249,6 +251,7 @@ func (t *tunStack) setupOS(c *Config) error {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	tReady := time.Now()
 	if t.hijack.Load() {
 		go netsh("interface", "ipv4", "set", "dnsservers", "name="+itoa(d.index), "source=static", "address="+tunDNS4.String(), "register=none", "validate=no")
 	}
@@ -270,6 +273,9 @@ func (t *tunStack) setupOS(c *Config) error {
 			}
 		}
 		t.updateExcludes(c.Tun.RouteExcludeAddress)
+	}
+	if traceOn {
+		t.e.log.Infof("[TRACE] setup firewall=%dus address-ready=%dus routes=%dus", tFw.Sub(tAddr).Microseconds(), tReady.Sub(tFw).Microseconds(), time.Since(tReady).Microseconds())
 	}
 	go t.watchLoop(ws)
 	return nil
