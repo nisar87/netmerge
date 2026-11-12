@@ -35,7 +35,7 @@ jobs:
           BENCH_PPROF: "1"
         run: |
           $env:TEMP = $env:RUNNER_TEMP; $env:TMP = $env:RUNNER_TEMP
-          & "$env:RUNNER_TEMP\enginebench.exe" -rounds 3 -engine "mihomo=$env:RUNNER_TEMP\mihomo.exe" -engine "netmerge=$env:RUNNER_TEMP\nmengine.exe"
+          & "$env:RUNNER_TEMP\enginebench.exe" -rounds 5 -engine "mihomo=$env:RUNNER_TEMP\mihomo.exe" -engine "netmerge=$env:RUNNER_TEMP\nmengine.exe"
       - name: Where NetMerge's engine spent its time during the 8 downloads
         if: always()
         working-directory: engine

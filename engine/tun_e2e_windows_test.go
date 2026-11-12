@@ -208,3 +208,15 @@ func TestTunWindows(t *testing.T) {
 		resp.Body.Close()
 	})
 }
+
+func TestIfIndexByName(t *testing.T) {
+	ifs, _ := net.Interfaces()
+	for _, i := range ifs {
+		start := time.Now()
+		idx, err := ifIndex(i.Name)
+		if err != nil || idx != i.Index {
+			t.Fatalf("%s: got %d %v, want %d", i.Name, idx, err, i.Index)
+		}
+		t.Logf("%s -> %d in %v", i.Name, idx, time.Since(start))
+	}
+}

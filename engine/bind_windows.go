@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -18,12 +20,48 @@ const (
 	ipv6UnicastIf = 31
 )
 
+var (
+	procAliasToLuid = modIphlpapi.NewProc("ConvertInterfaceAliasToLuid")
+	ifCacheMu       sync.Mutex
+	ifCache         = map[string]ifCached{}
+)
+
+type ifCached struct {
+	idx int
+	at  time.Time
+}
+
+// ifIndex finds an adapter's number by its name. Every new connection needs it, so it is asked directly
+// (ConvertInterfaceAliasToLuid, microseconds) instead of listing all adapters (net.InterfaceByName, about two
+// milliseconds on Windows), and remembered for two seconds.
 func ifIndex(iface string) (int, error) {
-	i, err := net.InterfaceByName(iface)
-	if err != nil {
-		return 0, fmt.Errorf("adapter %q: %w", iface, err)
+	ifCacheMu.Lock()
+	c, ok := ifCache[iface]
+	ifCacheMu.Unlock()
+	if ok && time.Since(c.at) < 2*time.Second {
+		return c.idx, nil
 	}
-	return i.Index, nil
+	idx := 0
+	if a, err := syscall.UTF16PtrFromString(iface); err == nil {
+		var luid uint64
+		var i uint32
+		if r, _, _ := procAliasToLuid.Call(uintptr(unsafe.Pointer(a)), uintptr(unsafe.Pointer(&luid))); r == 0 {
+			if r, _, _ := procConvertLuidToIndex.Call(uintptr(unsafe.Pointer(&luid)), uintptr(unsafe.Pointer(&i))); r == 0 {
+				idx = int(i)
+			}
+		}
+	}
+	if idx == 0 {
+		ni, err := net.InterfaceByName(iface)
+		if err != nil {
+			return 0, fmt.Errorf("adapter %q: %w", iface, err)
+		}
+		idx = ni.Index
+	}
+	ifCacheMu.Lock()
+	ifCache[iface] = ifCached{idx, time.Now()}
+	ifCacheMu.Unlock()
+	return idx, nil
 }
 
 func setUnicastIf(fd uintptr, idx int, v6 bool) error {
