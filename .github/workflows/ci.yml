@@ -73,7 +73,7 @@ jobs:
         working-directory: engine
         env:
           NM_WIN_TUN_E2E: "1"
-        run: go test -count=1 -run "TestTunWindows|TestIfIndexByName" -v .
+        run: go test -count=1 -run "TestTunWindows|TestIfIndexByName|TestFirewallRuleRecognised" -v .
   frontend:
     # the window's own tests: a fixture server that imitates NetMerge's API, driven by a real Chromium
     runs-on: ubuntu-latest
