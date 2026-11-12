@@ -175,6 +175,9 @@ func config(name string) []byte {
 	tun := map[string]any{"enable": true, "auto-route": true, "auto-detect-interface": true, "route-address": tg.routes, "mtu": 9000}
 	if name != "netmerge" {
 		tun["stack"] = "mixed" // what NetMerge uses with mihomo by default
+		if g := os.Getenv("BENCH_MIHOMO_GSO"); g != "" {
+			tun["gso"] = g == "1"
+		}
 	}
 	cfg := map[string]any{
 		"mode": "rule", "log-level": "info", "ipv6": false, "allow-lan": false, "find-process-mode": "always",
@@ -272,6 +275,16 @@ func runRound(name, path string) (map[string]float64, error) {
 	// how many connections the engine logged (a check that the measured traffic really went through it)
 	if b, err := os.ReadFile(logf.Name()); err == nil {
 		res["logged_tcp"] = float64(strings.Count(string(b), "[TCP]"))
+		dests := map[string]int{}
+		for _, l := range strings.Split(string(b), "\n") {
+			if i := strings.Index(l, "--> "); i > 0 && strings.Contains(l, "[TCP]") {
+				d := strings.Fields(l[i+4:])[0]
+				dests[d]++
+			} else if strings.Contains(l, "level=warning") || strings.Contains(l, "level=error") {
+				fmt.Println("  log:", l)
+			}
+		}
+		fmt.Printf("  connections logged by destination: %v\n", dests)
 	}
 	if ws, peak, cpu, err := procStats(cmd.Process.Pid); err == nil {
 		res["mem"], res["mem_peak"], res["cpu"] = float64(ws)/1e6, float64(peak)/1e6, cpu.Seconds()
