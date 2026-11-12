@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.17.3
+
+- **Wi-Fi took no part in a speed test (NetMerge engine).** Found in the PC's logs: 11 seconds before the test, nvidia's update server did not answer on Wi-Fi (it does not answer on either line, every hour). The engine then passed Wi-Fi over for 15 seconds, so all 8 of the speed test's connections went to the cable and Wi-Fi carried nothing. A line is now passed over only when another line made the same connection while it failed or hung, and then for 10 seconds; when every line fails the same connection (a server that is down), no line is blamed.
+
 ## 3.17.2
 
 Fixes from five hours of the NetMerge engine on the real PC (3.17.1, both lines, 2,650 connections, 289 blocks counted):

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hkdf"
@@ -9,6 +10,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
+	"io"
 	"math/rand"
 	"net"
 	"net/netip"
@@ -310,12 +312,13 @@ func TestRouterPlanAndFallbackOrder(t *testing.T) {
 	if s1.lines[0].Base() != s2.lines[0].Base() {
 		t.Fatal("consistent hashing should keep one site on one line")
 	}
-	// a line that just failed goes to the back
+	// a line that lost a connection another line made goes to the back
 	p1.lines[0].markFailed()
 	p3, _ := r.resolvePlan("SLOT1", m)
 	if p3.lines[0].name != "LINK2" {
-		t.Fatalf("failed line first: %s", p3.lines[0].name)
+		t.Fatalf("failing line first: %s", p3.lines[0].name)
 	}
+	p1.lines[0].markOK()
 	// choices survive a reload
 	r2, _ := newRouter(c)
 	r2.keepChoices(r)
@@ -392,5 +395,19 @@ func TestIncrementalChecksums(t *testing.T) {
 		if csumFold(csumAdd(pseudoSum(p.src, p.dst, proto, len(p.payload)), p.payload)) != 0 {
 			t.Fatalf("packet %d (v6 %v proto %d len %d): checksum wrong after the update", i, v6, proto, len(p.payload))
 		}
+	}
+}
+
+// When every line fails the same connection (the website's server is down), no line is passed over afterwards.
+func TestNoPenaltyWhenEveryLineFails(t *testing.T) {
+	e := New(t.TempDir(), io.Discard)
+	a, b := &Line{name: "LINK1", iface: "nm-missing-1"}, &Line{name: "LINK2", iface: "nm-missing-2"}
+	d := &dialer{e: e}
+	m := &Metadata{Network: "tcp", DstIP: netip.MustParseAddr("192.0.2.1"), DstPort: 443}
+	if _, _, err := d.dialTCP(context.Background(), &plan{lines: []*Line{a, b}}, m); err == nil {
+		t.Fatal("dial through missing adapters worked")
+	}
+	if !a.healthy() || !b.healthy() {
+		t.Fatal("a line was passed over although every line failed")
 	}
 }
