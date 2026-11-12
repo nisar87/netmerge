@@ -40,8 +40,14 @@ func (l *Line) Base() string {
 }
 
 func (l *Line) healthy() bool { return time.Now().UnixNano() >= l.failUntil.Load() }
-func (l *Line) markFailed()   { l.failUntil.Store(time.Now().Add(15 * time.Second).UnixNano()) }
-func (l *Line) markOK()       { l.failUntil.Store(0) }
+
+// markFailed puts the line last for the next 10 seconds. It is only called when another line made the same
+// connection while this one failed or was still trying: when every line fails the same connection (a server
+// that is down), it is not the lines' fault. (A real PC showed why: nvidia's server timing out on one line
+// pushed every new connection, a whole speed test included, onto the other line.)
+func (l *Line) markFailed() { l.failUntil.Store(time.Now().Add(10 * time.Second).UnixNano()) }
+
+func (l *Line) markOK() { l.failUntil.Store(0) }
 
 type Reject struct{}
 
@@ -316,7 +322,7 @@ func (d *dialer) dialTCP(ctx context.Context, p *plan, m *Metadata) (net.Conn, *
 				r.l.markOK()
 				if r.l != p.lines[0] {
 					d.e.log.Infof("[TCP] %s: %s did not connect in time, used %s instead", m.RemoteAddress(), p.lines[0].name, r.l.name)
-					// the lines that started earlier and are still trying are too slow right now: pass them over
+					// the lines that started earlier failed or are still trying while this one connected
 					for _, l := range p.lines {
 						if l == r.l {
 							break
@@ -349,9 +355,6 @@ func (d *dialer) dialTCP(ctx context.Context, p *plan, m *Metadata) (net.Conn, *
 					}
 				}(pending)
 				return nil, nil, r.err
-			}
-			if ctx.Err() == nil {
-				r.l.markFailed()
 			}
 			if started < len(p.lines) {
 				start()
