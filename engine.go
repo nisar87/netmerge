@@ -120,8 +120,21 @@ func (e *Engine) Adopt() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if v, ok := engineAlive(); ok {
-		e.running, e.version, e.startedAt = true, v, time.Now()
-		e.own = recordedIsOwn() || strings.HasPrefix(v, "nmengine")
+		own := recordedIsOwn() || strings.HasPrefix(v, "nmengine")
+		if want := getSettings().Engine == "netmerge"; own != want {
+			// the engine left running is not the one chosen now (the choice changed while NetMerge was closed):
+			// close it and start the chosen one
+			logf("engine %s left running is not the chosen one - restarting merging with the chosen engine", v)
+			e.mu.Unlock()
+			stopOwnEngines()
+			err := e.Start()
+			e.mu.Lock()
+			if err != nil {
+				logf("start after switching engines: %v", err)
+			}
+			return
+		}
+		e.running, e.version, e.startedAt, e.own = true, v, time.Now(), own
 		logf("re-attached to running engine %s", v)
 		return
 	}
