@@ -74,7 +74,11 @@ func main() {
 
 	initLog()
 	logf("NetMerge starting (folder %s)", rootDir)
+	logStartFacts(*background)
+	checkLastRun()
+	go countsLoop()
 	loadSettings()
+	reportIntro()
 	syncLinks(getAdapters(true))
 	if _, err := os.Stat(filepath.Join(rootDir, "data", ".shortcut")); err != nil {
 		createShortcut()
@@ -101,11 +105,11 @@ func main() {
 	} else if running {
 		go engine.Apply()
 	}
-	go safely("stats", statsLoop)
-	go safely("filters", blockUpdater)
-	go safely("health", healthLoop)
-	go safely("dispatch", dispatchLoop)
-	go safely("usage", usageSaver)
+	go keepRunning("stats", statsLoop)
+	go keepRunning("filters", blockUpdater)
+	go keepRunning("health", healthLoop)
+	go keepRunning("dispatch", dispatchLoop)
+	go keepRunning("usage", usageSaver)
 	if *autotest {
 		go func() {
 			for i := 0; i < 40; i++ {
@@ -127,16 +131,17 @@ func main() {
 	if v := os.Getenv("NETMERGE_UPDATE_WEB"); v != "" {
 		updateWeb = v
 	}
-	go safely("updates", updateLoop)
-	go safely("providers", providerLoop)
-	go safely("history", historyLoop)
-	go safely("events", eventsLoop)
-	go dnsGuardLoop()
-	go presetScheduleLoop()
+	go keepRunning("updates", updateLoop)
+	go keepRunning("providers", providerLoop)
+	go keepRunning("history", historyLoop)
+	go keepRunning("events", eventsLoop)
+	go keepRunning("dns guard", dnsGuardLoop)
+	go keepRunning("preset schedule", presetScheduleLoop)
+	go keepRunning("diagnostics reports", reportLoop)
 	go safely("old engine cleanup", removeOldEngine)
 
 	srv := &http.Server{Handler: routes(), ReadHeaderTimeout: 5 * time.Second}
-	go func() { _ = srv.Serve(ln) }()
+	go func() { logErr("serve the window", srv.Serve(ln)) }()
 	if !*background {
 		openWindow(url)
 	}
@@ -153,5 +158,7 @@ func main() {
 	eventsSave()
 	historySave()
 	engine.Stop()
+	flushCounts()
+	removeRunMarker()
 	_ = srv.Close()
 }

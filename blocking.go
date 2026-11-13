@@ -169,7 +169,7 @@ func metaFile(id string) string { return filepath.Join(packsDir(), id+".json") }
 func readMeta(id string) packMeta {
 	var m packMeta
 	if b, err := os.ReadFile(metaFile(id)); err == nil {
-		_ = json.Unmarshal(b, &m)
+		logErr("read block list details "+id, json.Unmarshal(b, &m))
 	}
 	return m
 }
@@ -439,7 +439,7 @@ func statsPath() string { return filepath.Join(rootDir, "data", "blockstats.json
 func (b *blockStatsT) load() {
 	if raw, err := os.ReadFile(statsPath()); err == nil {
 		b.mu.Lock()
-		_ = json.Unmarshal(raw, b)
+		logErr("read the blocking statistics", json.Unmarshal(raw, b))
 		b.rollLocked()
 		b.mu.Unlock()
 	}
@@ -491,6 +491,7 @@ func pumpEngineLog(r *os.File, lf *os.File) {
 		if time.Since(checked) > 2*time.Second {
 			debug, checked = getSettings().DebugLog, time.Now()
 		}
+		noteEngineLine(line)
 		if !strings.Contains(line, "REJECT") && !strings.Contains(line, `msg="[TCP] `) && !strings.Contains(line, `msg="[UDP] `) {
 			write(line)
 			continue

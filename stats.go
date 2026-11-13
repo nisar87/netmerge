@@ -146,7 +146,7 @@ func statsLoop() {
 						if checkChanged++; checkChanged >= 2 {
 							checkChanged = 0
 							logf("connections changed - updating the engine")
-							go safely("apply", func() { _ = engine.Apply() })
+							go safely("apply", func() { logErr("update the engine after connections changed", engine.Apply()) })
 						}
 					} else {
 						checkChanged = 0
@@ -247,8 +247,9 @@ func sample(slow bool) {
 			go func() {
 				var r connResult
 				if b, code, err := apiReq("GET", "/connections", nil); err == nil && code == 200 {
-					_ = json.Unmarshal(b, &r.list)
-					r.ok = true
+					if logErr("read the engine's connection list", json.Unmarshal(b, &r.list)) == nil {
+						r.ok = true
+					}
 				}
 				r.at = time.Now()
 				ch <- r

@@ -12,7 +12,7 @@ export function patch(target, changes) {
   return target;
 }
 const settingsFields = ['appRules', 'bypassIPs', 'stableDomains', 'vpnLink', 'autoStart', 'mergeOnLaunch',
-  'builtinDNS', 'debugLog', 'classicBalance', 'noUpdateCheck', 'noCallProtect', 'quotaReset', 'quotaAction'];
+  'builtinDNS', 'debugLog', 'classicBalance', 'noUpdateCheck', 'noCallProtect', 'noDiagnostics', 'quotaReset', 'quotaAction'];
 const restoreFields = ['appRules', 'bypassIPs', 'stableDomains', 'mergeOnLaunch', 'builtinDNS', 'dnsProvider',
   'dnsSecure', 'dnsCustom', 'dnsDomains', 'noCallProtect', 'noUpdateCheck', 'classicBalance', 'quotaReset', 'quotaAction'];
 
@@ -220,6 +220,7 @@ export function createModel(scenario = 'default') {
         case '/api/restore':
           if (!body.mode && !body.links?.length && !body.appRules) fail('That does not look like a NetMerge settings file');
           mergeSettings(body, true); break;
+        case '/api/clientlog': (data.clientLog ||= []).push(clone(body)); return { ok: true };
         case '/api/quit': break; // Keep the fixture server alive; never signal processes.
         default: fail('Unknown fixture API route', 404);
       }

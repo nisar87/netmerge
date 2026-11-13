@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -26,6 +27,11 @@ func writeJSON(w http.ResponseWriter, v any) {
 }
 
 func writeErr(w http.ResponseWriter, code int, msg string) {
+	if code == 403 || code == 405 {
+		count("api.refused") // another website or program tried the API
+	} else {
+		logf("answered %d: %s (%s)", code, firstLine(msg), where(2))
+	}
 	w.WriteHeader(code)
 	writeJSON(w, map[string]string{"error": msg})
 }
@@ -73,7 +79,12 @@ func hostGuard(next http.Handler) http.Handler {
 var quitCh = make(chan struct{})
 var quitOnce sync.Once
 
-func requestQuit() { quitOnce.Do(func() { close(quitCh) }) }
+func requestQuit() {
+	quitOnce.Do(func() {
+		logf("quit asked by %s", where(3))
+		close(quitCh)
+	})
+}
 
 func routes() http.Handler {
 	mux := http.NewServeMux()
@@ -92,6 +103,7 @@ func routes() http.Handler {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		manualPower.Store(true)
+		logf("merging switched %s in the window", map[bool]string{true: "on", false: "off"}[req.On])
 		if req.On {
 			if err := engine.Start(); err != nil {
 				writeErr(w, 500, err.Error())
@@ -138,9 +150,14 @@ func routes() http.Handler {
 			s.ClassicBalance = in.ClassicBalance
 			s.NoUpdateCheck = in.NoUpdateCheck
 			s.NoCallProtect = in.NoCallProtect
+			s.NoDiagnostics = in.NoDiagnostics
 			s.SetupDone = s.SetupDone || in.SetupDone
 			s.QuotaReset, s.QuotaAction = in.QuotaReset, in.QuotaAction
 		})
+		logSettingsChange(old, ns)
+		if ns.NoDiagnostics && !old.NoDiagnostics {
+			_ = os.Remove(dataPath("crash.txt")) // a crash report not sent yet is not sent later either
+		}
 		go safely("quota check", quotaCheck)
 		if ns.AutoStart != old.AutoStart {
 			if err := setAutoStart(ns.AutoStart); err != nil {
@@ -167,6 +184,24 @@ func routes() http.Handler {
 	registerPresetRoutes(mux)
 	registerDNSRoutes(mux)
 	registerLegacyDownloadRoutes(mux)
+	// errors the window met (script errors), so they show in the log
+	mux.HandleFunc("/api/clientlog", action(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Kind string `json:"kind"`
+			Msg  string `json:"msg"`
+			Src  string `json:"src"`
+			Line int    `json:"line"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 8<<10)).Decode(&in); err == nil {
+			kind := "error"
+			if in.Kind == "promise" {
+				kind = "promise"
+			}
+			clientError(kind, in.Msg, in.Src, in.Line)
+		}
+		writeJSON(w, map[string]bool{"ok": true})
+	}))
+
 	mux.HandleFunc("/api/events", guard(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"events": allEvents()})
 	}))

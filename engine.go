@@ -153,6 +153,7 @@ func (e *Engine) Start() error {
 }
 
 func (e *Engine) startEngine() error {
+	logf("starting merging (asked by %s)", where(3))
 	if msg := detectConflictNow(); msg != "" {
 		e.setError(msg)
 		logf("not starting: %s", msg)
@@ -270,6 +271,9 @@ func (e *Engine) watch(cmd *exec.Cmd, exited chan error) {
 	}
 	e.mu.Unlock()
 	if current {
+		raw := engineCrashText()
+		logf("CRASH: the network engine stopped unexpectedly (%v)", err)
+		pendingCrash(fmt.Sprintf("network engine stopped unexpectedly (%v)\n%s", err, raw))
 		note("bad", "The network engine stopped unexpectedly. NetMerge is restarting it.")
 		e.restartAfter(fmt.Sprintf("engine exited unexpectedly (%v)", err))
 	}
@@ -345,7 +349,7 @@ func (e *Engine) Stop() {
 	}
 	stopOwnEngines()
 	forgetEngine()
-	logf("merging stopped")
+	logf("merging stopped (asked by %s)", where(2))
 	if was {
 		note("info", "Merging stopped")
 	}
