@@ -25,3 +25,5 @@ cd frontend && npm run screenshots
 | Settings, appearance | [settings-appearance-light.png](settings-appearance-light.png) | [settings-appearance-dark.png](settings-appearance-dark.png) |
 | Settings, appearance, narrow window | [settings-appearance-light-narrow.png](settings-appearance-light-narrow.png) | |
 | Settings, advanced | [settings-advanced-light.png](settings-advanced-light.png) | |
+
+The animated preview and the tour video are in [docs/media](../media): `npm run tour` (in `frontend/`, needs ffmpeg) records the tour again from the current window.
