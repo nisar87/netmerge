@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.18.1
+
+- **Click a picture to choose the look.** In Settings → Appearance the Light and Dark pictures did nothing when clicked; only the buttons below them changed the theme. Now each picture is a button too, the chosen one is outlined and marked, and there is a third picture for System (follows Windows). The buttons below still work and stay in step with the pictures.
+
 ## 3.18.0
 
 - **One engine, built in.** NetMerge's own network engine is now the only one. The separate engine that NetMerge used to download (about 60 MB, in the `core` folder) is gone: nothing is downloaded on first start, and an old `core` folder is removed the first time 3.18.0 starts. Before this change the two engines were compared once more side by side on GitHub's machines, with the same settings:

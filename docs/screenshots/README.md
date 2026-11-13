@@ -22,4 +22,6 @@ cd frontend && npm run screenshots
 | Sharing | [sharing-connect-light.png](sharing-connect-light.png) | |
 | Activity | [activity-events-light.png](activity-events-light.png) | |
 | Settings | [settings-general-light.png](settings-general-light.png) | |
+| Settings, appearance | [settings-appearance-light.png](settings-appearance-light.png) | [settings-appearance-dark.png](settings-appearance-dark.png) |
+| Settings, appearance, narrow window | [settings-appearance-light-narrow.png](settings-appearance-light-narrow.png) | |
 | Settings, advanced | [settings-advanced-light.png](settings-advanced-light.png) | |

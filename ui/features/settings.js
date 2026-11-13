@@ -2,7 +2,7 @@
 function renderSettings(){
   $('#callTog').classList.toggle('on', !local.noCallProtect); $('#callTog').setAttribute('aria-checked', !local.noCallProtect);
   [['#autoTog','autoStart'],['#launchTog','mergeOnLaunch'],['#debugTog','debugLog']].forEach(([id,k]) => { $(id).classList.toggle('on', !!local[k]); $(id).setAttribute('aria-checked', !!local[k]); });
-  $$('#theme button').forEach(b=>{const selected=b.dataset.v===document.documentElement.dataset.preference;b.classList.toggle('sel',selected);b.setAttribute('aria-pressed',selected);});
+  $$('#theme button,.theme-preview').forEach(b=>{const selected=b.dataset.v===document.documentElement.dataset.preference;b.classList.toggle('sel',selected);b.setAttribute('aria-pressed',selected);});
   if (document.activeElement !== $('#balSel')) $('#balSel').value = local.classicBalance ? 'classic' : 'smart';
   const v = S.snap.version || '';
   $('#engineVer').textContent = v ? 'Built into NetMerge, version ' + v.replace(/^nmengine-/, '') + ' (running)' : 'Not running';
