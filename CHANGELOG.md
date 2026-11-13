@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.20.0
+
+A new look: **Quantum Flow, Mission Control and Aurora Glass.** Only the window changed; merging, the engine, routing, DNS, sharing, settings and updates work exactly as before, and your settings carry over.
+
+- **Quantum Flow on the Overview.** Each connection is a glowing source. Light flows from it into the NetMerge hub and on towards the totals. How much light flows follows that connection's measured download speed. A line that is off, has no internet or carries nothing sends no light, and a line with no internet is drawn broken in red. With merging off, nothing moves. Every particle keeps its connection's colour all the way: each download still runs over one connection, and NetMerge chooses which one. Point at a connection to see its readings.
+- **Mission Control.** The combined-speed gauge now has the NetMerge mark in its hub and a soft halo, and the hub brightens a little as traffic arrives. The live traffic chart draws smooth glowing curves.
+- **Aurora Glass everywhere.** Slow cyan, teal and violet light behind every page, translucent panels with a fine lit edge, gradient buttons and switches, glowing navigation, softer dialogs and toasts, and gentle page transitions. Dark and light are both redesigned, including the pictures in Settings → Appearance.
+- **New setting: Settings → Appearance → Animations** (Normal, Reduced or Off). Normal follows Windows: with Windows' animation effects off, it becomes Reduced by itself. Off keeps everything still. The moving picture draws only while the Overview is visible and stops when the window is hidden or minimized.
+- **Light on your PC.** The animation draws at most 30 frames a second, has a fixed limit of particles, and never measures the page while it draws. Measured in a browser without a graphics chip, against 3.19.0: the window keeps 60 frames a second and about the same work and memory. Frosted blur is kept only on dialogs and toasts, where it shows; on the big panels it cost half the frame rate and changed nothing visible. With Windows' "Transparency effects" off, the panels are solid.
+
 ## 3.19.0
 
 - **Problems are found without asking you for logs.** NetMerge can now send a short diagnostics report every 6 hours, and soon after a crash. The first-run screen has a "Send diagnostics" checkbox (ticked by default), and **Settings → Maintenance → Send diagnostics** turns it off at any time. A report holds a random installation number, the version, Windows and the PC model, your settings as on/off values and counts, a summary of your connections, and NetMerge's own log with addresses, hardware addresses, device names and your Windows user name taken out. It never holds the websites you visit, the apps you use or your files. If you used NetMerge before, the Activity list tells you once that this is on. Details are in the README, section Diagnostics.

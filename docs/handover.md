@@ -45,8 +45,8 @@ Not part of NetMerge any more:
 | `update.go` | Self-update from GitHub releases (`appVersion` here must match `VERSION`) |
 | `speedtest.go`, `blocking.go`, `dns.go`, `share.go`, `preset.go`, `backup.go`, `history.go` | Speed test, ad blocking, DNS, sharing to other devices, presets, backup, history |
 | `eventlog.go`, `report.go`, `diagnostics/` | The log beyond plain lines (problems with their place in the code, counts once a minute, how the last run ended, crash files) and the diagnostics reports sent to Firestore project `netmerge-windows`; `diagnostics/read.sh` reads them (see `diagnostics/README.md`) |
-| `ui/` | The window (HTML/CSS/JS served by the program; redesigned in 3.12.0) |
-| `frontend/` | Tests for the window: a fixture server that imitates the API + Playwright browser tests |
+| `ui/` | The window (HTML/CSS/JS served by the program). 3.20.0 look: `styles/tokens.css` (Aurora palette, light and dark), `styles/aurora.css` (glass, light, controls, motion modes, loaded last), `features/quantum-flow.js` (the canvas animation on the Overview; presentation only) |
+| `frontend/` | Tests for the window: a fixture server that imitates the API + Playwright browser tests; `scripts/perf.mjs` measures the window's own cost (frames, main-thread work, memory) |
 
 ## 4. Build, test, release
 

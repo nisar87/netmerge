@@ -97,6 +97,17 @@ function applyTheme(preference){
   if(S)render();
 }
 $$('#theme button').forEach(b=>b.onclick=()=>applyTheme(b.dataset.v));
+/* ---------- animations: Normal / Reduced / Off (Normal follows Windows' "Animation effects") ---------- */
+function applyMotion(pref){
+  if(!['normal','reduced','off'].includes(pref))pref='normal';
+  const root=document.documentElement;
+  root.dataset.motionPref=pref;
+  root.dataset.motion=pref==='normal'&&matchMedia('(prefers-reduced-motion: reduce)').matches?'reduced':pref;
+  try{localStorage.setItem('nm-motion',pref);}catch{}
+  $$('#motion button').forEach(b=>{b.classList.toggle('sel',b.dataset.v===pref);b.setAttribute('aria-pressed',b.dataset.v===pref);});
+  if(window.QF){if(root.dataset.motion==='off')QF.clear();else QF.kick();}
+}
+matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',()=>applyMotion(document.documentElement.dataset.motionPref));
 $('#quickTheme').onclick=()=>applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(document.documentElement.dataset.preference==='auto')applyTheme('auto');});
 
@@ -369,11 +380,15 @@ function drawChart(){
     g.fillStyle = css('--dim'); g.fillText(fmt(v)+' Mbps', w-padR+8, yy+4); }
   chartGeo = {len, X, Y, w, h, padL, padR, stack, acc, n};
   if (!len) return;
+  // smooth curves through the samples (midpoint quadratics: they pass near every reading and never overshoot much)
+  const curve = (vals, back) => { const pts = vals.map((v,i)=>[X(i),Y(v)]); if (back) pts.reverse();
+    pts.forEach(([x,y],i)=>{ if(!i){ back ? g.lineTo(x,y) : g.moveTo(x,y); return; } const [px,py]=pts[i-1]; g.quadraticCurveTo(px,py,(px+x)/2,(py+y)/2); if(i===pts.length-1)g.lineTo(x,y); }); };
+  const dark = document.documentElement.dataset.theme === 'dark';
   stack.forEach(({col,base,top}) => {
-    g.beginPath(); top.forEach((v,i)=> i? g.lineTo(X(i),Y(v)) : g.moveTo(X(i),Y(v)));
-    for (let i=len-1;i>=0;i--) g.lineTo(X(i), Y(base[i]));
-    g.closePath(); const gr = g.createLinearGradient(0,padT,0,h); gr.addColorStop(0,col+'77'); gr.addColorStop(1,col+'1c'); g.fillStyle = gr; g.fill();
-    g.beginPath(); top.forEach((v,i)=> i? g.lineTo(X(i),Y(v)) : g.moveTo(X(i),Y(v))); g.strokeStyle = col; g.lineWidth = 1.7; g.lineJoin='round'; g.stroke();
+    g.beginPath(); curve(top); curve(base, true);
+    g.closePath(); const gr = g.createLinearGradient(0,padT,0,h); gr.addColorStop(0,col+(dark?'66':'55')); gr.addColorStop(1,col+'0a'); g.fillStyle = gr; g.fill();
+    g.save(); if (dark) { g.shadowColor = col; g.shadowBlur = 10; }
+    g.beginPath(); curve(top); g.strokeStyle = col; g.lineWidth = 2; g.lineJoin='round'; g.stroke(); g.restore();
   });
   const i = hover >= 0 ? Math.min(hover, len-1) : len-1;
   g.fillStyle = css('--text'); g.beginPath(); g.arc(X(i), Y(acc[i]||0), 3.4, 0, 7); g.fill();

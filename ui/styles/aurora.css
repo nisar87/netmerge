@@ -1,0 +1,174 @@
+/* Aurora Glass: the material layer, loaded last. Panels are smoked glass over a slow aurora of cyan, teal and
+   violet light; borders catch a little light; controls glow softly when they are active. Colours come only from
+   tokens.css, so light and dark stay one system. Motion follows html[data-motion]: normal, reduced or off. */
+
+/* ---------- the light behind everything ---------- */
+html{background:var(--canvas)}
+body{background:transparent;position:relative;isolation:isolate}
+body::before{content:"";position:fixed;inset:-20vmax;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(38vmax 30vmax at 18% 12%,var(--aurora-1),transparent 70%),
+    radial-gradient(42vmax 32vmax at 88% 8%,var(--aurora-2),transparent 70%),
+    radial-gradient(46vmax 30vmax at 70% 96%,var(--aurora-3),transparent 72%),
+    var(--canvas)}
+html[data-motion="normal"] body::before{animation:aurora-drift var(--motion-ambient) ease-in-out infinite alternate}
+@keyframes aurora-drift{0%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-2.5vmax,1.5vmax,0) scale(1.04)}100%{transform:translate3d(2vmax,-1vmax,0) scale(1.02)}}
+/* a faint grid in dark mode, like a control-room floor */
+:root[data-theme="dark"] body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.35;
+  background-image:linear-gradient(rgb(148 197 255 / .035) 1px,transparent 1px),linear-gradient(90deg,rgb(148 197 255 / .035) 1px,transparent 1px);
+  background-size:48px 48px;mask-image:radial-gradient(120% 90% at 60% 30%,#000 30%,transparent 80%)}
+
+/* ---------- glass panels ---------- */
+/* No blur on the big panels: they sit over soft gradients, where blur changes nothing you can see but costs a lot
+   of drawing on PCs without a strong graphics chip (measured: 60 → 25 frames a second). Only small layers over
+   busy content (dialogs, toasts, tooltips) are frosted. */
+.card,.us,.mode-opt,.lk.ov-link,.side,.toast,.nm-dialog,dialog.wiz,.theme-preview{
+  background:var(--glass);
+  border-color:color-mix(in srgb,var(--accent) 7%,var(--line));box-shadow:var(--panel-shadow),inset 0 1px 0 var(--edge)}
+.side{border-right:1px solid color-mix(in srgb,var(--accent) 7%,var(--line));box-shadow:none}
+.card,.us,.lk.ov-link,.mode-opt{border-radius:var(--radius-panel)}
+/* a hairline of light along the top edge of the big panels */
+.ov-hero,.page-hero,.traffic-card,.us.tot{position:relative}
+.ov-hero::after,.page-hero::after,.traffic-card::after,.us.tot::after{content:"";position:absolute;inset:0 0 auto;height:1px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--accent) 55%,transparent) 30%,color-mix(in srgb,var(--accent-2) 50%,transparent) 70%,transparent)}
+.page-hero{background:radial-gradient(90% 180% at 100% 0,color-mix(in srgb,var(--accent) 10%,transparent),transparent 60%),var(--glass)}
+.hero-icon{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 22%,transparent),color-mix(in srgb,var(--accent-2) 18%,transparent));color:var(--accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 28%,transparent),0 0 24px -6px var(--edge-glow)}
+/* interactive panels light up their border when pointed at */
+.lk.ov-link,.mode-opt,.us,.theme-preview{transition:border-color var(--motion-normal),box-shadow var(--motion-normal),transform var(--motion-normal) var(--ease-out)}
+.lk.ov-link:hover,.mode-opt:hover,.us:hover{border-color:color-mix(in srgb,var(--c,var(--accent)) 45%,var(--line));box-shadow:var(--panel-shadow),inset 0 1px 0 var(--edge),0 0 0 1px color-mix(in srgb,var(--c,var(--accent)) 12%,transparent),0 18px 40px -26px color-mix(in srgb,var(--c,var(--accent)) 70%,transparent)}
+html[data-motion="normal"] .mode-opt:hover,html[data-motion="normal"] .us:hover{transform:translateY(-2px)}
+/* insets (tiles, inputs) sit a level below the glass */
+.cx-tile,.kpi,.mode-art{background:color-mix(in srgb,var(--canvas) 55%,transparent);border-color:color-mix(in srgb,var(--accent) 5%,var(--line))}
+
+/* ---------- type ---------- */
+h1,h2,.page-heading h1,#pageTitle{font-family:var(--font-display)}
+#pageTitle{background:linear-gradient(100deg,var(--text) 55%,color-mix(in srgb,var(--accent) 70%,var(--text)));-webkit-background-clip:text;background-clip:text;color:transparent}
+.eyebrow{color:var(--accent);letter-spacing:2px}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- navigation ---------- */
+.brand-mark{background:var(--grad-accent);color:var(--on-accent);box-shadow:0 6px 18px -6px color-mix(in srgb,var(--accent) 70%,transparent),inset 0 1px 0 rgb(255 255 255 / .35)}
+.nav{transition:background var(--motion-fast),color var(--motion-fast)}
+.nav:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.nav.sel{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 16%,transparent),color-mix(in srgb,var(--accent-2) 6%,transparent));color:var(--accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 16%,transparent)}
+.nav.sel::before{background:var(--grad-accent);box-shadow:0 0 12px var(--edge-glow)}
+.nav.sel .icon{filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 55%,transparent))}
+.subnav a{transition:color var(--motion-fast),border-color var(--motion-fast)}
+.subnav a.selected{border-image:var(--grad-accent) 1}
+.side-foot{background:color-mix(in srgb,var(--canvas) 50%,transparent);border-color:color-mix(in srgb,var(--accent) 8%,var(--line))}
+
+/* ---------- controls ---------- */
+.btn{transition:background var(--motion-fast),border-color var(--motion-fast),box-shadow var(--motion-fast),transform var(--motion-fast);background:color-mix(in srgb,var(--surface) 70%,transparent)}
+.btn:hover:not(:disabled){border-color:color-mix(in srgb,var(--accent) 55%,var(--control-line));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent)}
+html[data-motion="normal"] .btn:active:not(:disabled){transform:translateY(1px) scale(.99)}
+.btn.pri,.btn.primary{background:var(--grad-accent);border-color:transparent;color:var(--on-accent);box-shadow:0 8px 20px -10px color-mix(in srgb,var(--accent) 80%,transparent),inset 0 1px 0 rgb(255 255 255 / .25)}
+.btn.pri:hover:not(:disabled),.btn.primary:hover:not(:disabled){box-shadow:0 10px 26px -10px color-mix(in srgb,var(--accent) 95%,transparent),0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent),inset 0 1px 0 rgb(255 255 255 / .3)}
+.tog{transition:background var(--motion-normal),box-shadow var(--motion-normal)}
+.tog::after{transition:left var(--motion-normal) var(--ease-spring),box-shadow var(--motion-normal)}
+.tog.on{background:var(--grad-accent);box-shadow:0 0 14px -2px color-mix(in srgb,var(--accent) 55%,transparent)}
+.ov-link .tog.on{background:var(--c)}
+.power.is-on .sw{box-shadow:0 0 14px -2px color-mix(in srgb,var(--success) 70%,transparent)}
+.power{background:var(--glass)}
+.seg{background:color-mix(in srgb,var(--canvas) 60%,transparent);border-color:color-mix(in srgb,var(--accent) 6%,var(--line))}
+.seg button{transition:background var(--motion-fast),color var(--motion-fast),box-shadow var(--motion-fast)}
+.seg button.sel{background:var(--glass-strong);color:var(--accent);box-shadow:0 1px 3px rgb(0 0 0 / .12),inset 0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent)}
+.inp,.sel,textarea.inp{background:color-mix(in srgb,var(--surface) 75%,transparent);transition:border-color var(--motion-fast),box-shadow var(--motion-fast)}
+.inp:focus,.sel:focus,textarea.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 18%,transparent)}
+input[type="range"]{accent-color:var(--accent)}
+input[type="checkbox"]{accent-color:var(--accent)}
+
+/* ---------- tables ---------- */
+.tbl th{background:color-mix(in srgb,var(--canvas) 60%,transparent);text-transform:uppercase;letter-spacing:.8px}
+.tbl tbody tr{transition:background var(--motion-fast)}
+.tbl tbody tr:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}
+
+/* ---------- toasts and dialogs ---------- */
+.toast,.nm-dialog,dialog.wiz{-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);backdrop-filter:blur(var(--glass-blur)) saturate(150%)}
+.toast{border-color:color-mix(in srgb,var(--accent) 25%,var(--line))}
+.toast.show{box-shadow:var(--shadow-overlay),0 0 0 1px color-mix(in srgb,var(--accent) 12%,transparent),inset 0 1px 0 var(--edge)}
+.nm-dialog::backdrop,dialog.wiz::backdrop{background:color-mix(in srgb,var(--canvas) 55%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.dialog-symbol{color:var(--accent)}
+html[data-motion="normal"] .nm-dialog[open],html[data-motion="normal"] dialog.wiz[open]{animation:dlg-in var(--motion-panel) var(--ease-out)}
+@keyframes dlg-in{from{opacity:0;transform:translateY(10px) scale(.97)}}
+
+/* ---------- page transitions ---------- */
+html[data-motion="normal"] .page:not([hidden]){animation:page-in var(--motion-panel) var(--ease-out)}
+html[data-motion="reduced"] .page:not([hidden]){animation:page-fade 160ms linear}
+@keyframes page-in{from{opacity:0;transform:translateY(8px)}}
+@keyframes page-fade{from{opacity:0}}
+
+/* ---------- Overview: Quantum Flow and Mission Control ---------- */
+.ov-hero{background:
+  radial-gradient(60% 120% at 62% 52%,color-mix(in srgb,var(--accent) 11%,transparent),transparent 62%),
+  radial-gradient(40% 90% at 20% 50%,color-mix(in srgb,var(--accent-2) 7%,transparent),transparent 70%),var(--glass)}
+.ov-status{border-bottom-color:color-mix(in srgb,var(--accent) 8%,var(--line))}
+.ov-kpis{border-left-color:color-mix(in srgb,var(--accent) 8%,var(--line))}
+.ov-kpi,.ov-kpi:nth-child(odd){border-color:color-mix(in srgb,var(--accent) 8%,var(--line))}
+.ov-kpi-value{font-size:24px}
+.ov-kpi dt .icon{color:var(--accent)}
+#mergeFlow{position:relative;--hub-glow:#0891b2}
+:root[data-theme="dark"] #mergeFlow{--hub-glow:#67e8f9}
+#mergeFlow svg{position:relative;z-index:1}
+.qf-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
+html[data-motion="off"] .qf-canvas{display:none}
+.mf-halo-in{stop-color:var(--accent);stop-opacity:.16}
+.mf-halo-out{stop-color:var(--accent);stop-opacity:0}
+.mf-halo{opacity:.55;transition:opacity 1.2s}
+svg.busy .mf-halo{opacity:1}
+svg.off .mf-halo{opacity:.15}
+/* the hub's breathing is drawn on the canvas (it follows arriving traffic); animating the SVG would re-lay out the page every frame */
+.mf-glow{fill:color-mix(in srgb,var(--speed,var(--accent)) 7%,var(--glass-strong));stroke:color-mix(in srgb,var(--accent) 30%,var(--line))}
+.mf-logo path{stroke:var(--accent)}
+.mf-logo circle{fill:var(--accent-2)}
+svg.off .mf-logo{opacity:.4}
+.mf-card{fill:var(--glass-strong)}
+.mf-node .mf-card{stroke:color-mix(in srgb,var(--c) 45%,var(--line))}
+.mf-node.moving .mf-card{filter:drop-shadow(0 0 10px color-mix(in srgb,var(--c) 35%,transparent))}
+.mf-ribbon{stroke-opacity:.26}
+.mf-node.moving .mf-ribbon{stroke-opacity:.36}
+.mf-node.down .mf-ribbon{stroke:var(--error);stroke-opacity:.45;stroke-dasharray:3 9}
+.mf-node.down .mf-card{stroke:var(--error)}
+.mf-out{fill:none;stroke-width:12px;stroke-opacity:.3;stroke-linecap:round}
+.mf-out-a{stop-color:var(--accent);stop-opacity:.9}.mf-out-b{stop-color:var(--accent-2);stop-opacity:0}
+svg.busy .mf-out{stroke-opacity:.55}
+svg.off .mf-out{stroke-opacity:.05;stroke-dasharray:3 8}
+/* the canvas carries the moving particles; the old dashes stay as a still fallback when animations are off */
+html:not([data-motion="off"]) .mf-node.moving .mf-flow{animation:none;stroke-opacity:0}
+.mf-arc{filter:drop-shadow(0 0 8px color-mix(in srgb,var(--speed,var(--accent)) 60%,transparent))}
+.mf-hub-value{font-family:var(--font-display);font-weight:600;letter-spacing:-1.5px}
+.mf-track,.mf-inner-track{stroke:color-mix(in srgb,var(--raised) 85%,transparent)}
+:root{--gauge-low:#0284c7;--gauge-high:#0f8a5f}
+:root[data-theme="dark"]{--gauge-low:#38bdf8;--gauge-high:#34d399}
+
+/* live chart and connection cards */
+.lk.ov-link::before{height:2px;box-shadow:0 0 12px var(--c)}
+.live-label i{box-shadow:0 0 8px var(--success)}
+#chartBox .tip{background:var(--glass-strong);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-color:color-mix(in srgb,var(--accent) 20%,var(--line));box-shadow:var(--shadow-overlay)}
+
+/* ---------- motion settings ---------- */
+html[data-motion="off"] *,html[data-motion="off"] *::before,html[data-motion="off"] *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-motion="reduced"] *::after{animation-iteration-count:1!important;scroll-behavior:auto!important}
+html[data-motion="reduced"] .page:not([hidden]){animation-iteration-count:1!important}
+
+/* glass costs GPU time on very old graphics; Windows' "transparency effects: off" users get solid panels */
+@media (prefers-reduced-transparency: reduce){
+  .card,.us,.mode-opt,.lk.ov-link,.side,.toast,.nm-dialog,dialog.wiz,.theme-preview,.power{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+@media (max-width:719px){.side{background:var(--glass-strong)}}
+
+/* the page title takes focus after navigation (for screen readers); it shows no ring for that */
+#pageTitle:focus,#pageTitle:focus-visible,#main:focus,#main:focus-visible{outline:none;box-shadow:none}
+@media (min-width:720px){.opt>.seg{flex-wrap:nowrap;flex:none}}
+
+/* theme pictures show the real Aurora palettes (fixed colours: each picture is that theme, whatever is active) */
+.tp-screen{background:radial-gradient(70% 90% at 85% 10%,rgb(139 92 246 / .14),transparent 70%),radial-gradient(70% 90% at 15% 0,rgb(34 211 238 / .18),transparent 70%),#eef3f9}
+.tp-screen>i{background:rgb(255 255 255 / .8);border-right-color:#d9e2ee}
+.tp-body b{background:linear-gradient(90deg,#0e7490,#1d5fd8,#5b3fd6)}
+.tp-body u{background:rgb(255 255 255 / .85);border-color:#d9e2ee}
+.tp-screen.dark{background:radial-gradient(70% 90% at 85% 10%,rgb(139 92 246 / .3),transparent 70%),radial-gradient(70% 90% at 15% 0,rgb(34 211 238 / .22),transparent 70%),#060a14}
+.tp-screen.dark>i,.tp-screen.dark u{background:rgb(13 21 38 / .8);border-color:#22314b}
+.tp-screen.dark b{background:linear-gradient(90deg,#22d3ee,#60a5fa,#a78bfa)}
+dialog.wiz>.card{background:none;box-shadow:none;border:0}
+.wiz li{margin:14px 0}
+.wiz li i.ok{box-shadow:0 0 10px -2px color-mix(in srgb,var(--success) 60%,transparent)}
