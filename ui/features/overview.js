@@ -59,7 +59,8 @@ function renderMergeFlow(sn, run){
   const cx = compact ? 150 : 556, cy = H/2 - 4, R = 118, arcW = 14, inner = R - 40;
   // scale: a round number above the fastest reading of this session, so the needle has room to move
   const now = mbps(sn.totalDown) || 0, peak = Math.max(mbps(sn.peakDown) || 0, now);
-  const top = Math.max(10, niceMax(peak * 1.15));
+  // scale tops that divide into quarters cleanly (no 37.5 or 112 on the dial)
+  const top = [10, 20, 40, 80, 100, 160, 200, 400, 800, 1000, 1600, 2000, 4000, 8000, 10000].find(v => v >= peak * 1.15) || Math.ceil(peak * 1.15 / 1000) * 1000;
   const key = (compact ? 'c|' : 'w|') + all.map(l => l.name).join('|') + '|' + top;
   const P = (r, deg) => { const a = deg * Math.PI / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
   const arc = r => { const [x1, y1] = P(r, 135), [x2, y2] = P(r, 405); return `M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 1 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`; };
@@ -92,7 +93,7 @@ function renderMergeFlow(sn, run){
     const ticks = Array.from({length: 21}, (_, k) => { const deg = 135 + 270 * k / 20, major = k % 5 === 0;
       const [x1, y1] = P(R - arcW/2 - 6, deg), [x2, y2] = P(R - arcW/2 - (major ? 15 : 10), deg);
       return `<line class="mf-tick${major ? ' major' : ''}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`; }).join('');
-    const labels = [0, .25, .5, .75, 1].map(k => { const [x, y] = P(R + 22, 135 + 270 * k); return `<text class="mf-scale" x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle">${fmt(top * k).replace(/\.0+$/, '')}</text>`; }).join('');
+    const labels = [0, .25, .5, .75, 1].filter(k => Number.isInteger(top * k)).map(k => { const [x, y] = P(R + 22, 135 + 270 * k); return `<text class="mf-scale" x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle">${fmt(top * k).replace(/\.0+$/, '')}</text>`; }).join('');
     const C = 2 * Math.PI * inner;
     const segs = shown.map(l => `<circle class="mf-seg" data-n="${esc(l.name)}" cx="${cx}" cy="${cy}" r="${inner}" stroke="${colorOf(l.name)}" stroke-width="4" stroke-dasharray="0 ${C}" transform="rotate(-90 ${cx} ${cy})"/>`).join('');
     const [nx1] = P(inner + 8, 0), [nx2] = P(R + arcW/2 + 4, 0);
