@@ -121,3 +121,47 @@ test('wording follows the real behaviour of the chosen mode and balancing', asyn
   await page.locator('.lk[data-n="Wi-Fi"] .lk-settings summary').click();
   await expect(page.locator('.lk[data-n="Wi-Fi"] [data-f=roleHint]')).toContainText('Works only with Smart balancing');
 });
+
+test('Quantum Flow moves only with real traffic, and the animation setting is honoured', async ({ page, fixture }) => {
+  await navigate(page, 'overview');
+  // traffic on both lines: particles flow
+  await expect.poll(() => page.evaluate(() => window.QF.count), { timeout: 8000 }).toBeGreaterThan(5);
+  // hovering a source names its real readings
+  await expect(page.locator('#mergeFlow .mf-node[data-n="Ethernet"] title')).toContainText(/Mbps down/);
+  // merging off: nothing moves
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { running: false } } }));
+  await expect.poll(() => page.evaluate(() => window.QF.count)).toBe(0);
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { running: true } } }));
+  await expect.poll(() => page.evaluate(() => window.QF.count), { timeout: 8000 }).toBeGreaterThan(0);
+  // a line with no internet is drawn broken and sends nothing
+  const links = (await fixture.read('state')).snap.links;
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { links: links.map(l => ({ ...l, healthy: false, down: 0 })) } } }));
+  await expect(page.locator('#mergeFlow .mf-node.down')).toHaveCount(2);
+  await expect.poll(() => page.evaluate(() => window.QF.count), { timeout: 8000 }).toBe(0);
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { links } } }));
+  // Settings → Appearance → Animations: Off stops the picture and is remembered
+  await navigate(page, 'settings/appearance');
+  await page.locator('#motion button[data-v="normal"]').waitFor();
+  await expect(page.locator('#motion button[data-v="normal"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#motion button[data-v="off"]').click();
+  await expect(page.locator('html')).toHaveAttribute('data-motion', 'off');
+  expect(await page.evaluate(() => localStorage.getItem('nm-motion'))).toBe('off');
+  await navigate(page, 'overview');
+  await page.waitForTimeout(1500);
+  expect(await page.evaluate(() => window.QF.count)).toBe(0);
+  await expect(page.locator('#mergeFlow .qf-canvas')).toBeHidden();
+  await navigate(page, 'settings/appearance');
+  await page.locator('#motion button[data-v="normal"]').click();
+  // the tests run with the browser's reduced-motion preference on, so Normal resolves to Reduced here
+  await expect(page.locator('html')).toHaveAttribute('data-motion-pref', 'normal');
+  await expect(page.locator('html')).not.toHaveAttribute('data-motion', 'off');
+});
+
+test('Windows "animation effects off" turns Normal into Reduced, and a narrow window draws no streams', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await navigate(page, 'overview');
+  await expect(page.locator('html')).toHaveAttribute('data-motion', 'reduced');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(2500);
+  expect(await page.evaluate(() => window.QF.count)).toBe(0);
+});

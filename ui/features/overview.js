@@ -41,8 +41,8 @@ function renderMergeFlow(sn, run){
   const shown = (sn.links || []).filter(l => l.present && l.enabled);
   const compact = box.clientWidth > 0 && box.clientWidth < 520;
   const n = shown.length;
-  const W = compact ? 300 : 720, rowH = 74, H = compact ? 290 : Math.max(300, n * rowH + 40);
-  const cx = compact ? 150 : 560, cy = H/2 - 6, R = 110, arcW = 16, inner = R - 40;
+  const W = compact ? 300 : 760, rowH = 74, H = compact ? 290 : Math.max(300, n * rowH + 40);
+  const cx = compact ? 150 : 540, cy = H/2 - 6, R = 110, arcW = 16, inner = R - 40;
   // scale: a round number above the fastest reading of this session, so the needle has room to move
   const now = mbps(sn.totalDown) || 0, peak = Math.max(mbps(sn.peakDown) || 0, now);
   const top = Math.max(10, niceMax(peak * 1.15));
@@ -54,9 +54,9 @@ function renderMergeFlow(sn, run){
     const y0 = cy - (n - 1) * rowH / 2;
     const nodes = compact ? '' : shown.map((l, i) => {
       const y = y0 + i * rowH;
-      return `<g class="mf-node" data-n="${esc(l.name)}" style="--c:${colorOf(l.name)}">
-        <path class="mf-ribbon" d="M196 ${y} C 330 ${y}, 360 ${cy}, ${cx - R - 30} ${cy}"/>
-        <path class="mf-flow" d="M196 ${y} C 330 ${y}, 360 ${cy}, ${cx - R - 30} ${cy}"/>
+      return `<g class="mf-node" data-n="${esc(l.name)}" style="--c:${colorOf(l.name)}"><title data-f="title"></title>
+        <path class="mf-ribbon" d="M196 ${y} C 320 ${y}, 340 ${cy}, ${cx - R - 26} ${cy}"/>
+        <path class="mf-flow" d="M196 ${y} C 320 ${y}, 340 ${cy}, ${cx - R - 26} ${cy}"/>
         <rect class="mf-card" x="0" y="${y - 28}" width="196" height="56" rx="12"/>
         <rect class="mf-icon" x="10" y="${y - 18}" width="36" height="36" rx="9"/>
         ${svgIcon(l.kind, 18, y - 10, 20)}
@@ -71,8 +71,14 @@ function renderMergeFlow(sn, run){
     const C = 2 * Math.PI * inner;
     const segs = shown.map(l => `<circle class="mf-seg" data-n="${esc(l.name)}" cx="${cx}" cy="${cy}" r="${inner}" stroke="${colorOf(l.name)}" stroke-width="5" stroke-dasharray="0 ${C}" transform="rotate(-90 ${cx} ${cy})"/>`).join('');
     const [nx1] = P(inner + 8, 0), [nx2] = P(R + arcW/2 + 4, 0);
-    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true" focusable="false">
-      ${nodes}
+    // the combined traffic leaves the hub towards the totals on the right (the streams keep their own colours:
+    // each connection still carries its own downloads; NetMerge shares them out, it does not fuse one download)
+    const out = compact ? '' : `<linearGradient id="mfOutGrad" gradientUnits="userSpaceOnUse" x1="${cx + R + 26}" y1="0" x2="${W}" y2="0"><stop offset="0" class="mf-out-a"/><stop offset="1" class="mf-out-b"/></linearGradient><path class="mf-out" d="M${cx + R + 26} ${cy} H ${W}" stroke="url(#mfOutGrad)"/>`;
+    const logo = `<g class="mf-logo" transform="translate(${cx - 11} ${cy - 66}) scale(.69)"><path d="M6 9c7 0 7 7 13 7M6 23c7 0 7-7 13-7h7" fill="none" stroke-width="2.8" stroke-linecap="round"/><circle cx="26" cy="16" r="2.4"/></g>`;
+    box.innerHTML = `<canvas class="qf-canvas" aria-hidden="true"></canvas><svg viewBox="0 0 ${W} ${H}" aria-hidden="true" focusable="false">
+      <defs><radialGradient id="mfHalo"><stop offset="0" class="mf-halo-in"/><stop offset="1" class="mf-halo-out"/></radialGradient></defs>
+      <circle class="mf-halo" cx="${cx}" cy="${cy}" r="${R + 46}" fill="url(#mfHalo)"/>
+      ${out}${nodes}
       <circle class="mf-glow" cx="${cx}" cy="${cy}" r="${R - arcW/2 - 2}"/>
       <path class="mf-track" d="${arc(R)}" stroke-width="${arcW}"/>
       <path class="mf-arc" data-f="arc" d="${arc(R)}" stroke-width="${arcW}" pathLength="100" stroke-dasharray="0 100"/>
@@ -80,6 +86,7 @@ function renderMergeFlow(sn, run){
       <circle class="mf-inner-track" cx="${cx}" cy="${cy}" r="${inner}" stroke-width="5"/>
       ${segs}
       <g class="mf-needle" data-f="needle" style="transform-origin:${cx}px ${cy}px;transform:rotate(135deg)"><line x1="${nx1.toFixed(1)}" y1="${cy}" x2="${nx2.toFixed(1)}" y2="${cy}"/><circle cx="${nx2.toFixed(1)}" cy="${cy}" r="4"/></g>
+      ${logo}
       <text class="mf-hub-label" x="${cx}" y="${cy - 26}" text-anchor="middle" data-f="hubLabel"></text>
       <text class="mf-hub-value" x="${cx}" y="${cy + 14}" text-anchor="middle" data-f="hubValue"></text>
       <text class="mf-hub-unit" x="${cx}" y="${cy + 34}" text-anchor="middle">Mbps down</text>
@@ -101,11 +108,20 @@ function renderMergeFlow(sn, run){
     if (node) {
       const working = isWorking(l, run), moving = working && mbps(l.down) > 0.3;
       node.classList.toggle('idle', !working); node.classList.toggle('moving', moving);
+      node.classList.toggle('down', run && l.present && l.enabled && l.healthy === false);
       node.querySelector('.mf-ribbon').style.strokeWidth = (4 + Math.round(share * 22)) + 'px';
       f(node, 'state').textContent = statusOf(l, run)[0];
+      f(node, 'title').textContent = `${l.label || l.name}: ${statusOf(l, run)[0]} · ${fmtM(l.down)} Mbps down, ${fmtM(l.up)} up · ${Math.round(share * 100)}% of the download`;
     }
   });
   svg.classList.toggle('off', !run);
+  svg.classList.toggle('busy', run && total > 0);
+  // a narrow window shows the speedometer alone: no streams to draw
+  if (window.QF) QF.update(box, svg, {W, H, cx, cy, R, compact, run, out: compact ? null : [[cx + R + 26, cy], [W, cy]], streams: compact ? [] : shown.map((l, i) => {
+    const y = cy - (n - 1) * rowH / 2 + i * rowH;
+    return {name: l.name, color: colorOf(l.name), mbps: run && isWorking(l, run) ? Math.max(0, mbps(l.down) || 0) : 0,
+      p: [[196, y], [320, y], [340, cy], [cx - R - 26, cy]]};
+  })});
   const p = run ? Math.max(0, Math.min(1, now / gaugeTop)) : 0, col = speedColor(p);
   f(svg, 'arc').setAttribute('stroke-dasharray', `${(p * 100).toFixed(2)} 100`);
   svg.style.setProperty('--speed', col);
