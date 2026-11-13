@@ -28,7 +28,7 @@ Every release needs a manual approval before it is signed.
 NetMerge does not collect or send usage data, and has no analytics or telemetry. By itself it connects to these
 services, and only when the matching feature is used:
 
-- GitHub (`api.github.com`, `github.com`, `raw.githubusercontent.com`, `cdn.jsdelivr.net`): the update check, downloading the network engine, and downloading the optional blocking lists.
+- GitHub (`api.github.com`, `github.com`, `raw.githubusercontent.com`, `cdn.jsdelivr.net`): the update check and downloading the optional blocking lists.
 - Speed test servers (`speed.cloudflare.com`, `proof.ovh.net`) when you run a speed test.
 - Connectivity checks (`www.msftconnecttest.com`, `www.gstatic.com`) to see whether a connection is online.
 - `ifconfig.me`, to show the public address of a connection.
@@ -39,7 +39,7 @@ NetMerge keeps its settings and history on your own computer, in its data folder
 ## System changes
 
 NetMerge says before it changes anything on your computer. Changes it can make, when you turn the matching feature on:
-start with Windows (a scheduled task), a Windows Firewall rule for sharing your connection with other devices on your local network, and downloading the network engine.
+start with Windows (a scheduled task), a Windows Firewall rule for sharing your connection with other devices on your local network, and installing an update you accept.
 The scheduled task and the firewall rule follow the matching setting. (Before applying, the maintainer must verify that statement, and that the uninstall steps remove everything.)
 
 ## Reporting a problem
