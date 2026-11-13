@@ -93,7 +93,7 @@ function applyTheme(preference){
   document.documentElement.dataset.preference=preference;
   document.documentElement.dataset.theme=preference==='auto' ? (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light') : preference;
   try{localStorage.setItem('nm-theme',preference);}catch{}
-  $$('#theme button').forEach(b=>{b.classList.toggle('sel',b.dataset.v===preference);b.setAttribute('aria-pressed',b.dataset.v===preference);});
+  $$('#theme button,.theme-preview').forEach(b=>{b.classList.toggle('sel',b.dataset.v===preference);b.setAttribute('aria-pressed',b.dataset.v===preference);});
   if(S)render();
 }
 $$('#theme button').forEach(b=>b.onclick=()=>applyTheme(b.dataset.v));

@@ -165,3 +165,21 @@ test('settings has an About tab linking to nisarworks.com and the source', async
   await expect(page.locator('#aboutSite')).toHaveAttribute('target', '_blank');
   await expect(page.locator('#aboutRepo')).toHaveAttribute('href', 'https://github.com/nisar87/netmerge');
 });
+
+test('clicking a theme picture chooses that theme', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await navigate(page, 'settings/appearance');
+  const html = page.locator('html');
+  await page.locator('.theme-preview[data-v="dark"]').click();
+  await expect(html).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('.theme-preview[data-v="dark"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#theme button[data-v="dark"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('.theme-preview[data-v="light"]').click();
+  await expect(html).toHaveAttribute('data-theme', 'light');
+  await expect(page.locator('.theme-preview[data-v="dark"]')).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('.theme-preview[data-v="auto"]').click();
+  await expect(html).toHaveAttribute('data-preference', 'auto');
+  await expect(page.locator('.theme-preview[data-v="auto"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#theme button[data-v="dark"]').click();
+  await expect(page.locator('.theme-preview[data-v="dark"]')).toHaveAttribute('aria-pressed', 'true');
+});

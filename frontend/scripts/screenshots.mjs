@@ -15,7 +15,7 @@ const shots=[
   ['light',1440,900,'connections'],['light',1440,900,'connections/speed-test'],['light',1440,900,'connections/presets'],
   ['light',1440,900,'apps/active'],['light',1440,900,'apps/rules'],['light',1440,900,'usage'],
   ['light',1440,900,'protection/blocking'],['light',1440,900,'protection/dns'],['light',1440,900,'sharing/connect'],
-  ['light',1440,900,'activity/events'],['light',1440,900,'settings/general'],['light',1440,900,'settings/advanced'],['light',1440,900,'settings/about'],
+  ['light',1440,900,'activity/events'],['light',1440,900,'settings/general'],['light',1440,900,'settings/advanced'],['light',1440,900,'settings/about'],['light',1440,900,'settings/appearance'],['dark',1440,900,'settings/appearance'],['light',390,844,'settings/appearance'],
   ['dark',1440,900,'connections'],['dark',1440,900,'usage'],
 ];
 const errors=[];
