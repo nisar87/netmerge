@@ -342,7 +342,7 @@ type blockStatsT struct {
 var bstats = &blockStatsT{top: map[string]int{}, recent: map[string]*BlockEvent{}}
 
 // The engine logs a refused connection as "match AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow))))) using
-// REJECT" (checked with mihomo 1.19.33); the plain "match RuleSet(nm_block)" form of older versions still counts.
+// REJECT"; the plain "match RuleSet(nm_block)" form still counts.
 // The program name in brackets after the source is there only for programs on this PC: a shared phone's line is
 // "[TCP] 192.168.1.107:60372 --> 172.217.117.4:443 match ..." (seen on a real PC), so the brackets are optional.
 var blockedRe = regexp.MustCompile(`\[(?:TCP|UDP)\] ([^\s(]+)(?:\(([^)]*)\))? --> (\S+) match (?:RuleSet\(nm_block\)|AND\(\(\(RuleSet,nm_block\))`)

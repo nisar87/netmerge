@@ -31,6 +31,17 @@ func processPath(pid int) string {
 
 // processesRunning lists the processes running the program at path.
 func processesRunning(path string) []int {
+	var out []int
+	for _, pid := range allPids() {
+		if samePath(processPath(pid), path) {
+			out = append(out, pid)
+		}
+	}
+	return out
+}
+
+// allPids lists every running process.
+func allPids() []int {
 	snap, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return nil
@@ -40,9 +51,8 @@ func processesRunning(path string) []int {
 	pe.Size = uint32(unsafe.Sizeof(pe))
 	var out []int
 	for err = syscall.Process32First(snap, &pe); err == nil; err = syscall.Process32Next(snap, &pe) {
-		pid := int(pe.ProcessID)
-		if pid != 0 && samePath(processPath(pid), path) {
-			out = append(out, pid)
+		if pe.ProcessID != 0 {
+			out = append(out, int(pe.ProcessID))
 		}
 	}
 	return out

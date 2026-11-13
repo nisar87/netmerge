@@ -53,7 +53,7 @@ func TestRebuildAndConfig(t *testing.T) {
 	if blockedRe.FindStringSubmatch(`time="x" level=info msg="[TCP] 198.18.0.1:55696(node.exe) --> ads.doubleclick.net:443 match RuleSet(nm_block) using REJECT"`) == nil {
 		t.Fatal("regex")
 	}
-	// the line mihomo 1.19.33 really writes for the combined rule (seen in a run of the engine)
+	// the line the engine writes for the combined rule
 	if m := blockedRe.FindStringSubmatch(`time="x" level=info msg="[TCP] 198.18.0.1:55696(node.exe) --> ads.doubleclick.net:443 match AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow))))) using REJECT"`); m == nil || blockedApp(m[1], m[2]) != "node.exe" || m[3] != "ads.doubleclick.net:443" {
 		t.Fatalf("regex for the combined rule: %v", m)
 	}

@@ -59,7 +59,7 @@ type ruleEnv struct {
 
 type condition interface {
 	match(m *Metadata, env *ruleEnv) bool
-	name() string    // as mihomo prints it, e.g. DomainSuffix
+	name() string    // as printed in the log, e.g. DomainSuffix
 	payload() string // e.g. example.com
 }
 
@@ -221,7 +221,7 @@ func (c *logicCond) match(m *Metadata, env *ruleEnv) bool {
 }
 func (c *logicCond) name() string { return c.op }
 
-// payload is written the way mihomo writes it, because NetMerge's block counter reads it from the log:
+// payload is written in a fixed form, because NetMerge's block counter reads it from the log:
 // AND(((RuleSet,nm_block) && (NOT,(!(RuleSet,nm_allow)))))
 func (c *logicCond) payload() string { return "(" + c.inner() + ")" }
 
@@ -439,7 +439,7 @@ func matchingParen(s string, open int) int {
 
 // ---- domain sets (block and allow lists) ----
 
-// DomainSet holds a domain list in mihomo's text form: "+.x" (x and below), ".x" (below x only), "*.x" (one level
+// DomainSet holds a domain list in its text form: "+.x" (x and below), ".x" (below x only), "*.x" (one level
 // below x) and "x" (exactly x). Looking up a name costs one map lookup per label.
 // DomainSet keeps a 64-bit fingerprint of each name instead of the name itself: a block list of hundreds of
 // thousands of names takes a few megabytes, and the file's text is not kept. (Two different names sharing a

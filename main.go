@@ -133,9 +133,7 @@ func main() {
 	go safely("events", eventsLoop)
 	go dnsGuardLoop()
 	go presetScheduleLoop()
-	if engineMissing() {
-		go safely("engine download", downloadEngine)
-	}
+	go safely("old engine cleanup", removeOldEngine)
 
 	srv := &http.Server{Handler: routes(), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = srv.Serve(ln) }()

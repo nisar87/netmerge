@@ -215,7 +215,7 @@ func (t *tunStack) readLoop() {
 				t.udpPacket(p)
 			}
 		case protoICMP, protoICMPv6:
-			// answered here, as mihomo does: the internet's reachability is better judged by real connections
+			// answered here: the internet's reachability is better judged by real connections
 			if echoReply(p) {
 				t.write(p.b)
 			}

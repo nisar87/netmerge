@@ -53,10 +53,6 @@ export function createModel(scenario = 'default') {
     if (body.mode === 'fast' || body.mode === 'stable' || (!restore && (s.links || []).some(l => body.mode === `link:${l.name}`))) s.mode = body.mode;
     if (!restore) {
       s.setupDone ||= body.setupDone === true;
-      if (['', 'netmerge'].includes(body.engine)) s.engine = body.engine;
-      if (['', 'mixed', 'system', 'gvisor'].includes(body.tunStack) && body.tunStack !== s.tunStack) {
-        s.tunStack = body.tunStack; s.stackChosen = true;
-      }
     }
   }
   function safeBackup() {
@@ -146,7 +142,7 @@ export function createModel(scenario = 'default') {
           lines: Object.fromEntries(names.map(n => [n, { median: 12, p90: 15, fail: 0, hijack: false, n: 12 }])) }],
         rec: { provider: 'cloudflare', secure: false, median: 12, current: 25, text: 'Cloudflare answered fastest in this fixture.', notes: [] } });
     }
-    if (path === '/api/update' && updateReads > 0 && --updateReads === 0) Object.assign(data.update, { status: 'idle', checked: NOW, engineDl: '', enginePct: 100 });
+    if (path === '/api/update' && updateReads > 0 && --updateReads === 0) Object.assign(data.update, { status: 'idle', checked: NOW });
   }
   return {
     get data() { sync(); return data; },
@@ -217,10 +213,9 @@ export function createModel(scenario = 'default') {
         case '/api/presets': return presets(body);
         case '/api/dns': return dns(body);
         case '/api/update':
-          if (!['check', 'install', 'engine'].includes(body.action)) fail('unknown action');
+          if (!['check', 'install'].includes(body.action)) fail('unknown action');
           updateReads = 2;
-          if (body.action === 'engine') data.update.engineDl = 'downloading';
-          else data.update.status = body.action === 'check' ? 'checking' : 'installing';
+          data.update.status = body.action === 'check' ? 'checking' : 'installing';
           return data.update;
         case '/api/restore':
           if (!body.mode && !body.links?.length && !body.appRules) fail('That does not look like a NetMerge settings file');

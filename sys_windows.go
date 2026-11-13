@@ -96,7 +96,7 @@ func ifCounters() map[int][2]uint32 {
 	return res
 }
 
-// bindControl forces a socket out of a specific interface (bypasses the merge tunnel), like mihomo does.
+// bindControl forces a socket out of a specific interface (bypasses the merge tunnel), as the engine does.
 func bindControl(ifIndex int) func(network, address string, c syscall.RawConn) error {
 	return func(network, address string, c syscall.RawConn) error {
 		var serr error
@@ -304,7 +304,9 @@ func startUpdater(newExe, curExe, prevExe string) error {
 	body := `param([int]$ProcId,[string]$New,[string]$Cur,[string]$Prev)
 $ErrorActionPreference = 'Stop'
 try { Wait-Process -Id $ProcId -Timeout 40 } catch {}
-Get-Process mihomo -ErrorAction SilentlyContinue | Stop-Process -Force
+# an engine still running from this program (NetMerge.exe -engine) or from the old core folder holds the file
+$core = Join-Path (Split-Path $Cur) 'core'
+Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.Path -eq $Cur -or $_.Path.StartsWith($core + '\', 'OrdinalIgnoreCase')) } | Stop-Process -Force
 Start-Sleep 4
 # keep the running version as the "previous" one; if that copy fails, the update still goes ahead
 try { Copy-Item -Force $Cur $Prev } catch {}

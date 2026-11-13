@@ -90,7 +90,7 @@ func (t *Tracker) closeID(id string) bool {
 	return ok
 }
 
-// snapshot is the JSON NetMerge reads (field names as mihomo writes them).
+// snapshot is the JSON NetMerge reads.
 func (t *Tracker) snapshot() map[string]any {
 	t.mu.RLock()
 	list := make([]map[string]any, 0, len(t.conns))

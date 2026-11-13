@@ -13,7 +13,7 @@ export function createFixture(scenario = 'default') {
     links, mode: 'fast', appRules: [{ process: 'mstsc.exe', target: 'stable' }],
     bypassIPs: ['192.0.2.0/24'], stableDomains: ['accounts.example.test'], vpnLink: '',
     autoStart: false, mergeOnLaunch: true, builtinDNS: false, seenApps: ['browser.exe', 'mstsc.exe'],
-    secret: '', debugLog: false, tunStack: '', engine: '', tunMTU: 1500,
+    secret: '', debugLog: false, tunMTU: 1500,
     block: { enabled: true, packs: { ads: true, pro: false, malware: false } }, stackChosen: false,
     share: { enabled: false, port: 1080, ssPort: 8388, user: 'fixture-user', pass: FAKE_PASSWORD },
     deviceNames: { '02:00:00:00:00:01': 'Fixture phone' }, quotaReset: 1, quotaAction: 'warn',
@@ -34,7 +34,7 @@ export function createFixture(scenario = 'default') {
   const events = [{ time: NOW - 60, kind: 'good', text: 'Fixture connections ready' },
     { time: NOW - 300, kind: 'info', text: 'Synthetic session started' }];
   const state = {
-    snap: { running: true, version: 'fixture-engine', app: '0.0.0-fixture', error: '', uptime: 3600,
+    snap: { running: true, version: 'nmengine-0.0.0-fixture', app: '0.0.0-fixture', error: '', uptime: 3600,
       links: snapLinks, apps: [{ process: 'browser.exe', down: 2097152, up: 131072, conns: 8,
         links: { Ethernet: 5, 'Wi-Fi': 3 }, rule: '' }], totalDown: 3145728, totalUp: 393216,
       peakDown: 6291456, conns: 13, total: [1048576, 3145728, 2097152, 3145728], devices: [],
@@ -74,7 +74,7 @@ export function createFixture(scenario = 'default') {
       test: { running: false, progress: 0, total: 0, done: 0, lines: [], lineNames: {}, rows: [] } },
     // The production history records one sample per minute, already in Mbps.
     events: { events }, history: { points: Array.from({ length: 1440 }, (_, i) => ({ t: NOW - (1439 - i) * 60, d: { Ethernet: 16 + 5 * Math.sin(i / 41), 'Wi-Fi': 8 + 3 * Math.sin(i / 31) }, u: { Ethernet: 2, 'Wi-Fi': 1 } })) },
-    update: { current: '0.0.0-fixture', latest: '0.0.0-fixture', notes: 'Synthetic release notes.', page: 'https://example.test/releases', available: false, checked: NOW - 60, error: '', status: 'idle', progress: 0, repo: 'example/netmerge-fixture', auto: true, engineDl: '', enginePct: 0, engineErr: '' },
+    update: { current: '0.0.0-fixture', latest: '0.0.0-fixture', notes: 'Synthetic release notes.', page: 'https://example.test/releases', available: false, checked: NOW - 60, error: '', status: 'idle', progress: 0, repo: 'example/netmerge-fixture', auto: true },
     logs: { app: '2026-11-09 12:00:00 Fixture ready\n', engine: 'Fixture engine: running\n', rates: 'Ethernet down=2097152 up=262144\n' },
   };
   if (scenario === 'one-connection') {

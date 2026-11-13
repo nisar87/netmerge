@@ -1,71 +1,58 @@
-name: Engine comparison
-# mihomo (what NetMerge ships) and NetMerge's own engine, side by side on a Windows machine: each captures traffic
-# through its virtual adapter with the same settings, and the same measurements are taken (cmd/enginebench).
-# The table is in the run's summary. Informational: it does not block anything.
+name: Engine benchmark
+# NetMerge's engine measured the way NetMerge uses it (cmd/enginebench): start time, new connections, downloads,
+# block accuracy, a line that silently stops answering, memory and CPU. A change is measured side by side with
+# the engine on main, in turns, so the table shows whether it made things better or worse. The table is in the
+# run's summary. Informational: it does not block anything.
 on:
   workflow_dispatch:
   pull_request:
     paths: ["engine/**", ".github/workflows/engine-bench.yml"]
 jobs:
-  compare:
+  windows:
+    # a Windows machine, over the internet
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Get wintun.dll (checked against its published fingerprint)
         run: python scripts/get-wintun.py
-      - name: Get mihomo 1.19.33 (checked against its known fingerprint, as NetMerge does)
-        shell: pwsh
+      - name: Build this engine, the one on main, and the benchmark
         run: |
-          Invoke-WebRequest https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-windows-amd64-v1.19.33.zip -OutFile mihomo.zip
-          $h = (Get-FileHash mihomo.zip -Algorithm SHA256).Hash.ToLower()
-          if ($h -ne "6ab2180875f9f6fff8b19386d760daec257f66b45f72b3afc650634272fa837a") { throw "mihomo zip fingerprint $h" }
-          Expand-Archive mihomo.zip -DestinationPath mihomo
-          $exe = Get-ChildItem mihomo -Filter *.exe -Recurse | Select-Object -First 1
-          Copy-Item $exe.FullName "$env:RUNNER_TEMP\mihomo.exe"
-      - name: Build NetMerge's engine and the comparison
-        working-directory: engine
-        run: |
-          go build -o "$env:RUNNER_TEMP\nmengine.exe" ./cmd/nmengine
+          git worktree add "$env:RUNNER_TEMP\main" origin/main
+          Copy-Item -Recurse engine\wintun\amd64 "$env:RUNNER_TEMP\main\engine\wintun\" -Force
+          Push-Location "$env:RUNNER_TEMP\main\engine"; go build -o "$env:RUNNER_TEMP\engine-main.exe" ./cmd/nmengine; Pop-Location
+          Push-Location engine
+          go build -o "$env:RUNNER_TEMP\engine-this.exe" ./cmd/nmengine
           go build -o "$env:RUNNER_TEMP\enginebench.exe" ./cmd/enginebench
-      - name: Compare
+          Pop-Location
+      - name: Measure
         run: |
           $env:TEMP = $env:RUNNER_TEMP; $env:TMP = $env:RUNNER_TEMP
-          & "$env:RUNNER_TEMP\enginebench.exe" -rounds 5 -engine "mihomo=$env:RUNNER_TEMP\mihomo.exe" -engine "netmerge=$env:RUNNER_TEMP\nmengine.exe"
-      - name: Where NetMerge's engine spent its time during the 8 downloads
-        if: always()
-        working-directory: engine
-        run: |
-          Get-ChildItem $env:RUNNER_TEMP -Filter netmerge-cpu-*.pprof | ForEach-Object {
-            Write-Output "== $($_.Name)"
-            go tool pprof -top -nodecount=40 "$env:RUNNER_TEMP\nmengine.exe" $_.FullName
-          }
+          & "$env:RUNNER_TEMP\enginebench.exe" -rounds 5 -engine "main=$env:RUNNER_TEMP\engine-main.exe" -engine "this=$env:RUNNER_TEMP\engine-this.exe"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: engine-logs
-          path: |
-            ${{ runner.temp }}/bench-*.log
-            ${{ runner.temp }}/netmerge-cpu-*.pprof
+          path: ${{ runner.temp }}/bench-*.log
           retention-days: 7
-  compare-local:
-    # the same comparison on a private test network with its own servers (Linux, root): no internet noise, a
-    # 350,000-name block list, block accuracy and a line that silently stops answering
+  local:
+    # a private test network with its own servers (Linux, root): no internet noise, a 350,000-name block list
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Get mihomo 1.19.33 (checked against its known fingerprint)
+      - name: Build this engine, the one on main, and the benchmark
         run: |
-          curl -sSL -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
-          echo "132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz" | sha256sum -c
-          gunzip -c /tmp/mihomo.gz > /tmp/mihomo && chmod +x /tmp/mihomo
-      - name: Build
-        working-directory: engine
-        run: go build -o /tmp/nmengine ./cmd/nmengine && go build -o /tmp/enginebench ./cmd/enginebench
-      - name: Compare
-        run: cd /tmp && sudo -E ./enginebench -local -rounds 3 -engine mihomo=/tmp/mihomo -engine netmerge=/tmp/nmengine
+          git worktree add /tmp/main origin/main
+          (cd /tmp/main/engine && go build -o /tmp/engine-main ./cmd/nmengine)
+          cd engine && go build -o /tmp/engine-this ./cmd/nmengine && go build -o /tmp/enginebench ./cmd/enginebench
+      - name: Measure
+        run: cd /tmp && sudo -E ./enginebench -local -rounds 3 -engine main=/tmp/engine-main -engine this=/tmp/engine-this

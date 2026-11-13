@@ -23,10 +23,20 @@ func processPath(pid int) string {
 }
 
 func processesRunning(path string) []int {
+	var out []int
+	for _, pid := range allPids() {
+		if samePath(processPath(pid), path) {
+			out = append(out, pid)
+		}
+	}
+	return out
+}
+
+func allPids() []int {
 	ents, _ := os.ReadDir("/proc")
 	var out []int
 	for _, e := range ents {
-		if pid, err := strconv.Atoi(e.Name()); err == nil && samePath(processPath(pid), path) {
+		if pid, err := strconv.Atoi(e.Name()); err == nil {
 			out = append(out, pid)
 		}
 	}

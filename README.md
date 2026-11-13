@@ -2,7 +2,7 @@
 
 Combine two or three internet connections (for example a LAN cable and Wi-Fi from two different providers) into one faster connection on **Windows 11**, with no extra hardware, no paid service and no relay server.
 
-NetMerge wraps the open-source [mihomo](https://github.com/MetaCubeX/mihomo) engine in a small app with a friendly window. NetMerge also carries its own, lighter engine (see `engine/`), which can be tried under Settings → Advanced → Network engine; mihomo stays the default while it is being tested.
+NetMerge is one small program: a friendly window, and its own network engine built in (see `engine/`), written for NetMerge only and nothing else to download. A benchmark measures the engine on every change (start time, new connections, downloads, block accuracy, memory and CPU).
 
 ## Screenshots
 
@@ -39,8 +39,7 @@ One single connection (one download stream) can only use one line. A download ma
 
 1. Download `NetMerge.exe` from the [latest release](../../releases/latest).
 2. Put it in its own folder (for example `C:\NetMerge`) and run it. Click **Yes** on the administrator prompt (needed to merge connections).
-3. On the first start NetMerge downloads the network engine by itself (about 20 MB, checked against its published SHA-256).
-4. Turn on **Merging**.
+3. Turn on **Merging**. Everything NetMerge needs is inside `NetMerge.exe`; nothing else is downloaded.
 
 Windows SmartScreen may warn about an unknown publisher the first time, because the file is not code-signed. Choose *More info → Run anyway*, or build it yourself (below).
 
@@ -100,10 +99,11 @@ Until releases are signed, check the SHA-256 published next to each download (`N
 | Path | Purpose |
 | --- | --- |
 | `*.go` | The app (engine control, dispatcher, usage, sharing, updates, tray) |
+| `engine/` | The network engine, built into `NetMerge.exe` (its own Go module; see `engine/README.md`) |
 | `ui/` | The window |
 | `scripts/` | `STOP.bat`, `ROLLBACK.bat` (restore the previous version) |
 | `data/` | Created at runtime: settings, usage, logs (not in git) |
 
 ## License
 
-MIT. mihomo is a separate project under its own license.
+MIT. `NetMerge.exe` carries Wintun (wintun.net), the virtual network adapter driver of the WireGuard project, which may be redistributed with software that uses it.

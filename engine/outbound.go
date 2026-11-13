@@ -249,7 +249,7 @@ func (r *Router) resolvePlan(target string, m *Metadata) (*plan, error) {
 		}
 	}
 	p.lines = append(good, later...)
-	for i := len(groups) - 1; i >= 0; i-- { // mihomo's order: line, then groups from the innermost out
+	for i := len(groups) - 1; i >= 0; i-- { // line first, then groups from the innermost out
 		p.chain = append(p.chain, groups[i])
 	}
 	return p, nil

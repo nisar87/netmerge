@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -21,8 +20,6 @@ type Engine struct {
 	applyMu       sync.Mutex // serialises config reloads
 	startMu       sync.Mutex // one start at a time; never held by Status, so the window never waits for a start
 	cmd           *exec.Cmd
-	own           bool // the running engine is NetMerge's own (NetMerge.exe -engine), not mihomo
-	fellBack      bool // NetMerge's own engine was chosen but would not start, so mihomo runs
 	running       bool
 	startedAt     time.Time
 	lastError     string
@@ -36,12 +33,8 @@ type Engine struct {
 
 var engine = &Engine{}
 
-func mihomoExe() string {
-	if runtime.GOOS == "windows" {
-		return filepath.Join(rootDir, "core", "mihomo.exe")
-	}
-	return filepath.Join(rootDir, "core", "mihomo")
-}
+// oldCoreDir is where versions before 3.18 kept a separately downloaded engine program. It is removed at start.
+func oldCoreDir() string { return filepath.Join(rootDir, "core") }
 
 var apiClient = &http.Client{Timeout: 4 * time.Second}
 
@@ -95,13 +88,6 @@ type procOf struct{ pid int }
 
 func (p procOf) Pid() int { return p.pid }
 
-// Own tells whether NetMerge's own engine is the one running, and whether it was chosen but mihomo runs instead.
-func (e *Engine) Own() (own, fellBack bool) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.own && e.running, e.fellBack
-}
-
 func (e *Engine) AppliedKey() string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -120,21 +106,19 @@ func (e *Engine) Adopt() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if v, ok := engineAlive(); ok {
-		own := recordedIsOwn() || strings.HasPrefix(v, "nmengine")
-		if want := getSettings().Engine == "netmerge"; own != want {
-			// the engine left running is not the one chosen now (the choice changed while NetMerge was closed):
-			// close it and start the chosen one
-			logf("engine %s left running is not the chosen one - restarting merging with the chosen engine", v)
+		if !strings.HasPrefix(v, "nmengine") {
+			// an engine program of an older NetMerge version is still running: replace it with the built-in one
+			logf("engine %s from an older version is still running - starting the built-in engine instead", v)
 			e.mu.Unlock()
 			stopOwnEngines()
 			err := e.Start()
 			e.mu.Lock()
 			if err != nil {
-				logf("start after switching engines: %v", err)
+				logf("start after replacing the old engine: %v", err)
 			}
 			return
 		}
-		e.running, e.version, e.startedAt, e.own = true, v, time.Now(), own
+		e.running, e.version, e.startedAt = true, v, time.Now()
 		logf("re-attached to running engine %s", v)
 		return
 	}
@@ -142,13 +126,10 @@ func (e *Engine) Adopt() {
 	stopOwnEngines()
 }
 
-// engineCommand is the engine program to run: NetMerge's own (this same exe with -engine) or mihomo.
-func engineCommand(own bool) (string, []string) {
-	if own {
-		exe, _ := os.Executable()
-		return exe, []string{"-engine", "-d", configDir()}
-	}
-	return mihomoExe(), []string{"-d", configDir()}
+// engineCommand: the engine is built into NetMerge.exe and runs as a second process of it (-engine).
+func engineCommand() (string, []string) {
+	exe, _ := os.Executable()
+	return exe, []string{"-engine", "-d", configDir()}
 }
 
 func (e *Engine) setError(msg string) {
@@ -157,8 +138,8 @@ func (e *Engine) setError(msg string) {
 	e.mu.Unlock()
 }
 
-// Start starts the chosen engine. The lock that Status uses is only taken for a moment, so the window keeps
-// answering while the engine starts (it used to wait up to 15 seconds).
+// Start starts the engine. The lock that Status uses is only taken for a moment, so the window keeps answering
+// while the engine starts.
 func (e *Engine) Start() error {
 	e.startMu.Lock()
 	defer e.startMu.Unlock()
@@ -168,33 +149,10 @@ func (e *Engine) Start() error {
 	if running {
 		return nil
 	}
-	own := getSettings().Engine == "netmerge"
-	err := e.startWith(own)
-	if err != nil && own {
-		// NetMerge's own engine is still being tested: if it will not start, use mihomo so the internet keeps working
-		logf("NetMerge engine did not start (%v) - using mihomo instead", err)
-		note("warn", "NetMerge's own engine did not start, so merging uses the standard engine (mihomo). See the engine log for why.")
-		if err2 := e.startWith(false); err2 == nil {
-			e.mu.Lock()
-			e.fellBack = true
-			e.mu.Unlock()
-			return nil
-		}
-	}
-	return err
+	return e.startEngine()
 }
 
-func (e *Engine) startWith(own bool) error {
-	if !own {
-		if _, err := os.Stat(mihomoExe()); err != nil {
-			msg := "The network engine is not installed yet. NetMerge downloads it by itself - try again in a minute."
-			e.setError(msg)
-			if st, _, _ := engineDownloadState(); st == "" {
-				go safely("engine download", downloadEngine)
-			}
-			return fmt.Errorf("%s", msg)
-		}
-	}
+func (e *Engine) startEngine() error {
 	if msg := detectConflictNow(); msg != "" {
 		e.setError(msg)
 		logf("not starting: %s", msg)
@@ -221,7 +179,7 @@ func (e *Engine) startWith(own bool) error {
 	if st, err := os.Stat(logPath); err == nil {
 		logStart = st.Size() // error messages quote only what this start wrote, not the previous engine's lines
 	}
-	exe, args := engineCommand(own)
+	exe, args := engineCommand()
 	cmd := hiddenCmd(exe, args...)
 	pr, pw, perr := os.Pipe()
 	if perr != nil {
@@ -246,7 +204,7 @@ func (e *Engine) startWith(own bool) error {
 	}
 	rememberEngine(cmd.Process.Pid, exe)
 	e.mu.Lock()
-	e.cmd, e.own = cmd, own
+	e.cmd = cmd
 	e.mu.Unlock()
 	exited := make(chan error, 1)
 	go func() {
@@ -272,7 +230,7 @@ func (e *Engine) startWith(own bool) error {
 		}
 		if v, ok := engineAlive(); ok {
 			e.mu.Lock()
-			e.running, e.version, e.startedAt, e.lastError, e.apiFails, e.fellBack = true, v, time.Now(), "", 0, false
+			e.running, e.version, e.startedAt, e.lastError, e.apiFails = true, v, time.Now(), "", 0
 			e.appliedKey = keyOf(links)
 			e.mu.Unlock()
 			logf("engine %s started with %d connection(s)", v, len(links))
@@ -378,12 +336,12 @@ func (e *Engine) Check() {
 
 func (e *Engine) Stop() {
 	e.mu.Lock()
-	cmd, own := e.cmd, e.own
+	cmd := e.cmd
 	was := e.running
 	e.running, e.cmd = false, nil
 	e.mu.Unlock()
 	if cmd != nil && cmd.Process != nil {
-		stopEngineProcess(procOf{cmd.Process.Pid}, own)
+		stopEngineProcess(procOf{cmd.Process.Pid})
 	}
 	stopOwnEngines()
 	forgetEngine()
