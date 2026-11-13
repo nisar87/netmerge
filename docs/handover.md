@@ -1,6 +1,6 @@
 # Handover: NetMerge for Windows
 
-Written 2026-11-11 for the next person or session working on NetMerge (version 3.13.1). Read this first, then
+Written 2026-11-11 for the next person or session working on NetMerge, last updated 2026-11-13 (version 3.18.0). Read this first, then
 `README.md` and the top of `CHANGELOG.md`. Facts here were true on that date; check the code when in doubt.
 
 ## 1. The owner and how to work with him
@@ -67,7 +67,7 @@ Not part of NetMerge any more:
 - The PC: Windows 11, lines = **Ethernet** (Intel, about 100 Mbps cable; the ISP slows it after about 100 MB),
   **Wi-Fi** (TP-Link USB stick, 130 Mbps link), **Ethernet 6** (Samsung phone, USB tethering, mobile data,
   plugged in when testing). Gateway 192.168.1.1 for cable and Wi-Fi (different public IPs).
-- A **test copy** of NetMerge runs from `E:\NetMerge\test-3.11.14\` (self-updates; currently 3.13.1). Its window is
+- A **test copy** of NetMerge runs from `E:\NetMerge\test-3.11.14\` (self-updates to each release). Its window is
   `http://127.0.0.1:9196`. After a release, update it with `POST /api/update {"action":"check"}` then
   `{"action":"install"}` (header `X-NetMerge: 1`), then check the version.
 - Tools that worked: the built-in browser pane on the PC (tab on `127.0.0.1:9196`) for the API and the window;
