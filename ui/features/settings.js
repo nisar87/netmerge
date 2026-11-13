@@ -1,6 +1,7 @@
 /* ---------- settings ---------- */
 function renderSettings(){
   $('#callTog').classList.toggle('on', !local.noCallProtect); $('#callTog').setAttribute('aria-checked', !local.noCallProtect);
+  $('#diagTog').classList.toggle('on', !local.noDiagnostics); $('#diagTog').setAttribute('aria-checked', !local.noDiagnostics);
   [['#autoTog','autoStart'],['#launchTog','mergeOnLaunch'],['#debugTog','debugLog']].forEach(([id,k]) => { $(id).classList.toggle('on', !!local[k]); $(id).setAttribute('aria-checked', !!local[k]); });
   $$('#theme button,.theme-preview').forEach(b=>{const selected=b.dataset.v===document.documentElement.dataset.preference;b.classList.toggle('sel',selected);b.setAttribute('aria-pressed',selected);});
   if (document.activeElement !== $('#balSel')) $('#balSel').value = local.classicBalance ? 'classic' : 'smart';
@@ -11,6 +12,7 @@ $('#autoTog').onclick = () => { local.autoStart = !local.autoStart; renderSettin
 $('#launchTog').onclick = () => { local.mergeOnLaunch = !local.mergeOnLaunch; renderSettings(); saveSoon('Saved'); };
 $('#balSel').onchange = e => { local.classicBalance = e.target.value === 'classic'; saveSoon(local.classicBalance ? 'Classic balancing' : 'Smart balancing'); };
 $('#callTog').onclick = () => { local.noCallProtect = !local.noCallProtect; renderSettings(); saveSoon(local.noCallProtect ? 'Call protection off' : 'Call protection on'); };
+$('#diagTog').onclick = () => { local.noDiagnostics = !local.noDiagnostics; renderSettings(); saveSoon(local.noDiagnostics ? 'Diagnostics reports off' : 'Diagnostics reports on'); };
 $('#debugTog').onclick = () => { local.debugLog = !local.debugLog; renderSettings(); saveSoon(local.debugLog ? 'Detailed logging on' : 'Detailed logging off'); };
 document.addEventListener('click', async e => {
   const b = e.target.closest && e.target.closest('[data-forget]'); if (!b) return;

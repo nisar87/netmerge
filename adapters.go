@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -91,8 +92,41 @@ func refreshAdapters() []Adapter {
 		a.Kind = kindOf(a.Name, a.Desc)
 		out = append(out, a)
 	}
+	logAdapterChanges(adapterCache, out, adapterAt.IsZero())
 	adapterCache, adapterAt = out, time.Now()
 	return out
+}
+
+// logAdapterChanges writes when a connection appears, goes away, or moves to another network (gateway).
+func logAdapterChanges(before, now []Adapter, first bool) {
+	desc := func(a Adapter) string {
+		return fmt.Sprintf("%s (%s, %s, gateway %s, %s)", a.Name, a.Kind, a.Desc, maskIP(a.Gateway), a.LinkRate)
+	}
+	old := map[string]Adapter{}
+	for _, a := range before {
+		old[a.Name] = a
+	}
+	if first {
+		var all []string
+		for _, a := range now {
+			all = append(all, desc(a))
+		}
+		logf("connections found: %d: %s", len(now), strings.Join(all, "; "))
+		return
+	}
+	for _, a := range now {
+		o, ok := old[a.Name]
+		switch {
+		case !ok:
+			logf("connection appeared: %s", desc(a))
+		case o.Gateway != a.Gateway:
+			logf("connection changed network: %s (was gateway %s)", desc(a), maskIP(o.Gateway))
+		}
+		delete(old, a.Name)
+	}
+	for _, a := range old {
+		logf("connection went away: %s", a.Name)
+	}
 }
 
 func adapterByName(name string) (Adapter, bool) {

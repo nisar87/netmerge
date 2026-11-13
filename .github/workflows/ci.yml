@@ -15,6 +15,8 @@ jobs:
       - run: go vet ./...
       - run: GOOS=windows go vet ./...
       - run: go test ./...
+      - name: A diagnostics report is accepted by the real database, and one with an unknown field is refused
+        run: NETMERGE_REPORT_LIVE=1 go test -count=1 -run TestReportAcceptedByFirestore -v .
       - run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w -H=windowsgui" -o NetMerge.exe .
       - run: python3 scripts/check-windows-icon.py NetMerge.exe
   engine:
@@ -47,7 +49,7 @@ jobs:
       - name: Get wintun.dll (checked against its published fingerprint)
         run: python scripts/get-wintun.py
       - run: go vet ./...
-      - run: go test -count=1 -run "TestProcessesByPath|TestCounters64|TestUpdate|TestOfflineUsage|TestAdaptersAPIMatchesPowerShell" -v .
+      - run: go test -count=1 -run "TestProcessesByPath|TestCounters64|TestUpdate|TestOfflineUsage|TestAdaptersAPIMatchesPowerShell|TestSysFacts" -v .
       - run: go build -o NetMerge.exe .
       - working-directory: engine
         run: go vet ./...

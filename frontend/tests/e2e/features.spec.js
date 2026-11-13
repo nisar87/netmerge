@@ -8,11 +8,12 @@ for (const [id, key, route, value] of [
   ['launchTog', 'mergeOnLaunch', 'settings/general', false],
   ['callTog', 'noCallProtect', 'settings/general', true],
   ['updTog', 'noUpdateCheck', 'settings/maintenance', true],
+  ['diagTog', 'noDiagnostics', 'settings/maintenance', true],
   ['debugTog', 'debugLog', 'settings/advanced', true],
 ]) {
   test(`${id} sends complete settings and maps ${key} correctly`, async ({ page, fixture }) => {
     await navigate(page, route);
-    await expect(page.locator(`#${id}`)).toHaveAttribute('aria-checked', String(['noCallProtect', 'noUpdateCheck'].includes(key) ? !BASE.state.settings[key] : BASE.state.settings[key]));
+    await expect(page.locator(`#${id}`)).toHaveAttribute('aria-checked', String(['noCallProtect', 'noUpdateCheck', 'noDiagnostics'].includes(key) ? !BASE.state.settings[key] : BASE.state.settings[key]));
     const before = (await fixture.read('state')).settings;
     await mutate(page, 'settings', { ...before, [key]: value }, () => page.locator(`#${id}`).click());
     expect((await fixture.read('state')).settings).toEqual({ ...before, [key]: value });
@@ -182,4 +183,22 @@ test('clicking a theme picture chooses that theme', async ({ page }) => {
   await expect(page.locator('.theme-preview[data-v="auto"]')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('#theme button[data-v="dark"]').click();
   await expect(page.locator('.theme-preview[data-v="dark"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('the setup guide has a Send diagnostics checkbox, on by default, that saves the choice', async ({ page, fixture }) => {
+  await navigate(page, 'settings/maintenance');
+  await page.locator('#wizBtn').click();
+  const box = page.locator('#wizDiag');
+  await expect(box).toBeChecked();
+  const before = (await fixture.read('state')).settings;
+  await mutate(page, 'settings', { ...before, noDiagnostics: true }, () => box.uncheck());
+  expect((await fixture.read('state')).settings.noDiagnostics).toBe(true);
+  await mutate(page, 'settings', { ...before, noDiagnostics: false }, () => box.check());
+  expect((await fixture.read('state')).settings.noDiagnostics).toBe(false);
+});
+
+test('a script error in the window is sent to the log', async ({ page, fixture }) => {
+  await navigate(page, 'overview');
+  await page.evaluate(() => window.dispatchEvent(new ErrorEvent('error', { message: 'test failure in the window', filename: 'http://127.0.0.1/app/x.js', lineno: 3 })));
+  await expect.poll(async () => JSON.stringify((await fixture.requests()).filter(r => String(r.path || r.url).includes('clientlog')))).toContain('test failure in the window');
 });

@@ -546,7 +546,7 @@ func saveCaps(set []*dispLink) {
 		return
 	}
 	b, _ := json.Marshal(m)
-	_ = os.WriteFile(capFile(), b, 0o644)
+	logErr("save the learned line speeds", os.WriteFile(capFile(), b, 0o644))
 }
 
 var (

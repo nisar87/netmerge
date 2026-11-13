@@ -28,7 +28,7 @@ func onResume() {
 		}
 		if running, _, _, _ := engine.Status(); running {
 			logf("resume: reloading the engine")
-			_ = engine.Apply()
+			logErr("reload the engine after sleep", engine.Apply())
 		}
 	})
 }

@@ -58,8 +58,8 @@ func eventsSave() {
 	actMu.Unlock()
 	_ = os.MkdirAll(filepath.Dir(eventsPath()), 0o755)
 	tmp := eventsPath() + ".tmp"
-	if os.WriteFile(tmp, b, 0o644) == nil {
-		_ = os.Rename(tmp, eventsPath())
+	if logErr("save the activity list", os.WriteFile(tmp, b, 0o644)) == nil {
+		logErr("save the activity list", os.Rename(tmp, eventsPath()))
 	}
 }
 

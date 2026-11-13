@@ -92,12 +92,12 @@ func fixConflicts() error {
 			continue
 		}
 		for _, s := range c.Services {
-			_ = hiddenCmd("sc.exe", "stop", s).Run()
+			logErr("stop the service "+s, hiddenCmd("sc.exe", "stop", s).Run())
 		}
 		for _, p := range c.Procs {
 			killProcessByName(p)
 		}
-		_ = hiddenCmd("sc.exe", "stop", c.Driver).Run()
+		logErr("stop the driver "+c.Driver, hiddenCmd("sc.exe", "stop", c.Driver).Run())
 		ok := false
 		for i := 0; i < 10; i++ {
 			time.Sleep(500 * time.Millisecond)

@@ -51,8 +51,8 @@ func historySave() {
 	histMu.Unlock()
 	_ = os.MkdirAll(filepath.Dir(historyPath()), 0o755)
 	tmp := historyPath() + ".tmp"
-	if os.WriteFile(tmp, b, 0o644) == nil {
-		_ = os.Rename(tmp, historyPath())
+	if logErr("save the speed history", os.WriteFile(tmp, b, 0o644)) == nil {
+		logErr("save the speed history", os.Rename(tmp, historyPath()))
 	}
 }
 

@@ -303,21 +303,26 @@ func startUpdater(newExe, curExe, prevExe string) error {
 	script := filepath.Join(filepath.Dir(newExe), "apply-update.ps1")
 	body := `param([int]$ProcId,[string]$New,[string]$Cur,[string]$Prev)
 $ErrorActionPreference = 'Stop'
-try { Wait-Process -Id $ProcId -Timeout 40 } catch {}
+# what happens here is written to data\update.log; NetMerge copies it into its own log at the next start
+$log = Join-Path (Split-Path $Cur) 'data\update.log'
+function Note($m) { try { Add-Content -Path $log -Value ((Get-Date -Format 'HH:mm:ss') + ' ' + $m) } catch {} }
+Note "waiting for NetMerge (process $ProcId) to close"
+try { Wait-Process -Id $ProcId -Timeout 40 } catch { Note "it did not close in 40 s: $($_.Exception.Message)" }
 # an engine still running from this program (NetMerge.exe -engine) or from the old core folder holds the file
 $core = Join-Path (Split-Path $Cur) 'core'
-Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.Path -eq $Cur -or $_.Path.StartsWith($core + '\', 'OrdinalIgnoreCase')) } | Stop-Process -Force
+try { Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.Path -eq $Cur -or $_.Path.StartsWith($core + '\', 'OrdinalIgnoreCase')) } | Stop-Process -Force } catch { Note "could not stop a running copy: $($_.Exception.Message)" }
 Start-Sleep 4
 # keep the running version as the "previous" one; if that copy fails, the update still goes ahead
-try { Copy-Item -Force $Cur $Prev } catch {}
+try { Copy-Item -Force $Cur $Prev } catch { Note "could not keep the previous version: $($_.Exception.Message)" }
 # the old program may need a moment to let go of its file
 $done = $false
 for ($i = 0; $i -lt 8 -and -not $done; $i++) {
-  try { Move-Item -Force $New $Cur; $done = $true } catch { Start-Sleep 2 }
+  try { Move-Item -Force $New $Cur; $done = $true } catch { Note "try $($i+1) to replace the program failed: $($_.Exception.Message)"; Start-Sleep 2 }
 }
+if ($done) { Note "new version in place" } else { Note "the program could not be replaced; the version before stays" }
 # only if the program file is gone altogether is the previous version put back
-if (-not (Test-Path $Cur) -and (Test-Path $Prev)) { Copy-Item -Force $Prev $Cur }
-Start-Process $Cur
+if (-not (Test-Path $Cur) -and (Test-Path $Prev)) { Copy-Item -Force $Prev $Cur; Note "the program was missing; put the previous version back" }
+try { Start-Process $Cur } catch { Note "could not start NetMerge again: $($_.Exception.Message)" }
 `
 	if err := os.WriteFile(script, []byte(body), 0o644); err != nil {
 		return err

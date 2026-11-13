@@ -44,6 +44,7 @@ Not part of NetMerge any more:
 | `api.go` | Local web API for the window. **Anything that changes state must be POST with header `X-NetMerge: 1`** (`action()` wrapper); GET is read-only. Fixed in 3.11.24 after a security audit. |
 | `update.go` | Self-update from GitHub releases (`appVersion` here must match `VERSION`) |
 | `speedtest.go`, `blocking.go`, `dns.go`, `share.go`, `preset.go`, `backup.go`, `history.go` | Speed test, ad blocking, DNS, sharing to other devices, presets, backup, history |
+| `eventlog.go`, `report.go`, `diagnostics/` | The log beyond plain lines (problems with their place in the code, counts once a minute, how the last run ended, crash files) and the diagnostics reports sent to Firestore project `netmerge-windows`; `diagnostics/read.sh` reads them (see `diagnostics/README.md`) |
 | `ui/` | The window (HTML/CSS/JS served by the program; redesigned in 3.12.0) |
 | `frontend/` | Tests for the window: a fixture server that imitates the API + Playwright browser tests |
 
@@ -97,6 +98,9 @@ first real update after it will show it on the PC).
    and unplugging a line with this engine, a 24-hour run.
 3. Not yet done: code signing (SignPath application pending; "Windows protected your PC" warning), a 24-hour run,
    running as a standard user, a trademark check of the name "NetMerge" (a similar `net-merge` project exists).
+
+4. **Diagnostics (3.19.0).** Reports arrive in Firestore `netmerge-windows`. A daily scheduled task reads them with
+   `diagnostics/read.sh`, fixes what they show and releases at most once a day.
 
 ## 8. Lessons
 

@@ -81,11 +81,13 @@ func probeOne(name string, a Adapter) {
 	c.Timeout = 7 * time.Second
 	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	ok, delay, portal := false, 0, false
+	lastErr := ""
 	for _, u := range probeURLs {
 		start := time.Now()
 		req, _ := http.NewRequest("GET", u, nil)
 		resp, err := c.Do(req)
 		if err != nil {
+			lastErr = err.Error()
 			continue
 		}
 		bl := 0
@@ -127,6 +129,11 @@ func probeOne(name string, a Adapter) {
 	} else {
 		st.ok = false
 		st.fails++
+		if portal {
+			count("check." + name + ".signin-page")
+		} else {
+			count("check." + name + "." + failClass(lastErr))
+		}
 		qualityAdd(name, false, 0)
 		if st.fails >= 4 {
 			st.dead = true
@@ -135,6 +142,7 @@ func probeOne(name string, a Adapter) {
 	probes[name] = st
 	probeMu.Unlock()
 	if st.portal && !wasPortal {
+		logf("connection %s answers with a sign-in page (hotel or café Wi-Fi)", name)
 		note("warn", "%s needs a sign-in page first (hotel or café Wi-Fi). Open a browser on that network and sign in.", labelFor(getSettings(), name))
 		trayBalloon("Sign-in needed", labelFor(getSettings(), name)+" needs you to sign in on its web page before it has internet.")
 	}

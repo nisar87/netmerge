@@ -202,14 +202,14 @@ func presetScheduleLoop() {
 					return
 				}
 				updateSettings(func(s *Settings) { s.SchedActive, s.SchedPrev = true, s.Preset })
-				_ = presetApply(sc.Preset)
+				logErr("apply the scheduled preset", presetApply(sc.Preset))
 			case !in && s.SchedActive:
 				prev := s.SchedPrev
 				updateSettings(func(s *Settings) { s.SchedActive, s.SchedPrev = false, "" })
 				if prev == "" {
-					_ = presetRestore()
+					logErr("restore settings after the preset schedule", presetRestore())
 				} else {
-					_ = presetApply(prev)
+					logErr("apply the preset after the schedule", presetApply(prev))
 				}
 			}
 		})

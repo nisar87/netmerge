@@ -1,0 +1,57 @@
+# Diagnostics: reads the reports the app sent (Firestore, project netmerge-windows) and keeps them, encrypted, on the
+# branch "diagnostics-data" (one commit, replaced each run). This repository is public, so the reports are encrypted
+# with a public key the reader passes in (diagnostics/read.sh makes a new key pair for every run and keeps the private
+# half only in memory): nobody holds a key that opens older runs. The log shows counts only. (A branch, not an
+# artifact: the reader reaches GitHub's git but not the storage artifacts are downloaded from.)
+name: Diagnostics
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Reports of the last N days"
+        default: "2"
+      pubkey:
+        description: "The reader's public key (PEM, base64)"
+        required: true
+permissions:
+  contents: write # the diagnostics-data branch
+  id-token: write # GitHub proves who it is to Google (no key file)
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        id: auth
+        with:
+          workload_identity_provider: projects/940996643435/locations/global/workloadIdentityPools/github/providers/netmerge-windows
+          service_account: netmerge-ci@netmerge-tests.iam.gserviceaccount.com
+          token_format: access_token
+      - name: Read the reports
+        env:
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+          DAYS: ${{ github.event.inputs.days }}
+        run: python3 diagnostics/fetch.py | tee count.txt
+      - name: Encrypt them
+        env:
+          PUBKEY: ${{ github.event.inputs.pubkey }}
+        run: |
+          mkdir out
+          echo "$PUBKEY" | base64 -d > reader.pem
+          openssl pkey -pubin -in reader.pem -noout -text | head -1
+          openssl rand -out k.bin 32
+          openssl pkeyutl -encrypt -pubin -inkey reader.pem -pkeyopt rsa_padding_mode:oaep -in k.bin -out out/key.enc
+          gzip -9 reports.jsonl
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:k.bin -in reports.jsonl.gz -out out/reports.enc
+          cp count.txt out/
+          shred -u k.bin reports.jsonl.gz
+      - name: Keep them on the diagnostics-data branch (replaced, not added to)
+        run: |
+          cd out
+          git init -q -b diagnostics-data
+          git config user.name "NetMerge diagnostics"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Diagnostics reports, encrypted ($(cat count.txt))"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" diagnostics-data

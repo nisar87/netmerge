@@ -59,14 +59,31 @@ func logf(format string, a ...any) {
 	fmt.Print(line)
 }
 
-// safely runs fn and turns a crash into a log line instead of ending the whole app.
-func safely(what string, fn func()) {
+// safely runs fn and turns a crash into a log line (and a crash report) instead of ending the whole app.
+// It reports whether fn crashed.
+func safely(what string, fn func()) (crashed bool) {
 	defer func() {
 		if r := recover(); r != nil {
-			logf("recovered from a crash in %s: %v", what, r)
+			crashed = true
+			logf("CRASH in %s (recovered): %v (%s)", what, r, where(3))
+			pendingCrash(fmt.Sprintf("crash in %s (recovered, NetMerge kept running): %v\n%s", what, r, stackOfOurs()))
 		}
 	}()
 	fn()
+	return false
+}
+
+// keepRunning runs a loop that should never end; if it crashes it is started again (after a pause that grows if it
+// keeps crashing), so one bad moment does not leave statistics or health checks stopped until NetMerge restarts.
+func keepRunning(what string, fn func()) {
+	pause := 5 * time.Second
+	for safely(what, fn) {
+		logf("%s: starting it again in %v", what, pause)
+		time.Sleep(pause)
+		if pause < 5*time.Minute {
+			pause *= 2
+		}
+	}
 }
 
 // quoteArgs builds a Windows command line from separate arguments so that a folder with spaces (C:\Users\Jo Smith\x)

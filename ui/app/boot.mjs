@@ -4,6 +4,21 @@ import {normalizeState,contributingLinks} from './format.mjs';
 import {createScheduler} from './polling.mjs';
 
 const request = createClient();
+// errors in the window go to NetMerge's log (at most a few: one broken screen must not flood it)
+let reportedErrors = 0;
+function reportError(kind, msg, src, line) {
+  if (++reportedErrors > 20) return;
+  try {
+    fetch('/api/clientlog', {method:'POST', headers:{'X-NetMerge':'1','Content-Type':'application/json'},
+      body:JSON.stringify({kind, msg:String(msg||'').slice(0,400), src:String(src||''), line:Number(line)||0})}).catch(()=>{});
+  } catch {}
+}
+window.addEventListener('error', event => reportError('error', event.message || event.error, event.filename, event.lineno));
+window.addEventListener('unhandledrejection', event => {
+  const reason = event.reason;
+  if (reason?.name === 'AbortError') return;
+  reportError('promise', reason?.stack || reason?.message || reason, '', 0);
+});
 const scheduler = createScheduler();
 const writer = createSettingsWriter({read:async()=> (await request('state',{fresh:true})).settings,write:body=>request('settings',{body})});
 const icon = name => {

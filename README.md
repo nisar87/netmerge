@@ -31,6 +31,7 @@ More pages (connections, speed test, apps, sharing, settings, narrow window) are
 - **Health checks.** A line without internet is left out until it works again.
 - **A speed test made for merged lines** (see [Measuring the merged speed](#measuring-the-merged-speed)).
 - **Tray icon, start with Windows, update notifications.**
+- **Problems found without asking you for logs.** Short diagnostics reports, with nothing about the sites you visit (see [Diagnostics](#diagnostics); you can turn them off).
 
 ### An honest limit
 
@@ -79,6 +80,23 @@ list stay where they are.
 
 NetMerge looks for a new release on GitHub a few times a day. When there is one, a banner appears with **Update now**. It downloads `NetMerge.exe`, checks it against the SHA-256 published with the release, swaps it in, keeps the old one as `NetMerge-previous.exe` and restarts. **Settings** has a switch to turn automatic checks off.
 
+## Diagnostics
+
+So that problems can be found and fixed without anyone asking you for log files, NetMerge sends a short report every 6 hours, and soon after a crash. You choose this on the first-run screen (a checkbox, ticked by default) and can turn it off at any time in **Settings → Maintenance → Send diagnostics**. Turning it off also deletes a crash report that was not sent yet.
+
+**What a report holds:**
+
+- a random number made for this installation (not linked to you, your PC or your Windows account);
+- the NetMerge version, the Windows version, and the PC's make, model, processor and memory;
+- your settings as on/off values and numbers; lists (app rules, sites, addresses, devices) only as how many entries they have;
+- a summary of your connections: their type (Wi-Fi, Ethernet, phone), whether they work, their delay and speed;
+- NetMerge's own log since the last report, at most about 100 KB, with the last two parts of every IP address, hardware addresses, device names and the Windows user name in folder paths taken out;
+- after a crash: what crashed and where in NetMerge's code.
+
+**What a report never holds:** the websites you visit, the apps you use, the contents of anything you send or receive, your files, passwords, or names you gave to devices.
+
+Reports go to a database (Google Firebase) that the app can only add to: nothing can be read, changed or deleted from the app, and nobody but the NetMerge maintainer's checks can read them. Details: [diagnostics/README.md](diagnostics/README.md).
+
 ## Build from source
 
 ```
@@ -119,6 +137,7 @@ Until releases are signed, check the SHA-256 published next to each download (`N
 | `*.go` | The app (engine control, dispatcher, usage, sharing, updates, tray) |
 | `engine/` | The network engine, built into `NetMerge.exe` (its own Go module; see `engine/README.md`) |
 | `ui/` | The window |
+| `diagnostics/` | The database rules for diagnostics reports and the scripts that read them |
 | `scripts/` | `STOP.bat`, `ROLLBACK.bat` (restore the previous version) |
 | `data/` | Created at runtime: settings, usage, logs (not in git) |
 

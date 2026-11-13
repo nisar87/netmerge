@@ -57,6 +57,7 @@ type Settings struct {
 	DNSDomains     []string          `json:"dnsDomains,omitempty"` // names that keep using the Windows DNS
 	DNSFallback    bool              `json:"dnsFallback"`          // NetMerge went back to Windows DNS by itself
 	ClassicBalance bool              `json:"classicBalance"`       // true = old fixed round-robin instead of the smart dispatcher
+	NoDiagnostics  bool              `json:"noDiagnostics"`        // true = do not send diagnostics reports (report.go)
 }
 
 var (
@@ -110,8 +111,8 @@ func saveSettingsLocked() {
 	_ = os.MkdirAll(filepath.Dir(settingsPath()), 0o755)
 	b, _ := json.MarshalIndent(settings, "", "  ")
 	tmp := settingsPath() + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err == nil {
-		_ = os.Rename(tmp, settingsPath())
+	if logErr("save settings", os.WriteFile(tmp, b, 0o644)) == nil {
+		logErr("save settings", os.Rename(tmp, settingsPath()))
 	}
 }
 

@@ -17,7 +17,7 @@ export function createFixture(scenario = 'default') {
     block: { enabled: true, packs: { ads: true, pro: false, malware: false } }, stackChosen: false,
     share: { enabled: false, port: 1080, ssPort: 8388, user: 'fixture-user', pass: FAKE_PASSWORD },
     deviceNames: { '02:00:00:00:00:01': 'Fixture phone' }, quotaReset: 1, quotaAction: 'warn',
-    setupDone: true, noCallProtect: false, noUpdateCheck: false, preset: '', customPresets: [],
+    setupDone: true, noCallProtect: false, noUpdateCheck: false, noDiagnostics: false, preset: '', customPresets: [],
     presetSchedule: { enabled: false, from: '22:00', to: '06:00', preset: 'work' },
     schedActive: false, schedPrev: '', dnsProvider: '', dnsSecure: false, dnsCustom: [], dnsDomains: [],
     dnsFallback: false, classicBalance: false,

@@ -17,13 +17,18 @@ function renderWizard(force){
   if(!(wizOpen||(!local.setupDone&&!wizSkip))){if(dialog){dialog.close();dialog.remove();}return;}
   if(!dialog){
     dialog=document.createElement('dialog');dialog.id='wiz';dialog.className='wiz';dialog.setAttribute('aria-labelledby','wizTitle');
-    dialog.innerHTML='<div class="card"><div class="eyebrow">LET’S GET CONNECTED</div><h2 id="wizTitle">Welcome to NetMerge</h2><p class="hint2">A quick check before your connections work together.</p><ol id="wizSteps"></ol><p class="hint2" id="wizError" role="status"></p><div class="dialog-actions"><button class="btn" id="wizSkip">Set up later</button><button class="btn pri" id="wizDone">Done</button></div></div>';
+    dialog.innerHTML='<div class="card"><div class="eyebrow">LET’S GET CONNECTED</div><h2 id="wizTitle">Welcome to NetMerge</h2><p class="hint2">A quick check before your connections work together.</p><ol id="wizSteps"></ol><label class="wiz-check"><input type="checkbox" id="wizDiag"><span><b>Send diagnostics</b>Short reports about problems, so they can be fixed without asking you for logs. Never the websites you visit, your apps or your files. You can change this later in Settings. <a href="https://github.com/nisar87/netmerge#diagnostics" target="_blank" rel="noopener">What is sent</a></span></label><p class="hint2" id="wizError" role="status"></p><div class="dialog-actions"><button class="btn" id="wizSkip">Set up later</button><button class="btn pri" id="wizDone">Done</button></div></div>';
     dialog.addEventListener('cancel',event=>{event.preventDefault();if(!wizBusy){wizOpen=false;wizSkip=true;dialog.close();dialog.remove();}});
     document.body.append(dialog);dialog.showModal();
     $('#wizSkip').onclick=()=>finishSetup(false);$('#wizDone').onclick=()=>finishSetup(true);
+    $('#wizDiag').onchange=async event=>{
+      local.noDiagnostics=!event.target.checked;
+      try{await api('settings',local);}catch(error){$('#wizError').textContent=error.message;}
+    };
   }
   const steps=wizSteps();
   setHTML($('#wizSteps'),steps.map((step,index)=>`<li><i class="${step[0]?'ok':''}">${step[0]?NM.icon('check'):index+1}</i><div><b>${esc(step[1])}</b><p class="hint2">${esc(step[2])}</p>${index>=2?`<button class="btn sm" id="wizOption${index}" data-setup-option="${index}" aria-pressed="${step[0]}" aria-disabled="${wizBusy}">${step[0]?'Turn off':'Turn on'}</button>`:''}</div></li>`).join(''));
+  $('#wizDiag').checked=!local.noDiagnostics;$('#wizDiag').disabled=wizBusy;
   const ready=steps[0][0]&&steps[1][0];
   $('#wizDone').textContent=ready&&!S.snap.running?'Start merging':'Done';$('#wizDone').disabled=wizBusy;$('#wizSkip').disabled=wizBusy;
 }

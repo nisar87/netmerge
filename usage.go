@@ -29,7 +29,7 @@ func usageLoadLocked() {
 	}
 	usageLoaded = true
 	if b, err := os.ReadFile(usagePath()); err == nil {
-		_ = json.Unmarshal(b, &usage)
+		logErr("read the data usage file (usage counts start again)", json.Unmarshal(b, &usage))
 	}
 }
 
@@ -279,7 +279,7 @@ func usageSave() {
 	}
 	b, _ := json.Marshal(usage)
 	tmp := usagePath() + ".tmp"
-	if os.WriteFile(tmp, b, 0o644) == nil && os.Rename(tmp, usagePath()) == nil {
+	if logErr("save data usage", os.WriteFile(tmp, b, 0o644)) == nil && logErr("save data usage", os.Rename(tmp, usagePath())) == nil {
 		usageDirty = false
 	}
 }

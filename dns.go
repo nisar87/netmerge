@@ -190,7 +190,7 @@ func dnsGuardTick() {
 		dnsGuardFails = 0
 		dnsGuardMu.Unlock()
 		dnsRevert("The chosen DNS servers stopped answering.")
-		_ = engine.Apply()
+		logErr("apply the settings after going back to Windows DNS", engine.Apply())
 	}
 }
 

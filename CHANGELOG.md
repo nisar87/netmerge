@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.19.0
+
+- **Problems are found without asking you for logs.** NetMerge can now send a short diagnostics report every 6 hours, and soon after a crash. The first-run screen has a "Send diagnostics" checkbox (ticked by default), and **Settings → Maintenance → Send diagnostics** turns it off at any time. A report holds a random installation number, the version, Windows and the PC model, your settings as on/off values and counts, a summary of your connections, and NetMerge's own log with addresses, hardware addresses, device names and your Windows user name taken out. It never holds the websites you visit, the apps you use or your files. If you used NetMerge before, the Activity list tells you once that this is on. Details are in the README, section Diagnostics.
+- **Much more in the log.** Why the last run ended (Windows shut down, or NetMerge ended unexpectedly), Windows version and PC model at start, every start and stop of merging and what asked for it, connections appearing, going away or moving to another network, which settings changed, sign-in pages on hotel or café Wi-Fi, errors the window met, and what the updater did. Failures that used to be dropped silently (saving settings, usage, history; reloading the engine; stopping a conflicting service) are now written with the place in the code. Failed connections and failed health checks are counted per line and cause and written once a minute, without website names.
+- **A crash no longer stops part of NetMerge for good.** If the statistics, health checks, balancing or another background task crashed, it stayed stopped until NetMerge was restarted. It now starts again by itself, and the crash is kept for the next report. When the network engine stops unexpectedly, its last output is kept too.
+
 ## 3.18.1
 
 - **Click a picture to choose the look.** In Settings → Appearance the Light and Dark pictures did nothing when clicked; only the buttons below them changed the theme. Now each picture is a button too, the chosen one is outlined and marked, and there is a third picture for System (follows Windows). The buttons below still work and stay in step with the pictures.
