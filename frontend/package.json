@@ -9,7 +9,8 @@
     "check:scope": "node scripts/check-scope.mjs",
     "test:fixtures": "node --test tests/fixtures/server.test.mjs",
     "audit": "node scripts/audit.mjs",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "tour": "node scripts/tour.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",

@@ -4,6 +4,12 @@ Combine two or three internet connections (for example a LAN cable and Wi-Fi fro
 
 NetMerge is one small program: a friendly window, and its own network engine built in (see `engine/`), written for NetMerge only and nothing else to download. A benchmark measures the engine on every change (start time, new connections, downloads, block accuracy, memory and CPU).
 
+## See it working
+
+![NetMerge's Overview: two connections flowing into the hub at their measured speeds, beside the combined-speed gauge](docs/media/netmerge-overview.gif)
+
+**[Watch the 78-second tour (MP4)](docs/media/netmerge-tour.mp4)**: the live picture, a line losing internet and coming back, the connection cards, traffic modes, the speed test, usage, blocking, phone sharing and the light theme. The tour is recorded from the real window, with made-up connection data; the captions were added for the video.
+
 ## Screenshots
 
 | Overview | Overview (dark) |

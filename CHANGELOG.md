@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.21.1
+
+- **A rounder speedometer scale.** The dial now picks a top speed that divides into clean quarters (for example 0–160 Mbps, with marks at 40, 80 and 120), so it never shows numbers like 37.5 or 112.
+- **The README shows NetMerge working:** a short animated preview of the Overview, and a 78-second tour video recorded from the real window, plus fresh screenshots.
+
 ## 3.21.0
 
 Refinements to the 3.20 look. Only the window changed; merging, the engine, routing, DNS, sharing, settings and updates work exactly as before.
