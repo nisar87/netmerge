@@ -13,7 +13,7 @@ const routes = [
   ['sharing/connect', 'share', /sharing|connect/i], ['sharing/devices', 'share', /sharing|devices/i],
   ['activity/events', 'history', /activity|events/i], ['activity/logs', 'history', /activity|logs/i],
   ['settings/general', 'settings', /settings|general/i], ['settings/appearance', 'settings', /settings|appearance/i],
-  ['settings/maintenance', 'settings', /settings|updates|backup/i], ['settings/advanced', 'settings', /settings|advanced/i],
+  ['settings/maintenance', 'settings', /settings|updates|backup/i], ['settings/advanced', 'settings', /settings|advanced/i], ['settings/about', 'settings', /settings|about/i],
 ];
 
 for (const [route, nav, heading] of routes) {

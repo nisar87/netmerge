@@ -17,7 +17,8 @@ const ROUTES = {
   'settings/general':{page:'settings',group:'settings',view:'general'},
   'settings/appearance':{page:'settings',group:'settings',view:'appearance'},
   'settings/maintenance':{page:'settings',group:'settings',view:'maintenance'},
-  'settings/advanced':{page:'settings',group:'settings',view:'advanced'}
+  'settings/advanced':{page:'settings',group:'settings',view:'advanced'},
+  'settings/about':{page:'settings',group:'settings',view:'about'}
 };
 const ALIASES={downloads:'settings/general',apps:'apps/active',rules:'protection/routing',block:'protection/blocking',dns:'protection/dns',share:'sharing/connect',history:'activity/events',log:'activity/logs',settings:'settings/general',test:'connections/speed-test',presets:'connections/presets'};
 const TABS={
@@ -27,7 +28,7 @@ const TABS={
   rules:[['protection/routing','Routing exceptions'],['protection/blocking','Blocking'],['protection/dns','DNS']],
   share:[['sharing/connect','Connect a device'],['sharing/devices','Connected devices']],
   history:[['activity/events','Events'],['activity/logs','Logs']],
-  settings:[['settings/general','General'],['settings/appearance','Appearance'],['settings/maintenance','Maintenance'],['settings/advanced','Advanced']]
+  settings:[['settings/general','General'],['settings/appearance','Appearance'],['settings/maintenance','Maintenance'],['settings/advanced','Advanced'],['settings/about','About']]
 };
 let currentRoute='overview', routeView='';
 $$('.nav').forEach(link=>{link.dataset.label=link.querySelector('.nav-label').textContent;link.setAttribute('aria-label',link.dataset.label);});
@@ -89,7 +90,7 @@ matchMedia('(min-width: 720px)').addEventListener('change',event=>{if(event.matc
 
 // Section panels reuse their established controls and event identities.
 const settingsCards=$$('#pg-settings > .card');
-settingsCards[0].dataset.view='general';settingsCards[1].dataset.view='maintenance';
+settingsCards[0].dataset.view='general';settingsCards[1].dataset.view='maintenance';$('#aboutCard').dataset.view='about';
 const appearance=document.createElement('section');appearance.className='card appearance-card';appearance.dataset.view='appearance';
 appearance.innerHTML='<h2>Make yourself at home</h2><p class="hint2">Choose a comfortable workspace. System follows your device’s appearance.</p><div class="theme-previews" aria-hidden="true"><div class="theme-preview light"><i></i><div><b></b><span></span><span></span></div><small>Light</small></div><div class="theme-preview dark"><i></i><div><b></b><span></span><span></span></div><small>Dark</small></div></div>';
 appearance.append($('#theme').closest('.opt'));$('#pg-settings').append(appearance);$('#theme button[data-v="auto"]').textContent='System';

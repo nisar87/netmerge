@@ -224,6 +224,11 @@
         <div class="opt"><div><b>Setup guide</b><span>Shows the first-run checklist again.</span></div><button class="btn" id="wizBtn">Open</button></div>
         <div class="opt"><div><b>Quit NetMerge</b><span>Closing the window keeps merging in the background. Quit stops merging and exits.</span></div><button class="btn danger" id="quit">Quit</button></div>
       </div>
+      <div class="card about-card" id="aboutCard">
+        <div class="sechead">About NetMerge</div>
+        <div class="opt"><div><b>Made by Nisar Ahmad</b><span>NetMerge is free. Nisar's other tools, among them NetMerge for Android and the Pullwell download manager, are on nisarworks.com.</span></div><a class="btn" style="white-space:nowrap" id="aboutSite" href="https://nisarworks.com/" target="_blank" rel="noopener"><span data-icon="arrow-up-right"></span>nisarworks.com</a></div>
+        <div class="opt"><div><b>Source code and releases</b><span>Every version, what changed in it, and where to report a problem.</span></div><a class="btn" style="white-space:nowrap" id="aboutRepo" href="https://github.com/nisar87/netmerge" target="_blank" rel="noopener"><span data-icon="arrow-up-right"></span>GitHub</a></div>
+      </div>
       <details class="card adv" style="margin-top:16px">
         <summary><span class="sechead" style="display:inline">Advanced <span>leave as they are unless something is wrong</span></span></summary>
         <div class="opt"><div><b>Connection balancing <em class="rec">Recommended: Smart</em></b><span>Smart sends each new connection to the line with the most spare speed. Classic hands new connections out in turn, using the fixed shares (×1–×5) under Settings on each connection card on Overview. “Steady sites” mode always uses those shares. Switch to Classic only if Smart gives unexpected results.</span></div><select class="sel" id="balSel" aria-label="Connection balancing"><option value="smart">Smart (recommended)</option><option value="classic">Classic (fixed shares)</option></select></div>
