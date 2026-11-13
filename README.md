@@ -29,11 +29,29 @@ More pages (connections, speed test, apps, sharing, settings, narrow window) are
 - **Presets and schedule.** Gaming, work, travel and more in one click, with your own presets and a time schedule.
 - **Backup and restore** of settings, plus a first-run guide.
 - **Health checks.** A line without internet is left out until it works again.
-- **Tray icon, start with Windows, speed test, update notifications.**
+- **A speed test made for merged lines** (see [Measuring the merged speed](#measuring-the-merged-speed)).
+- **Tray icon, start with Windows, update notifications.**
 
 ### An honest limit
 
-One single connection (one download stream) can only use one line. A download manager that fetches a file in pieces over several connections gets around this. The gain comes from many connections at once, which is what browsers, download managers and most apps do. A single-stream speed test will show one line's speed.
+One single connection (one download stream) can only use one line. A download manager that fetches a file in pieces over several connections gets around this. The gain comes from many connections at once, which is what browsers, download managers and most apps do. A single-stream speed test will show one line's speed (see the next section).
+
+### Measuring the merged speed
+
+To see what merging really gives you, use the speed test built into NetMerge: **Connections → Speed test**. Website and app speed tests are not a reliable way to measure merged lines:
+
+- Many of them download over one connection, or only a few, from one server. One connection can only use one line, so the result often shows a single line's speed, not the merged speed.
+- They are made to measure one internet line, so they cannot tell you what each of your lines gives or how much merging adds.
+
+NetMerge's speed test is made for merged lines. It measures:
+
+1. **Each line on its own**, with one download stream and with eight, so you know what each line can do.
+2. **All lines together**, downloading from each line directly at the same time. This is the most the lines can give at this moment.
+3. **Through NetMerge**, with 1, 2, 4, 8, 16 and 32 parallel downloads, which is how real apps use the network. This is the speed merging gives you.
+
+The test downloads from several well-known servers (Google, Cloudflare and others) and spreads the load between them, so one slow or busy server does not lower the result.
+
+For a fair result, close other downloads and streaming while the test runs, and run it more than once: mobile data and Wi-Fi change from minute to minute.
 
 ## Install
 
