@@ -161,3 +161,12 @@ test('network engine choice is saved and the running engine is named', async ({ 
   await fixture.patch({ state: { snap: { version: '1.19.33', ownEngine: false, fellBack: true } } });
   await expect(page.locator('#engineVer')).toContainText('did not start');
 });
+
+test('settings has an About tab linking to nisarworks.com and the source', async ({ page }) => {
+  await navigate(page, 'settings/about');
+  await expect(page.locator('#aboutCard')).toBeVisible();
+  await expect(page.locator('#aboutCard')).toContainText('Made by Nisar Ahmad');
+  await expect(page.locator('#aboutSite')).toHaveAttribute('href', 'https://nisarworks.com/');
+  await expect(page.locator('#aboutSite')).toHaveAttribute('target', '_blank');
+  await expect(page.locator('#aboutRepo')).toHaveAttribute('href', 'https://github.com/nisar87/netmerge');
+});

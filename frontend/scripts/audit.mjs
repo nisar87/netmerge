@@ -10,7 +10,7 @@ await mkdir(output,{recursive:true});
 const server=createFixtureServer();await new Promise(done=>server.listen(0,'127.0.0.1',done));
 const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await chromium.launch(process.env.NETMERGE_BROWSER_EXECUTABLE?{executablePath:process.env.NETMERGE_BROWSER_EXECUTABLE}:{});
-const routes=['overview','connections','connections/speed-test','connections/presets','apps/active','apps/rules','usage','usage/allowances','protection/routing','protection/blocking','protection/dns','sharing/connect','sharing/devices','activity/events','activity/logs','settings/general','settings/appearance','settings/maintenance','settings/advanced'];
+const routes=['overview','connections','connections/speed-test','connections/presets','apps/active','apps/rules','usage','usage/allowances','protection/routing','protection/blocking','protection/dns','sharing/connect','sharing/devices','activity/events','activity/logs','settings/general','settings/appearance','settings/maintenance','settings/advanced','settings/about'];
 const reports=[],errors=[],external=[];
 try{
   for(const theme of ['light','dark'])for(const [width,height] of [[375,812],[390,844],[768,1024],[1024,768],[1440,900],[1920,1080]]){
