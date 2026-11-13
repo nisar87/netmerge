@@ -32,7 +32,7 @@ jobs:
         env:
           TOKEN: ${{ steps.auth.outputs.access_token }}
           DAYS: ${{ github.event.inputs.days }}
-        run: python3 diagnostics/fetch.py | tee count.txt
+        run: set -o pipefail; python3 diagnostics/fetch.py | tee count.txt
       - name: Encrypt them
         env:
           PUBKEY: ${{ github.event.inputs.pubkey }}
