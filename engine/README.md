@@ -1,11 +1,10 @@
-# NetMerge's own network engine (being tested)
+# NetMerge's network engine
 
-NetMerge runs a network engine underneath it: today that is **mihomo** (downloaded at first start, see `enginedl.go`).
-This folder holds NetMerge's own engine: a small engine that does exactly what NetMerge needs and nothing else. It
-is a separate Go module (`netmerge/engine`, standard library only) that shares no code with the app. NetMerge.exe
-carries it and runs it as `NetMerge.exe -engine -d <config folder>` (`cmd/nmengine` builds it on its own, for tests).
-The app keeps using mihomo until **Settings → Advanced → Network engine** is set to "NetMerge engine (testing)",
-and falls back to mihomo by itself if the new engine does not start.
+The engine that does NetMerge's work underneath the window: it captures the PC's traffic, sends each connection
+out on the line NetMerge chose, applies the app rules and block lists, and serves the sharing ports for phones. It
+does exactly what NetMerge needs and nothing else. It is a separate Go module (`netmerge/engine`, standard library
+only) that shares no code with the app. NetMerge.exe carries it and runs it as `NetMerge.exe -engine -d <config
+folder>` (`cmd/nmengine` builds it on its own, for tests).
 
 ## The contract
 
@@ -24,31 +23,30 @@ NetMerge's real configuration, starts an engine binary and checks:
 | Each connection sent out on the adapter of the line it was given (`interface-name`) | yes (on loopback) |
 | Refused connections logged as `[TCP] src(app) --> host:port match … using REJECT` at the `info` level, so the counter in `blocking.go` sees them | yes, with NetMerge's own log reader |
 | Sharing: HTTP/SOCKS proxy port with password (407 without), Shadowsocks (aes-128-gcm) port | yes |
-| Capturing all traffic of the PC (virtual adapter, routes, DNS) | own engine: `tun_e2e_linux_test.go` (CI, root) and `tun_e2e_windows_test.go` (CI, a Windows machine with Wintun) |
+| Capturing all traffic of the PC (virtual adapter, routes, DNS) | `tun_e2e_linux_test.go` (CI, root) and `tun_e2e_windows_test.go` (CI, a Windows machine with Wintun) |
+| Every setting NetMerge can write is a key the engine reads, and the engine accepts it | `engine_compat_test.go` |
 
-The CI job `engine-contract` runs this against mihomo 1.19.33 on every change, so the contract always describes
-what works today.
+CI runs the contract against the engine on its own and as NetMerge runs it (`NetMerge -engine`) on every change.
 
-## Stages
+## How it works
 
-0. **Contract**: the test above, passing against mihomo. Done.
-1. **Proxy part**: config, rules, groups and line choice, binding to adapters, API, log, sharing ports
-   (HTTP/SOCKS, Shadowsocks). Passes the contract in CI. Done.
-2. **Capturing traffic**: Wintun (Windows) or /dev/net/tun (Linux), routes and DNS, its own small TCP/IP handling
-   (the system's TCP does the heavy work: connections are rewritten to a local listener, no user-space TCP stack),
-   UDP sessions, the program of each connection, website names from TLS/HTTP/QUIC, fake-address DNS. Done; tested
-   in CI on Linux and on a Windows machine, not yet on a real PC with several lines.
-3. **The switch**: Settings → Advanced → Network engine, with automatic fallback to mihomo. Done (3.17.0).
-   Still to do on the real PC: speed comparisons, a 24-hour run, sleep/wake and unplugging lines.
-4. **Removing mihomo**, only when the new engine has been at least as good in daily use.
+- **Capturing traffic**: Wintun (Windows) or /dev/net/tun (Linux), set up with the system's own network functions.
+  The system's TCP does the heavy work: connections are rewritten to a local listener (no user-space TCP stack),
+  checksums are updated for the changed words only. UDP is relayed in sessions. Lost DNS answers are asked again.
+- **Choosing the line**: the rules in NetMerge's order, then the group NetMerge set; a line that does not connect
+  in time (about a second) while another one does is passed over for a few seconds. A website that is down on
+  every line blames no line.
+- **Names and programs**: website names from TLS, HTTP and QUIC; the program of each connection from the system's
+  socket tables, looked up while the connection's first bytes are awaited.
+- **Block lists**: kept as 64-bit fingerprints (a 350,000-name list takes about 8 MB and loads in under 0.1 s).
 
-## Compared with mihomo
+## Benchmark
 
-`cmd/enginebench` runs mihomo and this engine in turns with the same settings and measures start time, new
-connections (HTTP, HTTPS, UDP), downloads, block accuracy, a line that silently stops answering, memory and CPU.
-The workflow "Engine comparison" runs it on a Windows machine (internet) and on a private test network on Linux
-(`-local`: its own web, HTTPS, UDP and DNS servers, a 350,000-name block list). Results are in each run's
-summary; the engine is only changed when it stays ahead.
+`cmd/enginebench` measures the engine the way NetMerge uses it: start time, new connections (HTTP, HTTPS, UDP),
+downloads, block accuracy, a line that silently stops answering, memory and CPU. The workflow "Engine benchmark"
+runs it for every change to the engine, side by side with the engine on main, on a Windows machine (internet)
+and on a private test network on Linux (`-local`: its own web, HTTPS, UDP and DNS servers, a 350,000-name block
+list).
 
 ## Built to grow (not used yet)
 
@@ -58,6 +56,6 @@ summary; the engine is only changed when it stays ahead.
 
 ## Rules for this code
 
-- Written from scratch; no code copied from mihomo (GPL-3.0). Only Go's own library, plus Wintun (a prebuilt DLL
-  licensed for redistribution; `scripts/get-wintun.py` fetches it and checks its fingerprint).
-- Lighter than mihomo: only what the contract needs.
+- Written from scratch for NetMerge. Only Go's own library, plus Wintun (a prebuilt DLL licensed for
+  redistribution; `scripts/get-wintun.py` fetches it and checks its fingerprint).
+- Light: only what the contract needs.

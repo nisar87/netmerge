@@ -140,15 +140,6 @@ func routes() http.Handler {
 			s.NoCallProtect = in.NoCallProtect
 			s.SetupDone = s.SetupDone || in.SetupDone
 			s.QuotaReset, s.QuotaAction = in.QuotaReset, in.QuotaAction
-			if in.TunStack != s.TunStack {
-				switch in.TunStack {
-				case "", "mixed", "system", "gvisor":
-					s.TunStack, s.StackChosen = in.TunStack, true
-				}
-			}
-			if in.Engine == "" || in.Engine == "netmerge" {
-				s.Engine = in.Engine
-			}
 		})
 		go safely("quota check", quotaCheck)
 		if ns.AutoStart != old.AutoStart {
@@ -157,17 +148,6 @@ func routes() http.Handler {
 				updateSettings(func(s *Settings) { s.AutoStart = old.AutoStart })
 				writeErr(w, 500, "Could not change start-with-Windows: "+err.Error())
 				return
-			}
-		}
-		if ns.TunStack != old.TunStack || ns.Engine != old.Engine {
-			// the virtual adapter has to be rebuilt for a different network mode or engine
-			if running, _, _, _ := engine.Status(); running {
-				engine.Stop()
-				time.Sleep(time.Second)
-				if err := engine.Start(); err != nil {
-					writeErr(w, 500, err.Error())
-					return
-				}
 			}
 		}
 		if err := engine.Apply(); err != nil {

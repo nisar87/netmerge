@@ -4,18 +4,12 @@ function renderSettings(){
   [['#autoTog','autoStart'],['#launchTog','mergeOnLaunch'],['#debugTog','debugLog']].forEach(([id,k]) => { $(id).classList.toggle('on', !!local[k]); $(id).setAttribute('aria-checked', !!local[k]); });
   $$('#theme button').forEach(b=>{const selected=b.dataset.v===document.documentElement.dataset.preference;b.classList.toggle('sel',selected);b.setAttribute('aria-pressed',selected);});
   if (document.activeElement !== $('#balSel')) $('#balSel').value = local.classicBalance ? 'classic' : 'smart';
-  if (document.activeElement !== $('#stackSel')) $('#stackSel').value = (local.tunStack === 'mixed' ? '' : (local.tunStack || ''));
-  if (document.activeElement !== $('#engSel')) $('#engSel').value = local.engine === 'netmerge' ? 'netmerge' : '';
   const v = S.snap.version || '';
-  $('#engineVer').textContent = !v ? 'Not running'
-    : S.snap.ownEngine ? 'NetMerge engine ' + v.replace(/^nmengine-/, '') + ' (running)'
-    : 'mihomo ' + v + ' (running)' + (S.snap.fellBack ? ' - the NetMerge engine did not start, so the standard one is used' : '');
+  $('#engineVer').textContent = v ? 'Built into NetMerge, version ' + v.replace(/^nmengine-/, '') + ' (running)' : 'Not running';
 }
 $('#autoTog').onclick = () => { local.autoStart = !local.autoStart; renderSettings(); saveSoon(local.autoStart ? 'Will start with Windows' : 'Will not start with Windows'); };
 $('#launchTog').onclick = () => { local.mergeOnLaunch = !local.mergeOnLaunch; renderSettings(); saveSoon('Saved'); };
 $('#balSel').onchange = e => { local.classicBalance = e.target.value === 'classic'; saveSoon(local.classicBalance ? 'Classic balancing' : 'Smart balancing'); };
-$('#engSel').onchange = e => { local.engine = e.target.value; saveSoon(local.engine ? 'Switching to the NetMerge engine - reconnecting…' : 'Switching to the standard engine - reconnecting…'); };
-$('#stackSel').onchange = e => { local.tunStack = e.target.value; saveSoon('Engine mode changed - reconnecting…'); };
 $('#callTog').onclick = () => { local.noCallProtect = !local.noCallProtect; renderSettings(); saveSoon(local.noCallProtect ? 'Call protection off' : 'Call protection on'); };
 $('#debugTog').onclick = () => { local.debugLog = !local.debugLog; renderSettings(); saveSoon(local.debugLog ? 'Detailed logging on' : 'Detailed logging off'); };
 document.addEventListener('click', async e => {

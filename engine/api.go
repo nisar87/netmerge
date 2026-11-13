@@ -12,7 +12,7 @@ import (
 
 type http_server = http.Server
 
-// startAPI serves the local control API NetMerge uses (the same addresses and answers as mihomo's).
+// startAPI serves the local control API NetMerge uses.
 func (e *Engine) startAPI(addr, secret string) error {
 	if e.api != nil && e.api.Addr == addr {
 		return nil
@@ -41,7 +41,7 @@ func (e *Engine) startAPI(addr, secret string) error {
 		writeJSON(w, 200, map[string]any{"version": "nmengine-" + Version, "meta": true})
 	})
 	// POST /quit stops the engine cleanly (NetMerge uses it instead of killing the process, so the PC's
-	// routes and DNS are always put back). mihomo has no such call; NetMerge only sends it to its own engine.
+	// routes and DNS are always put back).
 	mux.HandleFunc("POST /quit", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		go e.Stop()

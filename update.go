@@ -23,7 +23,7 @@ import (
 
 // Set at build time:  -ldflags "-X main.appVersion=2.2.0 -X main.updateRepo=owner/netmerge"
 var (
-	appVersion = "3.17.5"
+	appVersion = "3.18.0"
 	updateRepo = "nisar87/netmerge" // "owner/repo" of the GitHub project (the release build sets it too)
 )
 
@@ -42,9 +42,6 @@ type UpdateState struct {
 	Progress  int    `json:"progress"` // percent while downloading
 	Repo      string `json:"repo"`
 	Auto      bool   `json:"auto"`
-	EngineDL  string `json:"engineDl"` // "" | "downloading" | "error"
-	EnginePct int    `json:"enginePct"`
-	EngineErr string `json:"engineErr"`
 
 	asset, sha string
 }
@@ -60,7 +57,6 @@ func updateSnapshot() UpdateState {
 	defer updMu.Unlock()
 	u := upd
 	u.Current, u.Repo, u.Auto = appVersion, updateRepo, !getSettings().NoUpdateCheck
-	u.EngineDL, u.EnginePct, u.EngineErr = engineDownloadState()
 	return u
 }
 
@@ -373,8 +369,6 @@ func registerUpdateRoutes(mux *http.ServeMux) {
 			}
 			_ = json.NewDecoder(r.Body).Decode(&in)
 			switch in.Action {
-			case "engine":
-				go safely("engine download", downloadEngine)
 			case "check":
 				checkUpdate(true)
 			case "install":

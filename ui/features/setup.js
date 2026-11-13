@@ -2,10 +2,10 @@
 let wizOpen=false,wizSkip=false,wizBusy=false;
 function wizSteps(){
   const present=S.snap.links.filter(link=>link.present&&link.enabled).length;
-  const engine=(!!S.snap.version || !!UP && !UP.engineDl) && !/not installed/i.test(S.snap.error||'');
+  const engine=!S.snap.error;
   return [
     [present>=2,present>=2?`${present} connections found`:present===1?'One connection found':'No connection found',present>=2?'Your connections are ready to combine.':'Connect a second network, such as Ethernet and Wi-Fi.'],
-    [engine,'Network engine',engine?'Installed and ready.':UP?.engineDl==='downloading'?'Downloading the engine. This is needed only once.':UP?.engineDl==='error'?'The engine could not be downloaded. Open Maintenance to retry.':'Waiting for the engine to report its version.'],
+    [engine,'Network engine',engine?'Built into NetMerge and ready. Nothing to install.':'It reported a problem: '+S.snap.error],
     [!!local.autoStart,'Start with Windows','Optional. Open NetMerge quietly when you sign in.'],
     [!!local.mergeOnLaunch,'Merge automatically','Optional. Start merging when NetMerge opens.']
   ];

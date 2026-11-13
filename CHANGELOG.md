@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.18.0
+
+- **One engine, built in.** NetMerge's own network engine is now the only one. The separate engine that NetMerge used to download (about 60 MB, in the `core` folder) is gone: nothing is downloaded on first start, and an old `core` folder is removed the first time 3.18.0 starts. Before this change the two engines were compared once more side by side on GitHub's machines, with the same settings:
+
+  | | Windows PC (real internet) | Test network (Linux) |
+  |---|---|---|
+  | Start | 73% faster | 48% faster |
+  | Connection / response time | 5 to 8% faster | 83% faster (TLS 72%, UDP 92%) |
+  | Downloads | Cloudflare 15% faster; Google about the same (8 parallel: 4% slower, within the noise) | 4 to 25% faster |
+  | Memory (peak) | 60% less | 59% less |
+  | CPU | 67% less | 23% less |
+  | Blocked sites refused correctly | | 40 of 40 (previous: 30) |
+
+  Every setting NetMerge writes is understood by the engine; a new test checks this for 13 combinations of settings.
+- **Removed: Settings → Advanced → Network engine and Network engine mode.** There is nothing to choose any more; those modes only applied to the previous engine. Settings → About shows the engine's version.
+- **Settings → About.** Who made NetMerge, with links to nisarworks.com and to the source code.
+
 ## 3.17.5
 
 - **Diagnostics now show what each line carried.** The diagnostics zip includes the last minutes of per-line speeds, connections and slots (kept even when the debug log is off) and the list of open connections with the line each one uses. A friend's zip about an unused hotspot could not show this before: the per-second record was only written with the debug log on.
@@ -16,18 +33,18 @@
 
 Fixes from five hours of the NetMerge engine on the real PC (3.17.1, both lines, 2,650 connections, 289 blocks counted):
 
-- **No IPv6 through the NetMerge engine when IPv6 is off** (NetMerge's setting, as with mihomo). The virtual adapter offered an IPv6 path, so Windows tried IPv6 first (Teams did) through lines that have none, and those attempts waited until they failed.
+- **No IPv6 through the NetMerge engine when IPv6 is off** (NetMerge's setting, as with the standard engine). The virtual adapter offered an IPv6 path, so Windows tried IPv6 first (Teams did) through lines that have none, and those attempts waited until they failed.
 - **Merging shows as on only once traffic really flows through the NetMerge engine.** Its first start on the PC took 3 seconds to get capture ready (the firewall permission is added once; later starts skip it), while NetMerge already said it had started.
 - **Adapters are listed with Windows' own function instead of PowerShell**: about a millisecond instead of seconds, and no more "adapter scan failed" (seen 7 times in the PC's log). Checked against PowerShell's list on a Windows machine in CI.
 
-What the PC's log showed about the NetMerge engine itself: every connection was named with its program, websites with their names; connections that failed: 7 in 5 hours (mihomo, the 1.5 hours before on the same PC: 25), of which 5 were nvidia's server not answering on either engine; 7 connections were rescued by moving to the other line within about a second.
+What the PC's log showed about the NetMerge engine itself: every connection was named with its program, websites with their names; connections that failed: 7 in 5 hours (the standard engine, the 1.5 hours before on the same PC: 25), of which 5 were nvidia's server not answering on either engine; 7 connections were rescued by moving to the other line within about a second.
 
 ## 3.17.1
 
-- **The NetMerge engine now really starts.** In 3.17.0 it refused NetMerge's own settings file (the file starts with a comment line, which mihomo accepts and the new engine did not), so NetMerge went back to mihomo after a few seconds. Found in the logs of the first test on a real PC; the engine test now writes the settings file exactly as NetMerge does.
-- **Compared with mihomo, side by side, every time the engine changes.** A new check runs both engines in turns with the same settings, on a Windows machine (internet) and on a private test network (no internet noise, a 350,000-name block list like the real one). In the latest runs the NetMerge engine was ahead of mihomo or level with it on every measurement (on the internet, HTTPS, UDP and the Cloudflare download came out level, within the variation between runs); the latest results:
+- **The NetMerge engine now really starts.** In 3.17.0 it refused NetMerge's own settings file (the file starts with a comment line, which the standard engine accepted and the new engine did not), so NetMerge went back to the standard engine after a few seconds. Found in the logs of the first test on a real PC; the engine test now writes the settings file exactly as NetMerge does.
+- **Compared with the standard engine, side by side, every time the engine changes.** A new check runs both engines in turns with the same settings, on a Windows machine (internet) and on a private test network (no internet noise, a 350,000-name block list like the real one). In the latest runs the NetMerge engine was ahead of the standard engine or level with it on every measurement (on the internet, HTTPS, UDP and the Cloudflare download came out level, within the variation between runs); the latest results:
 
-  | | mihomo | NetMerge engine |
+  | | Standard engine | NetMerge engine |
   |---|---|---|
   | Start until traffic flows through it (Windows, with block lists) | 1.2 s | 0.39 s |
   | New connection, small page (Windows) | 55.2 ms | 53.3 ms |
@@ -39,7 +56,7 @@ What the PC's log showed about the NetMerge engine itself: every connection was 
   | 64 downloads at once (test network) | 3.9 Gbit/s | 5.2 Gbit/s |
   | Blocked websites refused correctly, of 40 (test network) | 30 | 40 |
 
-  mihomo let plain-web ads on port 8080 through; the NetMerge engine refuses them by name, and writes the website's name (not its address) in the log, so "Blocked today" shows names. Internet results vary from run to run; the full tables are in the "Engine comparison" checks on GitHub.
+  The standard engine let plain-web ads on port 8080 through; the NetMerge engine refuses them by name, and writes the website's name (not its address) in the log, so "Blocked today" shows names. Internet results vary from run to run; the full tables are in the "Engine comparison" checks on GitHub.
 - **What was changed to get there:** the adapter is set up with Windows' own network functions instead of a netsh program per setting (capture ready in a fraction of a second); the adapter is created while the block lists load; block lists load twice as fast and take 8 MB instead of tens of MB; checksums are updated only for the changed parts of each packet; the program of a connection is looked up while the connection's first bytes are awaited, from the matching table only; adapters are found by name directly (2 ms less per new connection on Windows); lost DNS answers are asked again.
 - **Switching engines while NetMerge is closed** now starts the chosen engine instead of keeping the other one running.
 - Error messages about a failed engine start show only that engine's own lines.
@@ -48,10 +65,10 @@ Still not tested on your PC: please switch to the NetMerge engine in Settings �
 
 ## 3.17.0
 
-- **NetMerge's own network engine, to try.** Settings → Advanced → Network engine now offers "NetMerge engine (testing)" next to the standard engine (mihomo). It is written for NetMerge only, is part of NetMerge.exe (nothing extra to download) and does what NetMerge uses: merging over your lines, app and website rules, blocking, call protection, sharing with phones (proxy and Shadowsocks), and capturing the PC's traffic. New connections that would wait on a line that does not answer are moved to another line within about a second. If it cannot start, NetMerge uses the standard engine by itself and says so; Settings → Advanced → Engine shows which one runs. The standard engine stays the default.
+- **NetMerge's own network engine, to try.** Settings → Advanced → Network engine now offers "NetMerge engine (testing)" next to the standard engine. It is written for NetMerge only, is part of NetMerge.exe (nothing extra to download) and does what NetMerge uses: merging over your lines, app and website rules, blocking, call protection, sharing with phones (proxy and Shadowsocks), and capturing the PC's traffic. New connections that would wait on a line that does not answer are moved to another line within about a second. If it cannot start, NetMerge uses the standard engine by itself and says so; Settings → Advanced → Engine shows which one runs. The standard engine stays the default.
   - Tested: every check NetMerge has for an engine passes in CI with the new engine, the capture test runs on Linux and on a Windows machine (Wintun) in CI. **Not yet tested on a real PC with several lines**: please try it there and switch back if anything misbehaves.
 - **The window no longer freezes while merging starts.** Starting the engine used to hold the window for up to 15 seconds.
-- **NetMerge only closes its own engine.** It used to close every mihomo.exe on the PC, including other programs' copies.
+- **NetMerge only closes its own engine.** It used to close every program of the standard engine's name on the PC, including other programs' copies.
 - **Speeds keep updating while the engine is checked.** The engine check every 5 seconds could hold up the speed reading for several seconds (seen 40 times in a real log as "sampler was held up").
 - **Line choices are set again right after settings change.** Saving a setting reloads the engine, which forgot which line each slot used until the next check ("slot check" lines in the log).
 - **Data used while NetMerge is closed is counted.** On the next start NetMerge adds what each adapter carried in between (to that day), unless Windows restarted meanwhile. Adapters' 64-bit counters are used for this, so more than 4 GB is counted right.
@@ -63,7 +80,7 @@ Still not tested on your PC: please switch to the NetMerge engine in Settings �
 
 ## 3.16.2
 
-- **Allowed websites now follow your rules.** With blocking on, a website on an allow list used to skip every rule after it: an app sent to one line (or to skip NetMerge) was merged anyway for that site, a bank or login site you allowed could be spread over several lines, and an allowed call address left the steady call line. Now an allowed website is simply not blocked, and goes on to your app rules, call protection, "keep on one line" list and the built-in bank rule like any other site. This also covers the sites NetMerge always allows (GitHub, jsdelivr, gstatic and Microsoft's connection check). Checked with the same engine version NetMerge uses (mihomo 1.19.33): it accepts the new rule, refuses blocked sites and lets allowed ones continue; the "blocked today" counts read the engine's new log line.
+- **Allowed websites now follow your rules.** With blocking on, a website on an allow list used to skip every rule after it: an app sent to one line (or to skip NetMerge) was merged anyway for that site, a bank or login site you allowed could be spread over several lines, and an allowed call address left the steady call line. Now an allowed website is simply not blocked, and goes on to your app rules, call protection, "keep on one line" list and the built-in bank rule like any other site. This also covers the sites NetMerge always allows (GitHub, jsdelivr, gstatic and Microsoft's connection check). Checked with the standard engine version NetMerge used then: it accepts the new rule, refuses blocked sites and lets allowed ones continue; the "blocked today" counts read the engine's new log line.
 - **One list of blocked websites.** "Most blocked today" and "Blocked today" showed the same websites. They are now one list, most blocked first, with a bar next to each count and the Allow button.
 
 ## 3.16.1

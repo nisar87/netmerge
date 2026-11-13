@@ -40,7 +40,7 @@ func setupLocal() (func(), error) {
 		{"ip", "netns", "exec", "nmbench", "ip", "addr", "add", "203.0.113.53/32", "dev", "lo"},
 		{"ip", "netns", "exec", "nmbench", "ip", "route", "add", "default", "via", "10.200.0.1"},
 		// only sockets bound to the cable (the engines' line) reach the far side; everything else must be captured
-		// (a route in the main table would let mihomo's routing rules skip its adapter)
+		// (a route in the main table could let an engine's own routing rules skip its adapter)
 		{"ip", "route", "add", "203.0.113.0/24", "via", "10.200.0.2", "dev", "nmveth-h", "table", "4242"},
 		{"ip", "rule", "add", "oif", "nmveth-h", "lookup", "4242", "pref", "100"},
 		// a second line that has silently died: its packets reach a namespace that forwards nothing

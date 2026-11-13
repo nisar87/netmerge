@@ -1,9 +1,10 @@
-// enginebench compares network engines the way NetMerge uses them: each engine runs as its own process with the
-// same settings, captures traffic through its virtual adapter, and the same measurements are taken through it.
-// Engines take turns (A B A B ...) so changes in the network affect both alike.
+// enginebench measures NetMerge's engine the way NetMerge uses it: the engine runs as its own process, captures
+// traffic through its virtual adapter, and the measurements are taken through it. Two builds can be compared
+// (for example before and after a change); they take turns (A B A B ...) so changes in the network affect both
+// alike.
 //
-//	enginebench -engine "mihomo=C:\mihomo.exe" -engine "netmerge=C:\nmengine.exe" -rounds 3      (internet, Windows)
-//	enginebench -local -engine "mihomo=/x/mihomo" -engine "netmerge=/x/nmengine" -rounds 3       (a private test
+//	enginebench -engine "netmerge=C:\nmengine.exe" -rounds 3                                     (internet, Windows)
+//	enginebench -local -engine "before=/x/nmengine-old" -engine "after=/x/nmengine" -rounds 3   (a private test
 //	   network with its own servers, Linux as root: no internet noise, so small differences show)
 package main
 
@@ -185,12 +186,6 @@ func config(name string) []byte { return configWith(name, false) }
 // same slot layout NetMerge uses (each slot points at a line, AUTO takes the slots in turn)
 func configWith(name string, withDead bool) []byte {
 	tun := map[string]any{"enable": true, "auto-route": true, "auto-detect-interface": true, "route-address": tg.routes, "mtu": 9000}
-	if name != "netmerge" {
-		tun["stack"] = "mixed" // what NetMerge uses with mihomo by default
-		if g := os.Getenv("BENCH_MIHOMO_GSO"); g != "" {
-			tun["gso"] = g == "1"
-		}
-	}
 	cfg := map[string]any{
 		"mode": "rule", "log-level": "info", "ipv6": false, "allow-lan": false, "find-process-mode": envOr("BENCH_FIND", "always"),
 		"unified-delay": true, "tcp-concurrent": false, "external-controller": apiAddr, "secret": secret,
@@ -300,7 +295,7 @@ func runRound(name, path string) (map[string]float64, error) {
 
 	for _, d := range tg.downloads {
 		var prof chan []byte
-		if d.key == "parallel" && name == "netmerge" && os.Getenv("BENCH_PPROF") != "" {
+		if d.key == "parallel" && os.Getenv("BENCH_PPROF") != "" {
 			prof = make(chan []byte, 1)
 			go func() { prof <- fetch("http://127.0.0.1:6060/debug/pprof/profile?seconds=5") }()
 		}

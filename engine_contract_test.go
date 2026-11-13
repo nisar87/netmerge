@@ -3,7 +3,7 @@ package main
 // The engine contract: everything NetMerge needs from the network engine, checked against a real engine binary.
 // Run with NM_ENGINE_BIN=/path/to/engine go test -run TestEngineContract -v
 // (NetMerge itself as the engine: NM_ENGINE_BIN=./netmerge NM_ENGINE_ARGS=-engine)
-// It runs against mihomo today; NetMerge's own engine (engine/) has to pass the same checks before it can replace it.
+// CI runs it against the engine on its own (nmengine) and as NetMerge runs it (NetMerge -engine).
 // The virtual adapter (TUN) needs Windows and admin rights, so here traffic enters through the sharing ports
 // (HTTP/SOCKS proxy and Shadowsocks) - the rules, line choice, API and log are the same for both ways in.
 
@@ -241,7 +241,7 @@ func (e *contractEngine) httpVia(target string, withAuth bool) (*http.Response, 
 }
 
 // connectVia opens a CONNECT tunnel to host:port through the sharing proxy. It reports whether the tunnel really
-// carries data: an engine may answer "200" and close a refused tunnel at once (mihomo does), or answer an error.
+// carries data: an engine may answer "200" and close a refused tunnel at once, or answer an error.
 func (e *contractEngine) connectVia(hostport string) (open bool) {
 	c, err := net.DialTimeout("tcp", e.proxy, 5*time.Second)
 	if err != nil {

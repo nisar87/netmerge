@@ -10,7 +10,7 @@ import (
 )
 
 // Config is the part of the engine settings file (config.yaml, written by NetMerge as JSON) that this engine reads.
-// Keys NetMerge writes for mihomo that have no meaning here (tun stack, profile, unified-delay ...) are ignored.
+// Unknown keys are ignored; NetMerge's tests check that every key it writes is one the engine reads.
 type Config struct {
 	Mode               string                    `json:"mode"`
 	LogLevel           string                    `json:"log-level"`

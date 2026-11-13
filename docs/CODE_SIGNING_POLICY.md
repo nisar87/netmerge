@@ -8,8 +8,9 @@ Once the project is accepted, the release workflow will send that build to SignP
 
 ## What is signed
 
-Only NetMerge.exe, built by this project. The network engine NetMerge can download on first use
-(mihomo, from github.com/MetaCubeX/mihomo) is a separate program by other authors and is not signed by this project.
+Only NetMerge.exe, built by this project. Its network engine is part of the same program. The one file by other
+authors it carries, wintun.dll (the WireGuard project's virtual network adapter driver, checked against its
+published fingerprint at build time), keeps its authors' own signature and is not signed by this project.
 
 ## Roles
 

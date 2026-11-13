@@ -13,10 +13,7 @@ function renderUpdate(){
       ${UP.status === 'downloading' ? `<div class="share-bar" style="margin-top:8px"><div style="width:${UP.progress}%"></div></div>` : ''}</div>
       <button class="btn primary" id="updGo" ${busy?'disabled':''}>${UP.status==='downloading' ? 'Downloading '+UP.progress+'%' : UP.status==='installing' ? 'Restarting…' : 'Update now'}</button></div>`;
   }
-  if (UP.engineDl === 'downloading') b = `<div class="note updb"><div style="flex:1"><b>Downloading the network engine…</b> <span class="hint2">first start only</span><div class="share-bar" style="margin-top:8px"><div style="width:${UP.enginePct}%"></div></div></div></div>` + b;
-  else if (UP.engineDl === 'error') b = `<div class="note bad"><span style="flex:1"><b>Could not download the network engine.</b> ${esc(UP.engineErr)}</span><button class="btn" id="engRetry">Try again</button></div>` + b;
   setHTML($('#updBanner'), b);
-  const er=$('#engRetry');if(er)er.onclick=async()=>{er.disabled=true;try{UP=await api('update',{action:'engine'});renderUpdate();}catch(error){toast(error.message,true);er.disabled=false;}};
   const g = $('#updGo'); if (g) g.onclick = async () => { try { UP = await api('update',{action:'install'}); renderUpdate(); toast('Downloading the update…'); } catch(e){ toast(e.message, true); } };
   $('#appVer').textContent = 'v'+UP.current;
   $('#updInfo').textContent = UP.status === 'checking' ? 'Checking…' : UP.error ? UP.error : UP.available ? `Version ${UP.latest} is available.` : UP.checked ? `You have the latest version. Checked ${updAgo(UP.checked)}.` : 'Not checked yet.';
@@ -26,3 +23,4 @@ function renderUpdate(){
 $('#updCheck').onclick = async () => { try { UP = await api('update',{action:'check'}); renderUpdate(); if (!UP.error) toast(UP.available ? 'Update found' : 'You are up to date'); } catch(e){ toast(e.message, true); } };
 $('#updTog').onclick = () => { local.noUpdateCheck = !local.noUpdateCheck; if (UP) { UP.auto = !local.noUpdateCheck; renderUpdate(); } saveSoon(local.noUpdateCheck ? 'Automatic update checks off' : 'Automatic update checks on'); };
 NM.schedule('update',loadUpdate,4000,()=>!document.hidden); setTimeout(loadUpdate, 800);
+

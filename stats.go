@@ -64,9 +64,7 @@ type AppStat struct {
 type Snapshot struct {
 	Running   bool            `json:"running"`
 	Version   string          `json:"version"`
-	OwnEngine bool            `json:"ownEngine"` // NetMerge's own engine is running (not mihomo)
-	FellBack  bool            `json:"fellBack"`  // NetMerge's own engine was chosen but would not start, so mihomo runs
-	App       string          `json:"app"`       // NetMerge version (the window reloads itself when it changes)
+	App       string          `json:"app"` // NetMerge version (the window reloads itself when it changes)
 	Error     string          `json:"error"`
 	Uptime    int64           `json:"uptime"`
 	Links     []LinkStat      `json:"links"`
@@ -523,8 +521,7 @@ func sample(slow bool) {
 	if running {
 		up = int64(time.Since(started).Seconds())
 	}
-	ownEng, fellBack := engine.Own()
-	snap = Snapshot{Running: running, Version: version, OwnEngine: ownEng, FellBack: fellBack, App: appVersion, Error: errMsg, Uptime: up, Links: links, Apps: appList,
+	snap = Snapshot{Running: running, Version: version, App: appVersion, Error: errMsg, Uptime: up, Links: links, Apps: appList,
 		TotalDown: totDown, TotalUp: totUp, PeakDown: peak, Conns: len(mc.Connections),
 		Total: append([]float64(nil), totalHist...)}
 	_, snap.Smart = dispatchSlotsOf("")

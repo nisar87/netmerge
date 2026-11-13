@@ -15,7 +15,7 @@ Written 2026-11-11 for the next person or session working on NetMerge (version 3
 ## 2. What NetMerge is
 
 A single Windows program (Go, standard library only, MIT licence) that merges several internet connections (cable,
-Wi-Fi, USB phone tethering) into one, for the whole PC. It runs the mihomo engine (TUN mode) underneath and sends each
+Wi-Fi, USB phone tethering) into one, for the whole PC. Its own network engine (`engine/`, built into the same program) captures the PC's traffic and sends each
 **new connection** out on one of the lines. One single connection never gets faster than its line; many connections
 (downloads in pieces, browsers, updates) do.
 
@@ -29,12 +29,12 @@ Not part of NetMerge any more:
 | File | What it does |
 | --- | --- |
 | `main.go` | Start-up, single instance (port 9196), admin relaunch, tray, crash log |
-| `engine.go`, `enginedl.go` | Starts/stops the engine (mihomo, or NetMerge's own when Settings → Advanced → Network engine says so, with fallback to mihomo); downloads the pinned mihomo (v1.19.33, SHA-256 pinned in code) |
-| `engine_procs.go`, `procs_*.go` | Closes only NetMerge's own engine processes (`data/engine.pid` + program path); the own engine is asked to stop via `POST /quit` |
-| `engine/` | NetMerge's own engine, a separate Go module (standard library only), run as `NetMerge.exe -engine -d <dir>`. See `engine/README.md` |
-| `engine_contract_test.go` | What any engine must do for NetMerge; CI runs it against mihomo, `nmengine` and `NetMerge -engine` |
+| `engine.go` | Starts/stops the engine (`NetMerge.exe -engine -d config`), re-attaches to a running one, restarts it after crashes |
+| `engine_procs.go`, `procs_*.go` | Closes only NetMerge's own engine processes (`data/engine.pid` + program path); the engine is asked to stop via `POST /quit`. Removes the `core` folder of versions before 3.18 |
+| `engine/` | The network engine, a separate Go module (standard library only). See `engine/README.md` |
+| `engine_contract_test.go`, `engine_compat_test.go` | What the engine must do for NetMerge, and that every setting NetMerge writes is one the engine reads |
 | `usage_offline.go` | Counts data used while NetMerge was closed (64-bit adapter counters, same Windows boot only) |
-| `config.go` | Writes the mihomo config: one proxy per line bound to its adapter, TUN, rules, bypass lists |
+| `config.go` | Writes the engine's settings file: one proxy per line bound to its adapter, TUN, rules, bypass lists |
 | `dispatch.go` | The heart: decides which line new connections use (smooth weighted slots, 8 slots, learned capacities with ~15-minute half-life, "slow" flags, call protection) |
 | `ratecap.go` | Rejects impossible byte-counter readings (USB adapter counters restart; 32-bit wrap) and readings across a long gap (sleep) |
 | `stats.go` | Samples adapter counters every second; per-line speed, usage, status shown in the window |
@@ -90,15 +90,12 @@ first real update after it will show it on the PC).
 ## 7. Open items
 
 1. **IPv6 is not merged** (`"ipv6": false` in the engine config). If a line gives the PC IPv6, that traffic bypasses
-   NetMerge. Not the case on the owner's PC; matters for other users. (The own engine can capture IPv6; the app
-   does not turn it on yet.)
-2. **The own engine (3.17.0) has not run on the owner's PC.** Tested in CI only (Linux capture with root; a Windows
-   runner with Wintun: capture, fake DNS, UDP, blocking, program names, ~700-850 Mbit/s on one line). Still to do
-   there: several real lines, speed against mihomo, a 24-hour run, sleep/wake, unplugging lines. Then stage 4
-   (removing mihomo) when the owner is satisfied.
-3. Fixed in 3.17.0: closing other tools' mihomo.exe, the window freeze during engine start, usage while closed,
-   "sampler was held up", "slot check" after reloads, update check 403. Not yet confirmed on the PC.
-4. Not yet done: code signing (SignPath application pending; "Windows protected your PC" warning), a 24-hour run,
+   NetMerge. Not the case on the owner's PC; matters for other users. (The engine can capture IPv6; the app does not
+   turn it on yet.)
+2. **Since 3.18.0 the built-in engine is the only engine.** It ran on the owner's PC from 3.17.1 (both lines, a day
+   of use) and is measured on every change by the "Engine benchmark" workflow. Not yet seen on the PC: sleep/wake
+   and unplugging a line with this engine, a 24-hour run.
+3. Not yet done: code signing (SignPath application pending; "Windows protected your PC" warning), a 24-hour run,
    running as a standard user, a trademark check of the name "NetMerge" (a similar `net-merge` project exists).
 
 ## 8. Lessons

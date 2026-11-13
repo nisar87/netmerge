@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Logger writes lines in the form NetMerge reads (and mihomo writes):
+// Logger writes lines in the form NetMerge reads:
 //
 //	time="2026-11-12T03:12:11.207397100+05:00" level=info msg="[TCP] 1.2.3.4:5(app.exe) --> host:443 match ... using ..."
 type Logger struct {

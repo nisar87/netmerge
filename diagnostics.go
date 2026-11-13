@@ -58,7 +58,7 @@ func diagnosticsSummary() string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "NetMerge %s\nTime: %s\nWindows/Go: %s/%s %s\n", appVersion, time.Now().Format(time.RFC3339), runtime.GOOS, runtime.GOARCH, runtime.Version())
 	ver, _ := engineAlive()
-	fmt.Fprintf(&sb, "Engine: %s (expected %s)\n\n", ver, engineVersion)
+	fmt.Fprintf(&sb, "Engine: %s\n\n", ver)
 	snap := getSnapshot()
 	fmt.Fprintf(&sb, "Merging: %v, connections: %d, down %.1f Mbps, up %.1f Mbps\n", snap.Running, snap.Conns, snap.TotalDown*8/1e6, snap.TotalUp*8/1e6)
 	if snap.Error != "" {

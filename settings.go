@@ -36,11 +36,8 @@ type Settings struct {
 	SeenApps       []string          `json:"seenApps"`
 	Secret         string            `json:"secret"`
 	DebugLog       bool              `json:"debugLog"`
-	TunStack       string            `json:"tunStack"`
-	Engine         string            `json:"engine"` // "" = mihomo, "netmerge" = NetMerge's own engine (being tested)
 	TunMTU         int               `json:"tunMTU"`
 	Block          *BlockSettings    `json:"block"`
-	StackChosen    bool              `json:"stackChosen"` // the user picked the engine mode themselves
 	Share          *ShareSettings    `json:"share"`
 	DeviceNames    map[string]string `json:"deviceNames,omitempty"` // names you gave to phones, keyed by hardware address
 	QuotaReset     int               `json:"quotaReset"`            // day of the month the allowance renews (1-28)
@@ -102,12 +99,6 @@ func loadSettings() {
 	normalizeLocked()
 	if settings.Block == nil {
 		settings.Block = defaultBlock()
-	}
-	// An old auto-tune left the engine on the slow user-space "gvisor" network stack (one download stream only
-	// reached ~13-25 Mbps through it). Go back to the normal mode once; it can be changed again in Settings.
-	if settings.TunStack == "gvisor" && !settings.StackChosen {
-		settings.TunStack = ""
-		logf("network engine mode reset from gvisor to the default (mixed)")
 	}
 	if settings.Mode != "stable" && !strings.HasPrefix(settings.Mode, "link:") {
 		settings.Mode = "fast"
