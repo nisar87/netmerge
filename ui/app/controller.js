@@ -262,7 +262,7 @@ function renderLinks(sn, act, P){
           <button class="tog" data-f="tog" role="switch" aria-label="Use ${esc(l.label || l.name)}"></button>
         </header>
         <div class="ov-link-speed"><span class="ov-down"><svg class="mini-gauge" viewBox="0 0 64 38" aria-hidden="true" focusable="false"><path class="mg-track" d="M7 33 A25 25 0 0 1 57 33"/><path class="mg-val" data-f="gauge" d="M7 33 A25 25 0 0 1 57 33" pathLength="100" stroke-dasharray="0 100"/><line class="mg-needle" data-f="gneedle" x1="32" y1="33" x2="32" y2="14" style="transform:rotate(-90deg)"/><circle class="mg-hub" cx="32" cy="33" r="3"/></svg><b class="num" data-f="down">—</b><small>Mbps</small></span><span class="ov-up num">${NM.icon('arrow-up')}<span data-f="up">—</span> <small>Mbps</small></span></div>
-        <svg class="ov-spark" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true" focusable="false"><defs><linearGradient id="lkg${i}-${Date.now()%1e6}" x1="0" y1="0" x2="0" y2="1"><stop offset="0"/><stop offset="1"/></linearGradient></defs><line class="ov-spark-base" x1="0" x2="300" y1="55" y2="55"/><path class="ov-spark-area" data-f="area"/><path class="ov-spark-line" data-f="line" vector-effect="non-scaling-stroke"/></svg>
+        <div class="ov-spark-box"><span class="ov-spark-dot" data-f="sdot" hidden></span><svg class="ov-spark" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true" focusable="false"><defs><linearGradient id="lkg${i}-${Date.now()%1e6}" x1="0" y1="0" x2="0" y2="1"><stop offset="0"/><stop offset="1"/></linearGradient></defs><line class="ov-spark-base" x1="0" x2="300" y1="55" y2="55"/><path class="ov-spark-area" data-f="area"/><path class="ov-spark-line" data-f="line" vector-effect="non-scaling-stroke"/></svg></div>
         <div class="ov-link-foot">
           <div class="ov-share"><span>Share of traffic <b class="num" data-f="tshare">—</b></span><span class="ov-bar" role="presentation"><i data-f="tbar"></i></span></div>
           <div class="ov-ping"><span>Response</span><b class="num" data-f="ping">—</b><small class="q" data-f="q" hidden></small></div>
@@ -309,6 +309,10 @@ function renderLinks(sn, act, P){
     card.style.setProperty('--c', c);
     card.classList.toggle('off', !ll.enabled || !l.present);
     card.classList.toggle('dim', !(run && l.present && ll.enabled && l.healthy === true && !l.standby && !l.slow && !l.portal && !l.quotaOut));
+    // one word for the card's state (healthy, standing by, no internet…), and a short glow when a line comes back
+    { const state = typeof flowState === 'function' ? flowState({...l, enabled: ll.enabled}, run) : '', was = card.dataset.state;
+      if (was !== state) { card.dataset.state = state;
+        if (['down', 'gone', 'checking'].includes(was) && ['moving', 'idle'].includes(state)) { card.classList.add('recovered'); clearTimeout(card._rec); card._rec = setTimeout(() => card.classList.remove('recovered'), 4000); } } }
     const f = n => card.querySelector(`[data-f=${n}]`);
     const [st, sc] = statusOf({...l, enabled: ll.enabled}, run);
     f('status').textContent = st; f('status').style.setProperty('--c', sc);
@@ -329,8 +333,12 @@ function renderLinks(sn, act, P){
     { const q = f('q'), lab = l.present && h.delay && l.quality && l.quality.label ? l.quality.label : ''; q.hidden = !lab; q.textContent = lab; q.className = 'q ' + lab.toLowerCase(); }
     { const hist = l.present ? (l.history||[]).slice(-90) : [];
       if (hist.length > 1) { const n = 90, x = k => (k + n - hist.length)/(n-1)*300, y = v => 54 - v/sparkMax*50;
-        const line = hist.map((v,k) => (k ? 'L' : 'M') + x(k).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+        // a smooth curve through the readings (midpoint quadratics), the same number of points every second once
+        // the 90 seconds are full, so the line glides from one reading to the next instead of jumping
+        const pts = hist.map((v,k) => [x(k), y(v)]);
+        const line = pts.map(([px,py],k) => { if (!k) return `M${px.toFixed(1)} ${py.toFixed(1)}`; const [qx,qy] = pts[k-1]; return `Q${qx.toFixed(1)} ${qy.toFixed(1)} ${((qx+px)/2).toFixed(1)} ${((qy+py)/2).toFixed(1)}`; }).join(' ') + ` L${pts.at(-1)[0].toFixed(1)} ${pts.at(-1)[1].toFixed(1)}`;
         f('line').setAttribute('d', line); f('area').setAttribute('d', `${line} L300 56 L${x(0).toFixed(1)} 56 Z`);
+        { const last = pts.at(-1), dot = f('sdot'); if (dot) { dot.style.left = (last[0] / 3) + '%'; dot.style.top = (last[1] / 56 * 100) + '%'; dot.hidden = !(run && on); } }
         const g = card.querySelector('linearGradient'); f('area').setAttribute('fill', `url(#${g.id})`);
       } else { f('line').removeAttribute('d'); f('area').removeAttribute('d'); } }
     card.setAttribute('aria-label', `${ll.label || l.label || l.name}: ${statusOf({...l, enabled: ll.enabled}, run)[0]}, ${l.present ? fmtM(l.down) : '—'} Mbps down`);

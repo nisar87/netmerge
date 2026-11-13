@@ -100,49 +100,122 @@ html[data-motion="reduced"] .page:not([hidden]){animation:page-fade 160ms linear
 
 /* ---------- Overview: Quantum Flow and Mission Control ---------- */
 .ov-hero{background:
-  radial-gradient(60% 120% at 62% 52%,color-mix(in srgb,var(--accent) 11%,transparent),transparent 62%),
-  radial-gradient(40% 90% at 20% 50%,color-mix(in srgb,var(--accent-2) 7%,transparent),transparent 70%),var(--glass)}
+  radial-gradient(60% 120% at 58% 52%,color-mix(in srgb,var(--accent) 12%,transparent),transparent 62%),
+  radial-gradient(40% 90% at 16% 50%,color-mix(in srgb,var(--accent-2) 8%,transparent),transparent 70%),var(--glass)}
+/* the picture gets more of the width; the four figures take a slimmer column */
+.ov-hero-body{grid-template-columns:minmax(0,1fr) 316px}
+.ov-flow{padding:22px 8px 22px 22px}
+.ov-flow svg{max-height:450px}
 .ov-status{border-bottom-color:color-mix(in srgb,var(--accent) 8%,var(--line))}
+.ov-status p{font-size:12.5px}
 .ov-kpis{border-left-color:color-mix(in srgb,var(--accent) 8%,var(--line))}
 .ov-kpi,.ov-kpi:nth-child(odd){border-color:color-mix(in srgb,var(--accent) 8%,var(--line))}
+.ov-kpi{padding:20px 20px}
 .ov-kpi-value{font-size:24px}
+.ov-kpi dt{font-size:11.5px}
+.ov-kpi-foot{font-size:11px;line-height:1.45}
 .ov-kpi dt .icon{color:var(--accent)}
 #mergeFlow{position:relative;--hub-glow:#0891b2}
 :root[data-theme="dark"] #mergeFlow{--hub-glow:#67e8f9}
 #mergeFlow svg{position:relative;z-index:1}
 .qf-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
 html[data-motion="off"] .qf-canvas{display:none}
-.mf-halo-in{stop-color:var(--accent);stop-opacity:.16}
+
+/* hub */
+.mf-halo-in{stop-color:var(--accent);stop-opacity:.18}
 .mf-halo-out{stop-color:var(--accent);stop-opacity:0}
 .mf-halo{opacity:.55;transition:opacity 1.2s}
 svg.busy .mf-halo{opacity:1}
-svg.off .mf-halo{opacity:.15}
+svg.off .mf-halo{opacity:.12}
 /* the hub's breathing is drawn on the canvas (it follows arriving traffic); animating the SVG would re-lay out the page every frame */
-.mf-glow{fill:color-mix(in srgb,var(--speed,var(--accent)) 7%,var(--glass-strong));stroke:color-mix(in srgb,var(--accent) 30%,var(--line))}
+.mf-glow{fill:color-mix(in srgb,var(--speed,var(--accent)) 6%,var(--glass-strong));stroke:color-mix(in srgb,var(--accent) 26%,var(--line))}
 .mf-logo path{stroke:var(--accent)}
 .mf-logo circle{fill:var(--accent-2)}
 svg.off .mf-logo{opacity:.4}
-.mf-card{fill:var(--glass-strong)}
+/* speedometer: a calmer arc glow, clearer number, fewer marks */
+.mf-arc{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--speed,var(--accent)) 50%,transparent))}
+.mf-track,.mf-inner-track{stroke:color-mix(in srgb,var(--raised) 85%,transparent)}
+.mf-tick{stroke:var(--control-line);opacity:.5}
+.mf-tick.major{stroke:var(--text);stroke-width:2;opacity:.75}
+.mf-scale{font:600 10.5px var(--font-mono);fill:var(--muted)}
+.mf-hub-label{font:700 10px var(--font-ui);letter-spacing:2px;fill:var(--muted)}
+.mf-hub-value{font:600 46px var(--font-display);letter-spacing:-1.5px;fill:var(--text);font-variant-numeric:tabular-nums}
+.mf-hub-unit{font:500 11.5px var(--font-ui);fill:var(--muted)}
+.mf-tier{font:650 12.5px var(--font-ui);fill:var(--text)}
+.mf-of{font:500 10.5px var(--font-ui);fill:var(--muted)}
+:root{--gauge-low:#0284c7;--gauge-high:#0f8a5f}
+:root[data-theme="dark"]{--gauge-low:#38bdf8;--gauge-high:#34d399}
+
+/* streams: a soft lit underlay, a ribbon shaded from the line's colour into the hub's, both easing between states */
+.mf-g-a{stop-color:var(--c)}
+.mf-g-b{stop-color:color-mix(in srgb,var(--c) 55%,var(--accent))}
+.mf-ribbon,.mf-ribbon-glow{fill:none;stroke-linecap:round;transition:stroke-width .7s var(--ease-out),stroke-opacity .6s,opacity .6s}
+.mf-ribbon{stroke-opacity:.3}
+.mf-ribbon-glow{stroke:var(--c);stroke-opacity:0;filter:url(#mfSoft)}
+.mf-node[data-state="moving"] .mf-ribbon{stroke-opacity:.42}
+:root[data-theme="dark"] .mf-node[data-state="moving"] .mf-ribbon-glow{stroke-opacity:.45}
+.mf-node[data-state="moving"] .mf-ribbon-glow{stroke-opacity:.25}
+.mf-card{fill:var(--glass-strong);transition:stroke .5s,opacity .5s}
 .mf-node .mf-card{stroke:color-mix(in srgb,var(--c) 45%,var(--line))}
-.mf-node.moving .mf-card{filter:drop-shadow(0 0 10px color-mix(in srgb,var(--c) 35%,transparent))}
-.mf-ribbon{stroke-opacity:.26}
-.mf-node.moving .mf-ribbon{stroke-opacity:.36}
-.mf-node.down .mf-ribbon{stroke:var(--error);stroke-opacity:.45;stroke-dasharray:3 9}
-.mf-node.down .mf-card{stroke:var(--error)}
-.mf-out{fill:none;stroke-width:12px;stroke-opacity:.3;stroke-linecap:round}
+.mf-node[data-state="moving"] .mf-card{filter:drop-shadow(0 0 10px color-mix(in srgb,var(--c) 35%,transparent))}
+.mf-name{font:600 13.5px var(--font-ui);fill:var(--text)}
+.mf-state{font:500 11.5px var(--font-ui);fill:var(--muted)}
+/* a status light on each source: green working, blue idle, amber held back or checking, red no internet, grey off */
+.mf-dot{fill:var(--muted);transition:fill .4s}
+.mf-node[data-state="moving"] .mf-dot{fill:var(--success)}
+.mf-node[data-state="idle"] .mf-dot{fill:var(--accent)}
+.mf-node[data-state="standby"] .mf-dot,.mf-node[data-state="held"] .mf-dot,.mf-node[data-state="checking"] .mf-dot{fill:var(--warning)}
+.mf-node[data-state="down"] .mf-dot{fill:var(--error)}
+html[data-motion="normal"] .mf-node[data-state="checking"] .mf-dot,html[data-motion="normal"] .mf-node[data-state="down"] .mf-dot{animation:mf-blink 1.4s ease-in-out infinite}
+@keyframes mf-blink{50%{opacity:.25}}
+.mf-node[data-state="down"] .mf-ribbon{stroke:var(--error);stroke-opacity:.5;stroke-dasharray:3 9}
+.mf-node[data-state="down"] .mf-card{stroke:var(--error)}
+.mf-node[data-state="down"] .mf-state{fill:var(--error)}
+.mf-node[data-state="standby"] .mf-ribbon,.mf-node[data-state="held"] .mf-ribbon,.mf-node[data-state="checking"] .mf-ribbon{stroke-opacity:.18;stroke-dasharray:2 7}
+.mf-node[data-state="held"] .mf-state,.mf-node[data-state="checking"] .mf-state{fill:var(--warning)}
+.mf-node[data-state="gone"] .mf-ribbon,.mf-node[data-state="off"] .mf-ribbon{stroke:var(--muted);stroke-opacity:.12;stroke-dasharray:1 8}
+.mf-node[data-state="gone"] .mf-card,.mf-node[data-state="off"] .mf-card{stroke-dasharray:4 4;opacity:.75}
+.mf-node[data-state="gone"] svg,.mf-node[data-state="off"] svg{opacity:.5}
+.mf-out{fill:none;stroke-width:12px;stroke-opacity:.3;stroke-linecap:round;transition:stroke-opacity .8s}
 .mf-out-a{stop-color:var(--accent);stop-opacity:.9}.mf-out-b{stop-color:var(--accent-2);stop-opacity:0}
 svg.busy .mf-out{stroke-opacity:.55}
 svg.off .mf-out{stroke-opacity:.05;stroke-dasharray:3 8}
 /* the canvas carries the moving particles; the old dashes stay as a still fallback when animations are off */
 html:not([data-motion="off"]) .mf-node.moving .mf-flow{animation:none;stroke-opacity:0}
-.mf-arc{filter:drop-shadow(0 0 8px color-mix(in srgb,var(--speed,var(--accent)) 60%,transparent))}
-.mf-hub-value{font-family:var(--font-display);font-weight:600;letter-spacing:-1.5px}
-.mf-track,.mf-inner-track{stroke:color-mix(in srgb,var(--raised) 85%,transparent)}
-:root{--gauge-low:#0284c7;--gauge-high:#0f8a5f}
-:root[data-theme="dark"]{--gauge-low:#38bdf8;--gauge-high:#34d399}
+
+/* ---------- connection cards ---------- */
+.lk.ov-link{gap:14px;padding:18px 18px 6px}
+.lk.ov-link::before{height:2px;box-shadow:0 0 12px var(--c);transition:background .5s,box-shadow .5s}
+.lk.ov-link[data-state="down"]{border-color:color-mix(in srgb,var(--error) 45%,var(--line));background:linear-gradient(180deg,color-mix(in srgb,var(--error) 7%,transparent),transparent 45%),var(--glass)}
+.lk.ov-link[data-state="down"]::before{background:var(--error);box-shadow:0 0 12px var(--error)}
+.lk.ov-link[data-state="standby"]::before,.lk.ov-link[data-state="held"]::before,.lk.ov-link[data-state="checking"]::before{background:var(--warning);box-shadow:none}
+.lk.ov-link[data-state="gone"]::before,.lk.ov-link[data-state="off"]::before,.lk.ov-link[data-state="ready"]::before{background:var(--line);box-shadow:none}
+.lk.ov-link.recovered{border-color:color-mix(in srgb,var(--success) 55%,var(--line))}
+html[data-motion="normal"] .lk.ov-link.recovered{animation:lk-back 1.6s var(--ease-out) 2}
+@keyframes lk-back{40%{box-shadow:var(--panel-shadow),0 0 0 3px color-mix(in srgb,var(--success) 30%,transparent),0 0 28px -4px color-mix(in srgb,var(--success) 60%,transparent)}}
+.ov-link .chip{font-size:11px;padding:3px 10px;font-weight:650;border:1px solid color-mix(in srgb,var(--c) 30%,transparent)}
+.ov-link .chip::before{box-shadow:0 0 6px var(--c)}
+.lk.ov-link[data-state="checking"] .chip::before,.lk.ov-link[data-state="down"] .chip::before{animation:mf-blink 1.4s ease-in-out infinite}
+.ov-link-icon{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 25%,transparent)}
+.ov-down b{font-size:36px;font-family:var(--font-display);font-weight:600;letter-spacing:-1px}
+.ov-up{font-size:12.5px;color:var(--text)}
+.ov-up .icon{color:var(--c)}
+.ov-spark-box{position:relative}
+.ov-spark{height:62px}
+.ov-spark-line{stroke-width:2;stroke-linecap:round}
+:root[data-theme="dark"] .ov-spark-line{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--c) 70%,transparent))}
+.ov-spark-dot{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:var(--c);box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 22%,transparent),0 0 10px var(--c)}
+.ov-link-foot{gap:18px}
+.ov-share>span:first-child{font-size:11.5px}
+.ov-share b{font-size:12.5px}
+.ov-bar{height:8px;background:color-mix(in srgb,var(--raised) 80%,transparent);box-shadow:inset 0 1px 2px rgb(0 0 0 / .15)}
+.ov-bar i{background:linear-gradient(90deg,color-mix(in srgb,var(--c) 70%,transparent),var(--c));box-shadow:0 0 10px -1px var(--c)}
+.ov-ping{font-size:11.5px}
+.ov-ping b{font-size:14px}
+.ov-ping .q{font-size:10.5px;padding:1px 8px}
+.lk.ov-link:focus-within{border-color:color-mix(in srgb,var(--c) 55%,var(--line))}
 
 /* live chart and connection cards */
-.lk.ov-link::before{height:2px;box-shadow:0 0 12px var(--c)}
 .live-label i{box-shadow:0 0 8px var(--success)}
 #chartBox .tip{background:var(--glass-strong);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-color:color-mix(in srgb,var(--accent) 20%,var(--line));box-shadow:var(--shadow-overlay)}
 
@@ -172,3 +245,13 @@ html[data-motion="reduced"] .page:not([hidden]){animation-iteration-count:1!impo
 dialog.wiz>.card{background:none;box-shadow:none;border:0}
 .wiz li{margin:14px 0}
 .wiz li i.ok{box-shadow:0 0 10px -2px color-mix(in srgb,var(--success) 60%,transparent)}
+
+/* ---------- Mission Control details: usage and history charts ---------- */
+.us-bar rect:not(.us-hit){transition:opacity var(--motion-fast),filter var(--motion-fast)}
+.us-plot:hover .us-bar:not(:hover) rect:not(.us-hit){opacity:.55}
+:root[data-theme="dark"] .us-bar:hover rect:not(.us-hit){filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 50%,transparent))}
+.us-bar:hover .us-hit{fill:color-mix(in srgb,var(--accent) 9%,transparent)}
+.us-ring-val{filter:drop-shadow(0 0 4px color-mix(in srgb,currentColor 30%,transparent))}
+.hist-grid line,.us-plot line{stroke-dasharray:2 4}
+.hint2{font-size:12.5px}
+.section-heading p.hint2{font-size:12px}
