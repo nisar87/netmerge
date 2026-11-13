@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.21.0
+
+Refinements to the 3.20 look. Only the window changed; merging, the engine, routing, DNS, sharing, settings and updates work exactly as before.
+
+- **A larger, clearer merge picture.** The picture takes more of the width. The streams now curve in and meet the hub side by side, each with a soft lit underlay, and are shaded from the connection's colour into the hub's.
+- **Uploads you can see.** Downloads flow from each connection into the hub as before. Uploads now travel the other way, as smaller pale sparks, so the two directions can be told apart. Both follow each line's measured speed.
+- **Every connection keeps its place.** A line that is unplugged, switched off, without internet, standing by or still being checked stays in the picture and shows that state. Each source has a status light: green working, blue idle, amber held back or checking, red no internet. Before, an unplugged line disappeared and the picture was rebuilt.
+- **Failure and recovery are clearer.** When a line loses internet, what was on its way fades out in red, and the stream and card turn red. When it comes back, one bright pulse runs along its stream and its card glows green twice.
+- **A cleaner speedometer.** The number is larger and glides to each new reading in half a second; a change such as merging off still shows at once. There are fewer marks, and a calmer glow that no longer softens the text.
+- **Connection cards.** The live graph is a smooth curve with a glowing dot on the newest reading. The speeds, upload and response time are easier to read. The share bar is clearer. The status chips are outlined, and blink for "checking" and "no internet". A card is tinted red when its line has no internet.
+- **Small things.** Usage bars light up when pointed at and the others dim. Secondary text is slightly larger.
+- **Still light.** The picture draws at most 30 frames a second with a lower particle limit than 3.20. If a frame takes too long on a slow PC, it lowers its detail by itself. The animation setting (Normal / Reduced / Off) and the pause while hidden work as before.
+
 ## 3.20.0
 
 A new look: **Quantum Flow, Mission Control and Aurora Glass.** Only the window changed; merging, the engine, routing, DNS, sharing, settings and updates work exactly as before, and your settings carry over.

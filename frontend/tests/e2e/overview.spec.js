@@ -165,3 +165,35 @@ test('Windows "animation effects off" turns Normal into Reduced, and a narrow wi
   await page.waitForTimeout(2500);
   expect(await page.evaluate(() => window.QF.count)).toBe(0);
 });
+
+test('every connection keeps its place in the picture and shows its real state, and a line that comes back is marked', async ({ page, fixture }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await navigate(page, 'overview');
+  const links = (await fixture.read('state')).snap.links;
+  const wifi = links[1].name, node = page.locator(`#mergeFlow .mf-node[data-n="${wifi}"]`), card = page.locator(`#links .lk[data-n="${wifi}"]`);
+  await expect(node).toHaveAttribute('data-state', 'moving');
+  // uploads travel back towards the lines as their own particles
+  await expect.poll(() => page.evaluate(() => window.QF.uploads), { timeout: 8000 }).toBeGreaterThan(0);
+  // no internet: red, broken, the card says so; the combined total does not pretend otherwise
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { links: links.map((l, i) => i ? { ...l, healthy: false, down: 0, up: 0 } : l) } } }));
+  await expect(node).toHaveAttribute('data-state', 'down');
+  await expect(card).toHaveAttribute('data-state', 'down');
+  await expect(card.locator('[data-f=status]')).toHaveText('No internet');
+  // it comes back: the card glows once and a pulse runs along its stream
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { links } } }));
+  await expect(card).toHaveClass(/recovered/);
+  await expect(node).toHaveAttribute('data-state', 'moving');
+  // unplugged: still drawn, as gone, instead of the whole picture being rebuilt
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { links: links.map((l, i) => i ? { ...l, present: false, down: 0, up: 0 } : l) } } }));
+  await expect(node).toHaveAttribute('data-state', 'gone');
+  await expect(page.locator('#mergeFlow .mf-node')).toHaveCount(2);
+});
+
+test('the combined number settles on the exact reading', async ({ page, fixture }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await navigate(page, 'overview');
+  const links = (await fixture.read('state')).snap.links;
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { totalDown: 6.5e6, links: links.map(l => ({ ...l, down: 3.25e6 })) } } }));
+  await expect(page.locator('#mergeFlow [data-f="hubValue"]')).toHaveText('52.0');
+  await expect(page.locator('#mergeFlow')).toHaveAttribute('aria-label', /Combined download speed 52\.0 Mbps/);
+});
