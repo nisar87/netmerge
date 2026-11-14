@@ -234,7 +234,7 @@ func flatten(v any, keepText bool) any {
 // engineSummary describes the connections without addresses.
 func engineSummary() string {
 	snap := getSnapshot()
-	running, ver, _, _ := engine.Status()
+	running, _, _, ver := engine.Status()
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "engine=%s running=%v merging=%v conns=%d down=%.1fMbps up=%.1fMbps\n", ver, running, snap.Running, snap.Conns, snap.TotalDown*8/1e6, snap.TotalUp*8/1e6)
 	if snap.Error != "" {
@@ -255,6 +255,7 @@ func engineSummary() string {
 // scrubbed and thinned, the newest reportLogMax characters, and the time stamp of the last line.
 func logSince(upTo string) (string, string) {
 	var lines []string
+	last := ""
 	for _, p := range []string{dataPath("netmerge.log.old"), dataPath("netmerge.log")} {
 		f, err := os.Open(p)
 		if err != nil {
@@ -262,18 +263,20 @@ func logSince(upTo string) (string, string) {
 		}
 		sc := bufio.NewScanner(f)
 		sc.Buffer(make([]byte, 64<<10), 1<<20)
+		keep := false // a line without a time (the rest of a message written over several lines) goes with the line before it
 		for sc.Scan() {
 			ln := sc.Text()
-			if len(ln) < 19 || ln[:19] <= upTo {
-				continue
+			if stamped(ln) {
+				keep = ln[:19] > upTo
+				if keep {
+					last = ln[:19]
+				}
 			}
-			lines = append(lines, ln)
+			if keep {
+				lines = append(lines, ln)
+			}
 		}
 		f.Close()
-	}
-	last := ""
-	if len(lines) > 0 {
-		last = lines[len(lines)-1][:19]
 	}
 	text := thin(lines)
 	if len(text) > reportLogMax {
@@ -283,6 +286,35 @@ func logSince(upTo string) (string, string) {
 		}
 	}
 	return scrub(text), last
+}
+
+// stamped tells whether a log line starts with its time ("2006-01-02 15:04:05").
+func stamped(ln string) bool {
+	if len(ln) < 19 {
+		return false
+	}
+	for i := 0; i < 19; i++ {
+		c := ln[i]
+		switch i {
+		case 4, 7:
+			if c != '-' {
+				return false
+			}
+		case 10:
+			if c != ' ' {
+				return false
+			}
+		case 13, 16:
+			if c != ':' {
+				return false
+			}
+		default:
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // thin writes a line that repeats the one before it (apart from the time) as a count.
