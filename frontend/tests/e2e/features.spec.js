@@ -208,20 +208,20 @@ test('addresses that skip NetMerge accept a range written with x, and explain wh
   const input = page.locator('#ipInput'), add = page.locator('#ipAdd'), toast = page.locator('#toast');
   const before = (await fixture.read('state')).settings.bypassIPs || [];
   // a wildcard in the middle is not one range: refused with an explanation, nothing saved
-  await input.fill('132.x.111.5'); await add.click();
+  await input.fill('198.x.100.5'); await add.click();
   await expect(toast).toContainText('Put x only at the end');
   await input.fill('300.1.2.3'); await add.click();
   await expect(toast).toContainText('0 to 255');
   expect((await fixture.read('state')).settings.bypassIPs || []).toEqual(before);
-  // 132.120.111.x is saved as the range 132.120.111.0/24 and shown back as written
-  await mutate(page, 'settings', { ...(await fixture.read('state')).settings, bypassIPs: [...before, '132.120.111.0/24'] }, async () => { await input.fill('132.120.111.x'); await add.click(); });
-  expect((await fixture.read('state')).settings.bypassIPs).toContain('132.120.111.0/24');
-  await expect(toast).toContainText('132.120.111.0 to 132.120.111.255');
-  await expect(page.locator('#ipList .tag', { hasText: '132.120.111.x' })).toHaveAttribute('title', '132.120.111.0/24');
+  // 198.51.100.x is saved as the range 198.51.100.0/24 and shown back as written
+  await mutate(page, 'settings', { ...(await fixture.read('state')).settings, bypassIPs: [...before, '198.51.100.0/24'] }, async () => { await input.fill('198.51.100.x'); await add.click(); });
+  expect((await fixture.read('state')).settings.bypassIPs).toContain('198.51.100.0/24');
+  await expect(toast).toContainText('198.51.100.0 to 198.51.100.255');
+  await expect(page.locator('#ipList .tag', { hasText: '198.51.100.x' })).toHaveAttribute('title', '198.51.100.0/24');
   // the same range again, written another way, is not added twice
-  await input.fill('132.120.111.0/24'); await add.click();
+  await input.fill('198.51.100.0/24'); await add.click();
   await expect(toast).toContainText('already on the list');
   // * works like x, and a single address stays a single address
-  await mutate(page, 'settings', { ...(await fixture.read('state')).settings, bypassIPs: [...before, '132.120.111.0/24', '10.20.0.0/16'] }, async () => { await input.fill('10.20.*.*'); await add.click(); });
+  await mutate(page, 'settings', { ...(await fixture.read('state')).settings, bypassIPs: [...before, '198.51.100.0/24', '10.20.0.0/16'] }, async () => { await input.fill('10.20.*.*'); await add.click(); });
   await expect(page.locator('#ipList .tag', { hasText: '10.20.x.x' })).toBeVisible();
 });

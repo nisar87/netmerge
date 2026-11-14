@@ -33,7 +33,7 @@ async function poll(resync){
       if(epoch!==stateEpoch)return;
       pollFails++;
       const banner=$('#connectionBanner');banner.hidden=false;banner.className='note '+(pollFails>=3?'bad':'warn');
-      banner.innerHTML='<span>'+esc(S ? 'Connection lost. Showing the last received values; reconnecting automatically.' : 'Waiting for NetMerge. Open the desktop application to connect.')+'</span><button class="btn" id="retryState">Retry now</button>';
+      banner.innerHTML='<span>'+esc(S ? 'Lost contact with NetMerge. Showing the last figures; reconnecting by itself.' : 'Waiting for NetMerge. Open the desktop application to connect.')+'</span><button class="btn" id="retryState">Retry now</button>';
       $('#retryState').onclick=()=>poll(true);
       if(S&&local)render();else $('#power').disabled=true;
       return false;

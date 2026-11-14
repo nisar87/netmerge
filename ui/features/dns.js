@@ -91,7 +91,7 @@ document.addEventListener('click', async e => {
   const t = e.target.closest('button'); if (!t || !D) return;
   if (t.id === 'dnsSecure') { dnsDraft.secure = !dnsDraft.secure; dnsDirty = true; dnsRevision++;paintDNS(true); }
   else if (t.dataset.dx !== undefined) { dnsDraft.domains.splice(+t.dataset.dx, 1); dnsDirty = true; dnsRevision++;paintDNS(true); }
-  else if (t.id === 'dnsDomAdd') { const v = $('#dnsDom').value.trim(); if (!/^([a-z0-9-]+\.)+[a-z]{2,}$/i.test(v.replace(/^\*\./,''))) return toast('Enter a domain like mycompany.com', true); dnsDraft.domains.push(v.replace(/^\*\./,'').toLowerCase()); dnsDomainDraft='';dnsDirty = true; dnsRevision++;paintDNS(true); }
+  else if (t.id === 'dnsDomAdd') { const v = $('#dnsDom').value.trim(); if (!/^([a-z0-9-]+\.)+[a-z]{2,}$/i.test(v.replace(/^\*\./,''))) return toast('Enter a website address like mycompany.com', true); dnsDraft.domains.push(v.replace(/^\*\./,'').toLowerCase()); dnsDomainDraft='';dnsDirty = true; dnsRevision++;paintDNS(true); }
   else if (t.id === 'dnsApply') { if (await dnsAct({action:'set', provider: dnsDraft.provider, secure: dnsDraft.secure, custom: dnsDraft.custom.filter(Boolean), domains: dnsDraft.domains})) toast('DNS applied'); }
   else if (t.id === 'dnsReset') { if (await dnsAct({action:'reset'})) toast('Back to Windows DNS'); }
   else if (t.id === 'dnsTest') { await dnsAct({action:'test'}); }

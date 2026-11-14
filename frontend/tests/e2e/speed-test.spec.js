@@ -140,7 +140,7 @@ test('failed polls add no samples and an unobserved completed test clears old hi
   await receive(page, fixture, running(40));
   await fixture.fault({ path: '/api/state', method: 'GET', status: 503, times: 1 });
   await page.evaluate(() => poll(true));
-  await expect(page.locator('#connectionBanner')).toContainText('Connection lost');
+  await expect(page.locator('#connectionBanner')).toContainText('Lost contact with NetMerge');
   await expect(page.locator('#testSamples tbody tr')).toHaveCount(1);
   await receive(page, fixture, completed);
   await expect(page.locator('#connectionBanner')).toBeHidden();

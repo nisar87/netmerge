@@ -1,8 +1,8 @@
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const ICONS = {ethernet:NM.icon('cable'),wifi:NM.icon('wifi'),mobile:NM.icon('smartphone')};
 const PAGES = {
-  overview:['Overview','A clear view of your connected world.'],
-  connections:['Connections','Make every connection work for you.'],
+  overview:['Overview','How your connections are doing right now'],
+  connections:['Connections','Choose how your connections work together'],
   dns:['DNS','Which servers look up website names'],
   history:['History','What happened and when'],
   presets:['Presets','One click for gaming, work, travel and more'],
@@ -174,7 +174,7 @@ function statusLine(sn, run){
   if (ls.some(l=>l.healthy==null)) return ['warn','Checking connection health','Waiting for a confirmed health reading.'];
   if (active.length < 2) return ['warn',active.length ? 'One connection is contributing' : 'No connections are contributing','Check the connection cards below for status and roles, and Usage for allowances.'];
   const n = (S.share && S.share.devices) || 0;
-  return ['good', `${active.length} connections working together`, local.mode === 'stable' ? 'Each website stays on one line; lines are used by the shares you set.' : local.classicBalance ? 'New connections take turns over your lines, by the shares you set.' : 'Each new connection goes to the line with the most spare speed.'];
+  return ['good', `${active.length} connections working together`, local.mode === 'stable' ? 'Each website stays on one line; lines are used by the shares you set.' : local.classicBalance ? 'Newly opened websites and downloads take turns over your lines, by the shares you set.' : 'Each newly opened website or download goes to the line with the most spare speed.'];
 }
 const MODE_ART = {
   // three small pictures: lines merging, each site kept on a line, one line only
@@ -272,7 +272,7 @@ function renderLinks(sn, act, P){
           <div class="lk-settings-body">
             <div class="meta"><span data-f="tags" style="display:contents"></span></div>
             <div class="share">
-              <div class="share-h"><span title="NetMerge decides by itself how many newly opened websites and downloads use this line, based on its speed right now.">Share of the work<b data-f="pct"></b></span>
+              <div class="share-h"><span title="How many of the newly opened websites and downloads go to this line.">Share of new connections<b data-f="pct"></b></span>
                 <div class="step" data-f="step"><button data-f="minus" aria-label="Give this connection a smaller share">−</button><b class="num" data-f="w"></b><button data-f="plus" aria-label="Give this connection a bigger share">+</button></div></div>
               <div class="share-bar"><div data-f="bar"></div></div>
             </div>
@@ -356,7 +356,7 @@ function renderLinks(sn, act, P){
     const smart = !!sn.smart && !local.mode.startsWith('link:') && local.mode !== 'stable';
     f('step').style.display = smart ? 'none' : '';
     const single = local.mode.startsWith('link:'), pct = single ? (local.mode === 'link:'+l.name ? 100 : 0) : smart ? ((ll.enabled && l.present) ? Math.round((l.slots||0)/8*100) : 0) : ((ll.enabled && l.present) ? Math.round(ll.weight/totalW*100) : 0);
-    card.querySelector('.share-h>span').title = single ? 'In one-line mode everything uses the chosen line.' : smart ? 'NetMerge decides by itself how many newly opened websites and downloads use this line, based on its spare speed right now.' : 'Set with − and +: a bigger share gives this line more of the new connections.';
+    card.querySelector('.share-h>span').title = single ? 'In one-line mode everything uses the chosen line.' : smart ? 'How many of the newly opened websites and downloads go to this line. NetMerge decides it by itself from the line\'s spare speed right now. (Share of traffic, above, is how much data the line actually carries.)' : 'Set with − and +: a bigger share sends more of the newly opened websites and downloads to this line.';
     f('pct').textContent = (ll.enabled && l.present) ? pct+'%' : '—';
     f('bar').style.width = pct+'%';
     f('sumHint').textContent = ll.role === 'busy' ? 'Only when busy' : ll.role === 'backup' ? 'Backup only' : '';
@@ -368,6 +368,21 @@ function setupCanvas(c){
   if (c.width !== Math.round(r.width*d) || c.height !== Math.round(r.height*d)){ c.width = Math.round(r.width*d); c.height = Math.round(r.height*d); }
   const g = c.getContext('2d'); g.setTransform(d,0,0,d,0,0); g.clearRect(0,0,r.width,r.height);
   return [g, r.width, r.height];
+}
+/* plain-language times and days, used everywhere a time or a date is shown */
+function agoText(t){
+  if(!t) return 'never';
+  const s = Math.max(0, Math.floor(Date.now()/1000 - t));
+  if (s < 45) return 'just now';
+  if (s < 3600) return Math.max(1, Math.round(s/60)) + ' min ago';
+  if (s < 48*3600) { const h = Math.round(s/3600); return h + (h === 1 ? ' hour ago' : ' hours ago'); }
+  const d = Math.round(s/86400); return d + (d === 1 ? ' day ago' : ' days ago');
+}
+function dayText(iso, withYear){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||''); if (!m) return iso || '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, {day:'numeric', month:'short', ...(withYear || !sameYear ? {year:'numeric'} : {})});
 }
 function niceMax(v){ for (const s of [1,2,5,10,20,25,40,50,80,100,150,200,250,400,500,800,1000,2000]) if (v<=s) return s; return Math.ceil(v/1000)*1000; }
 
