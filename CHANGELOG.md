@@ -10,7 +10,7 @@ Clearer words throughout the window, after a read-through of every page. Nothing
   - On each card, "Share of the work" is now **Share of new connections**. Its tooltip says how it differs from Share of traffic.
   - In Apps, "8 conn" is now **8 open**.
   - In Advanced, the balancing text uses the same words.
-- **Times and dates read naturally.** "132h ago" is now **5 days ago**, and "Checked 109 h ago" is now **Checked 4 days ago**. Usage shows **Nov 1 to Dec 1** and **busiest Nov 9** instead of 2026-11-01 style dates, and so do the daily chart, the table and the correction list.
+- **Times and dates read naturally.** "132h ago" is now **5 days ago**, and "Checked 109 h ago" is now **Checked 5 days ago**. Usage shows **Nov 1 to Dec 1** and **busiest Nov 9** instead of 2026-11-01 style dates, and so do the daily chart, the table and the correction list.
 - **Plainer speed test.**
   - "Throughput" is now **Live speed**.
   - "Parallel streams" is now **several downloads at once**.
