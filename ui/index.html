@@ -152,8 +152,8 @@
       <div class="grid2">
         <div class="card">
           <span class="pc-ic" data-icon="arrow-up-right"></span><h3>Skip NetMerge for these addresses <span class="rec">Only if needed</span></h3>
-          <p class="d">Traffic to these IPs skips NetMerge and uses normal Windows routing — for example a Remote Desktop server reached through your VPN. Addresses on your local network (such as 192.168.x.x) already skip it.</p>
-          <div class="row" style="flex-wrap:nowrap"><input class="inp" id="ipInput" placeholder="203.0.113.5 or 10.20.0.0/16" style="flex:1" aria-label="IP address"><button class="btn" id="ipAdd">Add</button></div>
+          <p class="d">Traffic to these addresses skips NetMerge and goes out the normal Windows way — for example a Remote Desktop server you reach through a VPN. Add one address (<code>203.0.113.5</code>) or a whole range: put <code>x</code> for the parts that can be anything (<code>132.120.111.x</code>, or <code>132.120.x.x</code>). Ranges written like <code>132.120.111.0/24</code> work too. Your local network (addresses starting 192.168., 10. and similar) always skips NetMerge; you don't need to add it.</p>
+          <div class="row" style="flex-wrap:nowrap"><input class="inp" id="ipInput" placeholder="203.0.113.5 or 132.120.111.x" style="flex:1" aria-label="IP address"><button class="btn" id="ipAdd">Add</button></div>
           <div class="listchips" id="ipList"></div>
         </div>
         <div class="card">
