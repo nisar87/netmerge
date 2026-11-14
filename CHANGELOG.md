@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.21.4
+
+Tidier problem reports. Nothing in the window changes.
+
+- **Old messages are no longer sent again and again.** When a message in NetMerge's log ran over several lines, the extra lines were included in every diagnostics report afterwards. Each report now holds only what is new.
+- **Reports name the engine version** instead of leaving it blank.
+- **Quitting no longer logs a false problem** about the window closing.
+
 ## 3.21.3
 
 Clearer words throughout the window, after a read-through of every page. Nothing works differently.
