@@ -184,3 +184,53 @@ func TestReportAcceptedByFirestore(t *testing.T) {
 		t.Fatalf("a report with an unknown field got %d, want 403", code)
 	}
 }
+
+// a message written over several lines (an engine's last output) is sent once, with the line it belongs to, and
+// never moves where the next report starts
+func TestLogSinceKeepsLinesWithoutATimeWithTheirLine(t *testing.T) {
+	old := rootDir
+	rootDir = t.TempDir()
+	defer func() { rootDir = old }()
+	_ = os.MkdirAll(filepath.Join(rootDir, "data"), 0o755)
+	log := "2026-11-12 05:21:50  engine failed: stopped\n" +
+		"time=\"2026-11-12T05:21:44\" level=error msg=\"old output\"\n" +
+		"start failed: old output\n" +
+		"2026-11-13 10:00:00  sent\n" +
+		"2026-11-13 10:00:05  new failure: first\n" +
+		"  second line\n" +
+		"2026-11-13 10:00:06  after\n"
+	_ = os.WriteFile(dataPath("netmerge.log"), []byte(log), 0o644)
+	text, last := logSince("2026-11-13 10:00:00")
+	if strings.Contains(text, "old output") || strings.Contains(text, "sent") {
+		t.Fatalf("old lines sent again:\n%s", text)
+	}
+	if !strings.Contains(text, "second line") || !strings.Contains(text, "after") {
+		t.Fatalf("new lines missing:\n%s", text)
+	}
+	if last != "2026-11-13 10:00:06" {
+		t.Fatalf("next report starts after %q", last)
+	}
+	_ = os.WriteFile(dataPath("netmerge.log"), []byte(log+"time=\"x\" trailing output\n"), 0o644)
+	if _, last := logSince("2026-11-13 10:00:00"); last != "2026-11-13 10:00:06" {
+		t.Fatalf("a last line without a time moved the start to %q", last)
+	}
+}
+
+func TestStamped(t *testing.T) {
+	for ln, want := range map[string]bool{"2026-11-13 10:00:00  x": true, "time=\"2026-11-12T05:21:44\"": false, "                     (the same": false, "2026-11-13": false} {
+		if stamped(ln) != want {
+			t.Errorf("stamped(%q) = %v", ln, !want)
+		}
+	}
+}
+
+func TestEngineSummaryNamesTheEngineVersion(t *testing.T) {
+	engine.mu.Lock()
+	oldV, oldE := engine.version, engine.lastError
+	engine.version, engine.lastError = "nmengine-9.9.9", ""
+	engine.mu.Unlock()
+	defer func() { engine.mu.Lock(); engine.version, engine.lastError = oldV, oldE; engine.mu.Unlock() }()
+	if s := engineSummary(); !strings.HasPrefix(s, "engine=nmengine-9.9.9 ") {
+		t.Fatalf("summary: %s", s)
+	}
+}

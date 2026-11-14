@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -141,7 +142,11 @@ func main() {
 	go safely("old engine cleanup", removeOldEngine)
 
 	srv := &http.Server{Handler: routes(), ReadHeaderTimeout: 5 * time.Second}
-	go func() { logErr("serve the window", srv.Serve(ln)) }()
+	go func() {
+		if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
+			logErr("serve the window", err)
+		}
+	}()
 	if !*background {
 		openWindow(url)
 	}
