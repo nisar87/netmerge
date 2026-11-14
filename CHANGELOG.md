@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.21.2
+
+- **Ranges written with x.** In Protection → Routing exceptions, "Skip NetMerge for these addresses" now accepts a range the way people write it: `132.120.111.x` (or `132.120.111.*`) means every address from 132.120.111.0 to 132.120.111.255, and `132.120.x.x` the whole 132.120 block. It is saved as the network range Windows uses (`132.120.111.0/24`) and shown back as you wrote it. The old form with `/` still works. Before, `132.120.111.x` was refused with only "That does not look right", while the help text itself wrote 192.168.x.x.
+- **Clearer messages.** A wildcard in the middle (`132.x.111.5`) is refused with the reason: it is not one range of addresses. A number above 255 is refused with the rule. The same range added twice in two different ways is noticed.
+- **Clearer help text.** It explains single addresses, ranges with x, and that your local network already skips NetMerge.
+
 ## 3.21.1
 
 - **A rounder speedometer scale.** The dial now picks a top speed that divides into clean quarters (for example 0–160 Mbps, with marks at 40, 80 and 120), so it never shows numbers like 37.5 or 112.
