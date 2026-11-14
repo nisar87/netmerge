@@ -10,9 +10,9 @@ function renderRules(){
   const v = $('#vpnLink'); if (document.activeElement !== v) setHTML(v, `<option value="">Automatic (wired first)</option>` + local.links.map(l => `<option value="${esc(l.name)}"${local.vpnLink===l.name?' selected':''}>${esc(l.label)}</option>`).join(''));
 }
 const addTo = (inp, key, test, msg) => { const v = $(inp).value.trim(); if (!v) return; if (!test(v)) return toast('That does not look right', true); local[key].push(v); $(inp).value=''; renderRules(); saveSoon(msg); };
-/* Addresses that skip NetMerge. Windows and the engine take ranges in the network form 132.120.111.0/24; people
-   write 132.120.111.x. Both are accepted: an x or * at the end becomes the matching range, and whole ranges are
-   shown back the way people write them. A wildcard in the middle (132.x.111.5) is not one range, so it is refused. */
+/* Addresses that skip NetMerge. Windows and the engine take ranges in the network form 198.51.100.0/24; people
+   write 198.51.100.x. Both are accepted: an x or * at the end becomes the matching range, and whole ranges are
+   shown back the way people write them. A wildcard in the middle (198.x.100.5) is not one range, so it is refused. */
 function ipParse(text){
   const v = text.trim().toLowerCase().replace(/\s+/g, '');
   const octet = p => /^\d{1,3}$/.test(p) && Number(p) <= 255;
@@ -24,16 +24,16 @@ function ipParse(text){
     return {value: `${parts.join('.')}/${bits}`};
   }
   const parts = v.split('.');
-  if (parts.length !== 4) return {error: 'Write an address as four numbers, like 203.0.113.5, or a range like 132.120.111.x'};
+  if (parts.length !== 4) return {error: 'Write an address as four numbers, like 203.0.113.5, or a range like 198.51.100.x'};
   const wild = parts.map(p => p === 'x' || p === '*');
   const first = wild.indexOf(true);
   if (first === -1) return parts.every(octet) ? {value: parts.join('.')} : {error: 'Each part of an address is a number from 0 to 255'};
-  if (first === 0) return {error: 'That would be every address on the internet. Keep at least the first part, like 132.x.x.x'};
-  if (wild.slice(first).some(w => !w)) return {error: 'Put x only at the end, like 132.120.111.x. 132.x.111.5 is not one range of addresses'};
+  if (first === 0) return {error: 'That would be every address on the internet. Keep at least the first part, like 198.x.x.x'};
+  if (wild.slice(first).some(w => !w)) return {error: 'Put x only at the end, like 198.51.100.x. 198.x.100.5 is not one range of addresses'};
   if (!parts.slice(0, first).every(octet)) return {error: 'Each part of an address is a number from 0 to 255'};
   return {value: `${[...parts.slice(0, first), ...Array(4 - first).fill('0')].join('.')}/${first * 8}`, wildcard: true};
 }
-// a whole range written the way people write it (132.120.111.0/24 → 132.120.111.x); anything else as it is
+// a whole range written the way people write it (198.51.100.0/24 → 198.51.100.x); anything else as it is
 function ipShown(v){
   const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)\/(8|16|24|32)$/.exec(v); if (!m) return v;
   const bits = Number(m[5]), keep = bits / 8, parts = m.slice(1, 5);

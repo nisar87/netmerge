@@ -48,7 +48,7 @@ function renderApps(){
        const split = Object.entries(a.links).map(([n,c]) => `<i title="${esc(n==='bypass'?'Skip NetMerge':labelOf(n))}: ${c}" style="width:${c/tot*100}%;background:${n==='bypass'?'var(--dim)':colorOf(n)}"></i>`).join('');
        const names = Object.keys(a.links).map(n => n==='bypass' ? 'Skip' : labelOf(n)).join(' + ');
        const rule = local.appRules.find(r => r.process === a.process)?.target || '';
-       return `<tr><td class="proc"><span class="app-name">${appAvatar(a.process)}${esc(a.process)}</span></td><td><div class="split" aria-hidden="true">${split}</div><div class="app-lines">${esc(names)} · ${a.conns} conn</div></td><td class="r num"><span class="app-rate"><span><b>${fmtM(a.down)}</b> Mbps</span><span class="app-bar" aria-hidden="true"><i style="width:${((a.down||0)/maxDown*100).toFixed(1)}%"></i></span></span></td><td class="r num">${fmtM(a.up)} Mbps</td>
+       return `<tr><td class="proc"><span class="app-name">${appAvatar(a.process)}${esc(a.process)}</span></td><td><div class="split" aria-hidden="true">${split}</div><div class="app-lines">${esc(names)} · ${a.conns} open</div></td><td class="r num"><span class="app-rate"><span><b>${fmtM(a.down)}</b> Mbps</span><span class="app-bar" aria-hidden="true"><i style="width:${((a.down||0)/maxDown*100).toFixed(1)}%"></i></span></span></td><td class="r num">${fmtM(a.up)} Mbps</td>
          <td>${a.process==='system'?'':`<select class="sel" data-p="${esc(a.process)}" aria-label="Rule for ${esc(a.process)}">${targetOptions(rule, true)}</select>`}</td></tr>`;
      }).join('')));
   tb.querySelectorAll('select').forEach(s => s.onchange = () => {

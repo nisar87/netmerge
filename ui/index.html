@@ -18,7 +18,7 @@
 <div class="app">
   <aside class="side" id="sidebar" aria-label="Application navigation">
     <a href="#/overview" class="brand" aria-label="NetMerge overview"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M6 9c7 0 7 7 13 7M6 23c7 0 7-7 13-7h7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="26" cy="16" r="2" fill="currentColor"/></svg></span><span>NetMerge<small>YOUR CONNECTIONS. TOGETHER.</small></span></a>
-    <div class="nav-caption">WORKSPACE</div><nav id="nav" aria-label="Main navigation"><a class="nav" href="#/overview" data-p="overview"><span data-icon="layout-dashboard"></span><span class="nav-label">Overview</span></a>
+    <div class="nav-caption">Menu</div><nav id="nav" aria-label="Main navigation"><a class="nav" href="#/overview" data-p="overview"><span data-icon="layout-dashboard"></span><span class="nav-label">Overview</span></a>
 <a class="nav" href="#/connections" data-p="connections"><span data-icon="network"></span><span class="nav-label">Connections</span></a>
 <a class="nav" href="#/apps/active" data-p="apps"><span data-icon="panels-top-left"></span><span class="nav-label">Apps</span></a>
 <a class="nav" href="#/usage" data-p="usage"><span data-icon="chart-no-axes-combined"></span><span class="nav-label">Usage</span></a>
@@ -27,11 +27,11 @@
 <a class="nav" href="#/activity/events" data-p="history"><span data-icon="activity"></span><span class="nav-label">Activity</span></a>
 <a class="nav" href="#/settings/general" data-p="settings"><span data-icon="settings-2"></span><span class="nav-label">Settings</span></a></nav>
     <div class="side-foot"><span class="status-dot" id="sideDot"></span><div><b id="sfTitle">Connecting…</b><span id="sfText">Waiting for NetMerge</span></div></div>
-    <div class="side-meta"><span>Local control center</span><span id="sidebarVersion"></span></div>
+    <div class="side-meta"><span>Runs on this PC</span><span id="sidebarVersion"></span></div>
   </aside>
   <button id="navScrim" class="nav-scrim" aria-label="Close navigation" hidden></button>
   <main id="main" tabindex="-1">
-    <header class="bar"><button class="btn icon-button menu-button" id="menuBtn" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar"><span data-icon="menu"></span></button><div class="page-heading"><div class="eyebrow" id="pageEyebrow">WORKSPACE</div><h1 id="pageTitle" tabindex="-1">Overview</h1><div class="sub" id="pageSub">A clear view of your connected world.</div></div><div class="spacer"></div><button class="btn icon-button" id="quickTheme" aria-label="Switch color theme" title="Switch color theme"><span data-icon="sun-moon"></span></button><button class="power" id="power" role="switch" aria-checked="false" aria-label="Merge connections" disabled><b id="powerText">Merging off</b><span class="sw" aria-hidden="true"></span></button></header>
+    <header class="bar"><button class="btn icon-button menu-button" id="menuBtn" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar"><span data-icon="menu"></span></button><div class="page-heading"><div class="eyebrow" id="pageEyebrow"></div><h1 id="pageTitle" tabindex="-1">Overview</h1><div class="sub" id="pageSub">A clear view of your connected world.</div></div><div class="spacer"></div><button class="btn icon-button" id="quickTheme" aria-label="Switch color theme" title="Switch color theme"><span data-icon="sun-moon"></span></button><button class="power" id="power" role="switch" aria-checked="false" aria-label="Merge connections" disabled><b id="powerText">Merging off</b><span class="sw" aria-hidden="true"></span></button></header>
     <nav id="subnav" class="subnav" aria-label="Section navigation" hidden></nav>
     <div id="connectionBanner" role="status" hidden></div><div id="saveStatus" role="status" hidden></div><div id="featureError" role="status" hidden></div>
     <div id="updBanner"></div><div id="alerts"></div>
@@ -120,26 +120,26 @@
         </div>
         <figure class="speed-graph" aria-labelledby="testGraphTitle">
           <div class="speed-graph-heading">
-            <h3 id="testGraphTitle"><span data-icon="activity"></span> Throughput</h3>
+            <h3 id="testGraphTitle"><span data-icon="activity"></span> Live speed</h3>
             <div class="speed-graph-tools"><span id="testGraphSummary">Waiting for readings</span><button class="btn icon-button" id="testChartPause" aria-label="Pause graph" title="Pause graph" disabled><span data-icon="pause"></span></button></div>
           </div>
           <div class="speed-plot">
             <svg id="testChart" aria-hidden="true"></svg>
-            <div class="speed-graph-empty" id="testGraphEmpty">Start a test to see live throughput.</div>
+            <div class="speed-graph-empty" id="testGraphEmpty">Start a test to see the live speed.</div>
           </div>
           <div class="speed-inspector" id="testInspector" hidden>
             <input type="range" id="testSample" min="0" max="0" value="0" aria-label="Inspect throughput samples" aria-describedby="testSampleValue">
             <output id="testSampleValue" for="testSample" aria-live="off"></output>
           </div>
-          <figcaption id="testGraphCaption">Time observed in this window. Breaks separate test stages or gaps in readings.</figcaption>
+          <figcaption id="testGraphCaption">Seconds since the test started. A gap means the test moved to its next stage, or a reading was missed.</figcaption>
         </figure>
       </div>
       <div id="testWarnings" class="speed-warnings" aria-live="polite"></div>
       <details class="card speed-details" id="testDetails">
-        <summary><span class="speed-detail-icon" data-icon="list-checks"></span><span><strong>Test details</strong><span id="testDetailsHint">Connection speeds, parallel streams and recommendations</span></span><span class="speed-chevron" data-icon="chevron-down"></span></summary>
+        <summary><span class="speed-detail-icon" data-icon="list-checks"></span><span><strong>Test details</strong><span id="testDetailsHint">Speed of each line, several downloads at once, and advice</span></span><span class="speed-chevron" data-icon="chevron-down"></span></summary>
         <div class="speed-detail-content">
-          <section aria-labelledby="testConnectionsTitle"><h3 id="testConnectionsTitle">Connection comparison</h3><p class="hint2">Single-stream speed compared with eight simultaneous downloads.</p><div id="testResults"></div></section>
-          <section aria-labelledby="testScalingTitle"><h3 id="testScalingTitle">Through NetMerge</h3><p class="hint2">How download speed changes as more streams run in parallel.</p><div id="testScaling"></div></section>
+          <section aria-labelledby="testConnectionsTitle"><h3 id="testConnectionsTitle">Connection comparison</h3><p class="hint2">One download compared with eight at once, on each line.</p><div id="testResults"></div></section>
+          <section aria-labelledby="testScalingTitle"><h3 id="testScalingTitle">Through NetMerge</h3><p class="hint2">How the speed grows as more downloads run at once.</p><div id="testScaling"></div></section>
           <div id="testNotes"></div>
           <details class="speed-samples" id="testSampleDetails"><summary>Recorded samples <span id="testSampleCount">(0)</span></summary><p class="hint2" id="testSampleNote">Live readings are kept in this window for the current test, up to 600 samples.</p><div class="table-scroll"><table class="tbl" id="testSamples"><caption class="sr-only">Live download samples for this test</caption><thead><tr><th scope="col">Elapsed</th><th scope="col">Test stage</th><th scope="col">Mbps</th></tr></thead><tbody></tbody></table></div></details>
         </div>
@@ -152,13 +152,13 @@
       <div class="grid2">
         <div class="card">
           <span class="pc-ic" data-icon="arrow-up-right"></span><h3>Skip NetMerge for these addresses <span class="rec">Only if needed</span></h3>
-          <p class="d">Traffic to these addresses skips NetMerge and goes out the normal Windows way — for example a Remote Desktop server you reach through a VPN. Add one address (<code>203.0.113.5</code>) or a whole range: put <code>x</code> for the parts that can be anything (<code>132.120.111.x</code>, or <code>132.120.x.x</code>). Ranges written like <code>132.120.111.0/24</code> work too. Your local network (addresses starting 192.168., 10. and similar) always skips NetMerge; you don't need to add it.</p>
-          <div class="row" style="flex-wrap:nowrap"><input class="inp" id="ipInput" placeholder="203.0.113.5 or 132.120.111.x" style="flex:1" aria-label="IP address"><button class="btn" id="ipAdd">Add</button></div>
+          <p class="d">Traffic to these addresses skips NetMerge and goes out the normal Windows way — for example a Remote Desktop server you reach through a VPN. Add one address (<code>203.0.113.5</code>) or a whole range: put <code>x</code> for the parts that can be anything (<code>198.51.100.x</code>, or <code>198.51.x.x</code>). Ranges written like <code>198.51.100.0/24</code> work too. Your local network (addresses starting 192.168., 10. and similar) always skips NetMerge; you don't need to add it.</p>
+          <div class="row" style="flex-wrap:nowrap"><input class="inp" id="ipInput" placeholder="203.0.113.5 or 198.51.100.x" style="flex:1" aria-label="Address or range"><button class="btn" id="ipAdd">Add</button></div>
           <div class="listchips" id="ipList"></div>
         </div>
         <div class="card">
           <span class="pc-ic" data-icon="link"></span><h3>Keep these websites on one line <span class="rec">Only if needed</span></h3>
-          <p class="d">Banks and login pages can sign you out if your IP changes between requests. These stay on a single line. Websites with “bank” in their name already do.</p>
+          <p class="d">Banks and sign-in pages can log you out if your internet address changes while you are signed in. Websites on this list always use the same line. Websites with “bank” in their name already do.</p>
           <div class="row" style="flex-wrap:nowrap"><input class="inp" id="domInput" placeholder="mybank.com" style="flex:1" aria-label="Website"><button class="btn" id="domAdd">Add</button></div>
           <div class="listchips" id="domList"></div>
         </div>
@@ -233,7 +233,7 @@
       </div>
       <details class="card adv" style="margin-top:16px">
         <summary><span class="sechead" style="display:inline">Advanced <span>leave as they are unless something is wrong</span></span></summary>
-        <div class="opt"><div><b>Connection balancing <em class="rec">Recommended: Smart</em></b><span>Smart sends each new connection to the line with the most spare speed. Classic hands new connections out in turn, using the fixed shares (×1–×5) under Settings on each connection card on Overview. “Steady sites” mode always uses those shares. Switch to Classic only if Smart gives unexpected results.</span></div><select class="sel" id="balSel" aria-label="Connection balancing"><option value="smart">Smart (recommended)</option><option value="classic">Classic (fixed shares)</option></select></div>
+        <div class="opt"><div><b>Connection balancing <em class="rec">Recommended: Smart</em></b><span>Smart sends each newly opened website or download to the line with the most spare speed. Classic hands them out in turn, by the shares (×1–×5) you set with − and + under Settings on each connection card on the Overview. The “steady sites” mode always uses those shares. Switch to Classic only if Smart gives unexpected results.</span></div><select class="sel" id="balSel" aria-label="Connection balancing"><option value="smart">Smart (recommended)</option><option value="classic">Classic (fixed shares)</option></select></div>
         <div class="opt"><div><b>Look for new connections</b><span>NetMerge already checks about every 10 seconds. Use this only if a line you just plugged in is missing.</span></div><button class="btn" id="rescan">Scan now</button></div>
         <div class="opt"><div><b>Detailed logging <em class="rec">Recommended: off</em></b><span>While data flows, writes the speed of each line and the busiest connections every second, and records each connection in the engine log. Only for troubleshooting. It makes the log files grow fast.</span></div><button class="tog" id="debugTog" role="switch" aria-label="Detailed logging"></button></div>
         <div class="opt"><div><b>Diagnostics</b><span>Saves a zip with logs, settings (no passwords) and a summary, to send when asking for help. Logs can contain website names, so look before sharing.</span></div><a class="btn" id="diagDl" href="/api/diagnostics" download>Download</a></div>
@@ -268,7 +268,7 @@
       </section>
       <details class="card" id="usFix">
         <summary style="cursor:pointer;font-weight:600">Correct a wrong number</summary>
-        <div class="hint" style="color:var(--mute);font-size:13px;margin:8px 0 12px">If a day shows far more data than you really used (an old version could count an adapter that was unplugged and plugged in again as billions of bytes), choose the connection and the day and type the real figure. Windows' own network statistics are the reference.</div>
+        <div class="hint" style="color:var(--mute);font-size:13px;margin:8px 0 12px">If a day shows far more data than you really used, choose the connection and the day and type the real figure. Windows’ own data usage (Settings → Network &amp; internet → Data usage) is the one to trust. Older versions of NetMerge could overcount after a line was unplugged and plugged in again.</div>
         <div class="qrow"><select class="sel" id="fxLink" aria-label="Connection"></select><select class="sel" id="fxDay" aria-label="Day"></select></div>
         <div class="qrow"><b style="min-width:70px">Down (MB)</b><input class="inp" id="fxDown" aria-label="Download usage in MB" type="number" min="0" max="10000000" step="1" inputmode="numeric"><b style="min-width:70px;margin-left:12px">Up (MB)</b><input class="inp" id="fxUp" aria-label="Upload usage in MB" type="number" min="0" max="10000000" step="1" inputmode="numeric"><button class="btn pri" id="fxSave" style="margin-left:12px" disabled>Save</button></div>
       </details>

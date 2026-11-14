@@ -1,9 +1,32 @@
 # Changelog
 
+## 3.21.3
+
+Clearer words throughout the window, after a read-through of every page. Nothing works differently.
+
+- **Examples use reserved addresses.** Every example address is now from the ranges set aside for documentation (`203.0.113.5`, `198.51.100.x`), never a real one.
+- **No more "connections" meaning two things.** "Connection" now means one of your lines (Ethernet, Wi-Fi, phone). The websites and downloads NetMerge shares out are called that:
+  - On the Overview: "Each newly opened website or download goes to the line with the most spare speed".
+  - On each card, "Share of the work" is now **Share of new connections**. Its tooltip says how it differs from Share of traffic.
+  - In Apps, "8 conn" is now **8 open**.
+  - In Advanced, the balancing text uses the same words.
+- **Times and dates read naturally.** "132h ago" is now **5 days ago**, and "Checked 109 h ago" is now **Checked 5 days ago**. Usage shows **Nov 1 to Dec 1** and **busiest Nov 9** instead of 2026-11-01 style dates, and so do the daily chart, the table and the correction list.
+- **Plainer speed test.**
+  - "Throughput" is now **Live speed**.
+  - "Parallel streams" is now **several downloads at once**.
+  - The graph caption says what a gap means.
+- **Plainer explanations elsewhere.**
+  - Routing exceptions: banks can log you out "if your internet address changes while you are signed in".
+  - The default preset is "your own settings, as they were before you used a preset".
+  - The usage correction points to Windows' own data usage page.
+  - When the window loses contact with NetMerge it says **Lost contact with NetMerge**.
+- **Less filler.** The page subtitles say what each page is for. The "WORKSPACE" label above every page title and the "Local control center" footer are gone. The menu is headed "Menu", and the footer says "Runs on this PC".
+- The tour video, the preview and the screenshots show these words.
+
 ## 3.21.2
 
-- **Ranges written with x.** In Protection → Routing exceptions, "Skip NetMerge for these addresses" now accepts a range the way people write it: `132.120.111.x` (or `132.120.111.*`) means every address from 132.120.111.0 to 132.120.111.255, and `132.120.x.x` the whole 132.120 block. It is saved as the network range Windows uses (`132.120.111.0/24`) and shown back as you wrote it. The old form with `/` still works. Before, `132.120.111.x` was refused with only "That does not look right", while the help text itself wrote 192.168.x.x.
-- **Clearer messages.** A wildcard in the middle (`132.x.111.5`) is refused with the reason: it is not one range of addresses. A number above 255 is refused with the rule. The same range added twice in two different ways is noticed.
+- **Ranges written with x.** In Protection → Routing exceptions, "Skip NetMerge for these addresses" now accepts a range the way people write it: `198.51.100.x` (or `198.51.100.*`) means every address from 198.51.100.0 to 198.51.100.255, and `198.51.x.x` the whole 198.51 block. It is saved as the network range Windows uses (`198.51.100.0/24`) and shown back as you wrote it. The old form with `/` still works. Before, `198.51.100.x` was refused with only "That does not look right", while the help text itself wrote 192.168.x.x.
+- **Clearer messages.** A wildcard in the middle (`198.x.100.5`) is refused with the reason: it is not one range of addresses. A number above 255 is refused with the rule. The same range added twice in two different ways is noticed.
 - **Clearer help text.** It explains single addresses, ranges with x, and that your local network already skips NetMerge.
 
 ## 3.21.1

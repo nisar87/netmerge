@@ -1,7 +1,7 @@
 /* ---------- updates ---------- */
 let UP = null, updShownErr = '';
 async function loadUpdate(){ try { UP = await api('update'); renderUpdate(); } catch(e){return false;} }
-function updAgo(t){ if(!t) return 'never'; const m = Math.round((Date.now()/1000 - t)/60); return m < 1 ? 'just now' : m < 60 ? m+' min ago' : Math.round(m/60)+' h ago'; }
+function updAgo(t){ return agoText(t); }
 function renderUpdate(){
   if (!UP) return;
   const busy = UP.status === 'downloading' || UP.status === 'installing' || UP.status === 'checking';

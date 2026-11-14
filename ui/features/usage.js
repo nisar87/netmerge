@@ -41,9 +41,9 @@ function renderUsage(){
   const topDay = top > 0 ? U.days[wk.indexOf(top)].date : '';
   const spark = wk.slice().reverse(), sMax = Math.max(...spark, 1);
   const wkBars = spark.map((v,i) => `<rect x="${i*14}" y="${(36 - v/sMax*34).toFixed(1)}" width="9" height="${Math.max(1.5, v/sMax*34).toFixed(1)}" rx="2"/>`).join('');
-  const wkCard = wkSum > 0 ? `<div class="us us-week"><div class="n">Last 7 days</div><div class="v">${F.show(F.q(wkSum))}</div><svg class="us-wk" viewBox="0 0 94 36" preserveAspectRatio="none" aria-hidden="true">${wkBars}</svg><div class="s">about ${F.show(F.q(wkSum/7))} a day · busiest ${esc(topDay)}</div>${pwSum > 0 ? `<div class="s us-trend ${wkSum >= pwSum ? 'up' : 'down'}">${wkSum >= pwSum ? '▲ Up' : '▼ Down'} ${Math.abs(Math.round((wkSum/pwSum-1)*100))}% on the week before</div>` : ''}</div>` : '';
+  const wkCard = wkSum > 0 ? `<div class="us us-week"><div class="n">Last 7 days</div><div class="v">${F.show(F.q(wkSum))}</div><svg class="us-wk" viewBox="0 0 94 36" preserveAspectRatio="none" aria-hidden="true">${wkBars}</svg><div class="s">about ${F.show(F.q(wkSum/7))} a day · busiest ${esc(dayText(topDay))}</div>${pwSum > 0 ? `<div class="s us-trend ${wkSum >= pwSum ? 'up' : 'down'}">${wkSum >= pwSum ? '▲ Up' : '▼ Down'} ${Math.abs(Math.round((wkSum/pwSum-1)*100))}% on the week before</div>` : ''}</div>` : '';
   const split = shown.map(l => `<i style="width:${allUsed > 0 ? (l.used/allUsed*100).toFixed(2) : 0}%;background:${P[L.indexOf(l)%5]}" title="${esc(l.label)}"></i>`).join('');
-  const totCard = `<div class="us tot"><div class="n">This period · all connections</div><div class="v">${tD+tU === 0 ? F.zero : F.show(tD+tU)}</div><div class="us-split" aria-hidden="true">${split}</div><div class="s us-du"><span>↓ ${F.show(tD)}</span><span>↑ ${F.show(tU)}</span></div><div class="s">${esc(U.start)} to ${esc(U.end)} · renews on day ${U.reset}</div></div>`;
+  const totCard = `<div class="us tot"><div class="n">This period · all connections</div><div class="v">${tD+tU === 0 ? F.zero : F.show(tD+tU)}</div><div class="us-split" aria-hidden="true">${split}</div><div class="s us-du"><span>↓ ${F.show(tD)}</span><span>↑ ${F.show(tU)}</span></div><div class="s">${esc(dayText(U.start))} to ${esc(dayText(U.end))} · renews on day ${U.reset}</div></div>`;
   setHTML($('#usSum'), totCard + cards + wkCard);
   $('#usPeriod').textContent = '· last 31 days';
   // ----- daily chart: one stacked bar per day, oldest on the left
@@ -52,11 +52,11 @@ function renderUsage(){
     const today = new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
     const bars = days.map((d,i) => { let y = H; const x = (31 - n + i)*bw + bw*.18, w = bw*.64;
       const segs = shown.map(l => { const v = d.links?.[l.name] || [0,0], gb = (v[0]+v[1])/1e9; if (gb <= 0) return ''; const h = H - Y(gb); y -= h; return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(h, .8).toFixed(1)}" fill="${P[L.indexOf(l)%5]}"/>`; }).join('');
-      return `<g class="us-bar${d.date===today?' today':''}"><title>${esc(d.date===today?'Today':d.date)}: ${(dayTot(d)/1e9).toFixed(2)} GB</title><rect class="us-hit" x="${((31-n+i)*bw).toFixed(1)}" y="0" width="${bw.toFixed(1)}" height="${H}"/>${segs}</g>`; }).join('');
+      return `<g class="us-bar${d.date===today?' today':''}"><title>${esc(d.date===today?'Today':dayText(d.date))}: ${(dayTot(d)/1e9).toFixed(2)} GB</title><rect class="us-hit" x="${((31-n+i)*bw).toFixed(1)}" y="0" width="${bw.toFixed(1)}" height="${H}"/>${segs}</g>`; }).join('');
     const grid = [0,.5,1].map(k => `<line x1="0" x2="${W}" y1="${Y(top*k).toFixed(1)}" y2="${Y(top*k).toFixed(1)}"/>`).join('');
     const yl = [1,.5,0].map(k => `<span style="top:${(Y(top*k)/H*100).toFixed(1)}%">${fmt(top*k)} GB</span>`).join('');
     const first = days[0]?.date || '', last = days.at(-1)?.date || '';
-    setHTML($('#usChart'), days.length ? `<div class="us-plot"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Data used per day, last ${days.length} days. The table below has every value."><g class="hist-grid">${grid}</g>${bars}</svg><div class="hist-y" aria-hidden="true">${yl}</div></div><div class="hist-x" aria-hidden="true"><span>${esc(first)}</span><span>${esc(last===today?'Today':last)}</span></div>` : '<div class="hist-empty">No days recorded yet.</div>');
+    setHTML($('#usChart'), days.length ? `<div class="us-plot"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Data used per day, last ${days.length} days. The table below has every value."><g class="hist-grid">${grid}</g>${bars}</svg><div class="hist-y" aria-hidden="true">${yl}</div></div><div class="hist-x" aria-hidden="true"><span>${esc(dayText(first))}</span><span>${esc(last===today?'Today':dayText(last))}</span></div>` : '<div class="hist-empty">No days recorded yet.</div>');
     setHTML($('#usLegend'), shown.map(l => `<div><i style="background:${P[L.indexOf(l)%5]}"></i>${esc(l.label)}</div>`).join(''));
   }
   // ----- daily table: download / upload for every connection, then the total
@@ -70,7 +70,7 @@ function renderUsage(){
   const rows = U.days.map(d => {
     let sd = 0, su = 0;
     const cells = shown.map(l => { const v = d.links?.[l.name] || [0,0], a = T.q(v[0]), b = T.q(v[1]); sd += a; su += b; return `<td class="num">${T.cell(a)}</td><td class="num">${T.cell(b)}</td>`; }).join('');
-    return `<tr class="${d.date===loc?'today':''}"><td>${d.date===loc?'Today':esc(d.date)}</td>${cells}<td class="num tot">${T.cell(sd)}</td><td class="num">${T.cell(su)}</td><td class="num"><b>${T.cell(sd+su)}</b></td></tr>`;
+    return `<tr class="${d.date===loc?'today':''}"><td>${d.date===loc?'Today':esc(dayText(d.date))}</td>${cells}<td class="num tot">${T.cell(sd)}</td><td class="num">${T.cell(su)}</td><td class="num"><b>${T.cell(sd+su)}</b></td></tr>`;
   }).join('');
   setHTML($('#usTbl'), head + rows);
   $('#usUnit').textContent = '· all values in GB';
@@ -94,7 +94,7 @@ function renderUsage(){
     if (fl.dataset.keys !== k){
       fl.dataset.keys = k;
       fl.innerHTML = local.links.map(l => `<option value="${esc(l.name)}">${esc(l.label)}</option>`).join('');
-      fd.innerHTML = U.days.map(d => `<option value="${esc(d.date)}">${esc(d.date)}</option>`).join('');
+      fd.innerHTML = U.days.map(d => `<option value="${esc(d.date)}">${esc(dayText(d.date, true))}</option>`).join('');
       const fill = () => { const d = U.days.find(x => x.date === fd.value), v = (d && d.links && d.links[fl.value]) || [0,0]; $('#fxDown').value = Math.round(v[0]/1e6); $('#fxUp').value = Math.round(v[1]/1e6); $('#fxSave').disabled = !fl.value || !fd.value; };
       fl.onchange = fd.onchange = fill; fill();
       $('#fxSave').onclick = async () => {

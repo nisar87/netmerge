@@ -16,7 +16,7 @@ async function loadBlock(){
 function blockControls(){
   for(const button of $$('#blkTog,#blkUpdate,#blkSaveMine,#blkSaveAllow,#blkPacks button,#blkRecent button'))button.disabled=blockBusy;
 }
-const ago = t => { const s = Math.max(0, Math.floor(Date.now()/1000 - t)); return s < 60 ? s+'s ago' : s < 3600 ? Math.floor(s/60)+'m ago' : Math.floor(s/3600)+'h ago'; };
+const ago = t => agoText(t);
 function renderBlock(){
   if (!B || !S) return;
   const on = B.enabled, run = S.snap.running;

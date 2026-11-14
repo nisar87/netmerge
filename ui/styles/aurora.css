@@ -255,3 +255,4 @@ dialog.wiz>.card{background:none;box-shadow:none;border:0}
 .hist-grid line,.us-plot line{stroke-dasharray:2 4}
 .hint2{font-size:12.5px}
 .section-heading p.hint2{font-size:12px}
+.eyebrow:empty{display:none}
