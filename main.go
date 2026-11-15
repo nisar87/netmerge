@@ -159,11 +159,7 @@ func main() {
 	}
 	logf("NetMerge quitting")
 	trayRemove()
-	usageSave()
-	eventsSave()
-	historySave()
-	engine.Stop()
-	flushCounts()
+	saveAndStop()
 	removeRunMarker()
 	_ = srv.Close()
 }

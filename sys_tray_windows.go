@@ -36,13 +36,21 @@ var (
 )
 
 const (
-	wmUser     = 0x0400
-	wmTray     = wmUser + 1
-	wmTimer    = 0x0113
-	wmClose    = 0x0010
-	wmDestroy  = 0x0002
-	wmLBtnUp   = 0x0202
-	wmRBtnUp   = 0x0205
+	wmUser    = 0x0400
+	wmTray    = wmUser + 1
+	wmTimer   = 0x0113
+	wmClose   = 0x0010
+	wmDestroy = 0x0002
+	wmLBtnUp  = 0x0202
+	wmRBtnUp  = 0x0205
+
+	wmQueryEndSession  = 0x0011
+	wmEndSession       = 0x0016
+	wmPowerBroadcast   = 0x0218
+	pbtSuspend         = 0x0004
+	pbtResumeSuspend   = 0x0007
+	pbtResumeAutomatic = 0x0012
+
 	nimAdd     = 0
 	nimModify  = 1
 	nimDelete  = 2
@@ -198,6 +206,21 @@ func trayProc(hwnd, msg, wp, lp uintptr) uintptr {
 	case wmTimer:
 		trayNotify(nimModify)
 		return 0
+	case wmQueryEndSession:
+		return 1 // NetMerge never holds up a shutdown
+	case wmEndSession:
+		if wp != 0 {
+			sessionEnding(lp)
+		}
+		return 0
+	case wmPowerBroadcast:
+		switch wp {
+		case pbtSuspend:
+			powerSleep(true)
+		case pbtResumeAutomatic, pbtResumeSuspend:
+			powerSleep(false)
+		}
+		return 1
 	case wmClose:
 		trayNotify(nimDelete)
 		trayWnd.Store(0)

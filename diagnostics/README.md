@@ -28,7 +28,8 @@ in the collection `reports`:
 | `crash` | Go runtime crash (`go-crash.log`), a recovered crash with its stack, or the engine's last output when it stopped unexpectedly |
 | `at` | time sent |
 
-The log (`eventlog.go`) holds: start-up facts, how the last run ended (Windows shut down, or an unexpected end),
+The log (`eventlog.go`) holds: start-up facts, how the last run ended (Windows shut down, restarted or signed out,
+the PC never woke from sleep, or an unexpected end), sleep and wake,
 every start and stop of merging and who asked for it, connections appearing, going away or changing network,
 settings changes, failures that used to be dropped silently (with the place in the code), errors the window met,
 update steps (including the updater script's own log), and once a minute the counts of failed connections per line
