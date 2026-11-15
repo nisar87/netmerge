@@ -245,9 +245,11 @@ func (t *tunStack) setupOS(c *Config) error {
 		}
 	}
 	tAddr := time.Now()
+	t.e.startStep("adding the firewall rule")
 	t.ensureFirewall()
 	tFw := time.Now()
 	// wait until Windows really has the address (the listener binds to it)
+	t.e.startStep("waiting for Windows to give the adapter its address")
 	for i := 0; i < 100; i++ {
 		if c, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: tunGW4.AsSlice()}); err == nil {
 			c.Close()
@@ -256,6 +258,7 @@ func (t *tunStack) setupOS(c *Config) error {
 		time.Sleep(20 * time.Millisecond)
 	}
 	tReady := time.Now()
+	t.e.startStep("adding the routes")
 	if t.hijack.Load() {
 		go netsh("interface", "ipv4", "set", "dnsservers", "name="+itoa(d.index), "source=static", "address="+tunDNS4.String(), "register=none", "validate=no")
 	}

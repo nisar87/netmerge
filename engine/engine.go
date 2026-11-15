@@ -43,6 +43,7 @@ type Engine struct {
 	tun        any            // *tunStack while capturing
 	pendingTun chan tunOpened // the adapter being created in advance (first start)
 	ready      atomic.Bool    // Start has finished: capture (if any) is in place
+	steps      startSteps     // the start-up step being done, for a start that hangs
 	dns        *dnsService
 	defIface   atomic.Value // string: the adapter for DIRECT while the PC's traffic is captured
 	procCache  *processFinder
@@ -108,6 +109,8 @@ func New(dir string, out io.Writer) *Engine {
 
 // Start loads the settings and opens everything they ask for.
 func (e *Engine) Start(path string) error {
+	finished := e.watchStart()
+	defer finished()
 	if err := e.Load(path); err != nil {
 		e.dropPendingTun()
 		return err
@@ -120,11 +123,13 @@ func (e *Engine) Start(path string) error {
 // Load reads (or re-reads) the settings and applies them. Open connections keep running; listeners whose
 // settings did not change are kept; NetMerge's choices (SLOTn, CALL) are carried over.
 func (e *Engine) Load(path string) error {
+	e.startStep("reading the settings")
 	c, err := LoadConfig(path)
 	if err != nil {
 		return err
 	}
 	e.preopenTun(c)
+	e.startStep("reading the website lists")
 	sets := map[string]*DomainSet{}
 	for name, p := range c.RuleProviders {
 		if p.Behavior != "" && p.Behavior != "domain" {
@@ -187,12 +192,15 @@ func (e *Engine) Load(path string) error {
 		e.log.Infof("rule set %s: %d entries", n, s.Len())
 	}
 
+	e.startStep("opening the ports")
 	if err := e.applyListeners(c); err != nil {
 		return err
 	}
+	e.startStep("starting DNS")
 	if err := e.applyDNS(c); err != nil {
 		return err
 	}
+	e.startStep("capturing the PC's traffic")
 	if err := e.applyTun(c); err != nil {
 		return err
 	}

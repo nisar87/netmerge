@@ -112,6 +112,7 @@ func (e *Engine) applyTun(c *Config) error {
 	began := time.Now()
 	var dev tunDevice
 	var err error
+	e.startStep("creating the network adapter")
 	if e.pendingTun != nil { // opened while the settings and lists were being read
 		r := <-e.pendingTun
 		e.pendingTun = nil
@@ -131,6 +132,7 @@ func (e *Engine) applyTun(c *Config) error {
 	}
 	t := &tunStack{e: e, dev: dev, mtu: mtu, nat: newNATTable(), done: make(chan struct{})}
 	t.hijack.Store(c.DNS.Enable && len(c.Tun.DNSHijack) > 0)
+	e.startStep("setting up the network adapter")
 	if err := t.setupOS(c); err != nil {
 		dev.Close()
 		return err

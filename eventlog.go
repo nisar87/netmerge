@@ -163,16 +163,80 @@ type runMarker struct {
 	Started int64  `json:"started"`
 	Alive   int64  `json:"alive"`
 	Pid     int    `json:"pid"`
+	Asleep  bool   `json:"asleep,omitempty"` // the PC went to sleep and has not woken since
+	Ending  string `json:"ending,omitempty"` // Windows told NetMerge it is ending the session, and why
 }
 
-var runStarted = time.Now()
+var (
+	runStarted = time.Now()
+	runMu      sync.Mutex
+	runAsleep  bool
+	runEnding  string
+)
 
 func touchRunMarker() {
-	b, _ := json.Marshal(runMarker{appVersion, runStarted.Unix(), time.Now().Unix(), os.Getpid()})
+	runMu.Lock()
+	defer runMu.Unlock()
+	b, _ := json.Marshal(runMarker{appVersion, runStarted.Unix(), time.Now().Unix(), os.Getpid(), runAsleep, runEnding})
 	_ = os.WriteFile(dataPath("running.json"), b, 0o644)
 }
 
 func removeRunMarker() { _ = os.Remove(dataPath("running.json")) }
+
+// powerSleep is called when Windows says the PC is going to sleep (on=true) or has woken (on=false). If the PC
+// never wakes (the battery ran out, or it was turned off while asleep), the next start can say so.
+func powerSleep(on bool) {
+	runMu.Lock()
+	changed := runAsleep != on
+	runAsleep = on
+	runMu.Unlock()
+	if !changed {
+		return
+	}
+	if on {
+		logf("the PC is going to sleep")
+	} else {
+		logf("the PC woke from sleep")
+	}
+	touchRunMarker()
+}
+
+// sessionEnding is called when Windows ends the session (shut down, restart, signing out, or an installer
+// closing apps); flags are WM_ENDSESSION's. Windows ends the program a few seconds later, so the things quitting
+// would save are saved now and merging is stopped (that also puts the PC's network settings back).
+func sessionEnding(flags uintptr) {
+	why := sessionEndReason(flags)
+	runMu.Lock()
+	runEnding = why
+	runMu.Unlock()
+	logf("Windows is ending the session (%s); saving and stopping merging", why)
+	touchRunMarker()
+	saveAndStop()
+	touchRunMarker()
+}
+
+func sessionEndReason(flags uintptr) string {
+	switch {
+	case flags&0x80000000 != 0: // ENDSESSION_LOGOFF
+		return "the user signed out of Windows"
+	case flags&0x1 != 0: // ENDSESSION_CLOSEAPP
+		return "Windows closed it for an installer or update"
+	}
+	return "Windows shut down or restarted"
+}
+
+// saveAndStop saves usage, events and history and stops merging; quitting and the end of the session both use it.
+var saveAndStopOnce sync.Once
+
+func saveAndStop() {
+	saveAndStopOnce.Do(func() {
+		usageSave()
+		eventsSave()
+		historySave()
+		engine.Stop()
+		flushCounts()
+	})
+}
 
 // checkLastRun writes how the last run ended, and keeps a Go crash report it left behind for the next report.
 func checkLastRun() {
@@ -183,9 +247,14 @@ func checkLastRun() {
 		boot := bootTime()
 		ran := alive.Sub(time.Unix(m.Started, 0)).Round(time.Minute)
 		switch {
+		case m.Ending != "":
+			logf("last run (%s, ran %v) ended at %s: %s", m.Version, ran, alive.Format("2006-01-02 15:04"), m.Ending)
 		case !boot.IsZero() && boot.After(alive):
 			logf("last run (%s, ran %v) ended when Windows shut down or restarted (last seen %s, Windows started %s)",
 				m.Version, ran, alive.Format("2006-01-02 15:04"), boot.Format("2006-01-02 15:04"))
+		case m.Asleep:
+			logf("last run (%s, ran %v) ended while the PC was asleep (since %s): the battery ran out, or the PC was turned off or restarted while asleep",
+				m.Version, ran, alive.Format("2006-01-02 15:04"))
 		default:
 			logf("last run (%s, ran %v) ended unexpectedly at about %s: it crashed, or it was ended from Task Manager",
 				m.Version, ran, alive.Format("2006-01-02 15:04"))
