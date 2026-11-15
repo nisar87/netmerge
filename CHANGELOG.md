@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.21.5
+
+Better problem reports. Nothing in the window changes.
+
+- **Shutting down is no longer reported as a crash.** When Windows shuts down, restarts or signs you out, NetMerge now saves its data, stops merging (which puts your normal network settings back) and notes why it closed. With Fast Startup, a normal shutdown used to look like a crash.
+- **Sleep and wake are noted.** If the PC never wakes up (for example, the battery runs out while it sleeps), the next start says so instead of calling it a crash.
+- **A slow start-up says where it is stuck.** If merging takes more than a few seconds to start, the log now shows which step it is on, so a start that fails with "The engine did not respond" can be explained and fixed.
+
 ## 3.21.4
 
 Tidier problem reports. Nothing in the window changes.
