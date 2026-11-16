@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.21.6
+
+Better problem reports. Nothing in the window changes.
+
+- **A pause in the live speeds says what caused it.** When NetMerge's once-a-second speed reading is held up for a few seconds, the log now names the step that took the time (reading the network adapters, waiting for the engine, or Windows not running NetMerge for a moment), so the cause can be found and fixed.
+
 ## 3.21.5
 
 Better problem reports. Nothing in the window changes.
