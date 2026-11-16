@@ -129,8 +129,10 @@ func statsLoop() {
 	n := 0
 	var last time.Time
 	for range t.C {
+		sampleClock.step("waiting for the next tick", time.Now())
 		if now := time.Now(); resumeDetected(last, now) {
 			onResume()
+			sampleClock.step("handling the wake from sleep", time.Now())
 		}
 		last = time.Now()
 		safely("sampler", func() { sample(n%5 == 0) })
@@ -206,32 +208,40 @@ func sample(slow bool) {
 		}
 	}
 	lastSampleAt = now
+	defer func() { sampleClock.step("working out the numbers for the window", time.Now()) }()
 	s := getSettings()
+	sampleClock.step("starting a sample", time.Now())
 	adapters := getAdapters(false)
 	byName := map[string]Adapter{}
 	for _, a := range adapters {
 		byName[a.Name] = a
 	}
+	sampleClock.step("reading the adapter list", time.Now())
 	if slow {
 		syncLinks(adapters)
 		s = getSettings()
+		sampleClock.step("matching connections to the settings", time.Now())
 	}
 	counters := ifCounters()
 	c64 := ifCounters64()
+	sampleClock.step("reading the byte counters", time.Now())
 	countOfflineUsage(byName, c64)
 	ctrs := map[string]ctrLink{}
 	// the byte counters were read just now: their interval is measured between reads, not from the start of the
 	// sample (a slow engine reply in between used to stretch one interval and shrink the next: false 200+ Mbps spikes)
 	cNow := time.Now()
+	sampleClock.step("counting use while NetMerge was off", cNow)
 	dtC := 1.0
 	if !lastCounterAt.IsZero() {
 		dtC = cNow.Sub(lastCounterAt).Seconds()
 	}
 	if dtC > 2.2 {
-		logf("sampler was held up for %.1f s", dtC)
+		logf("sampler was held up for %.1f s; slow steps: %s", dtC, sampleClock.slowest(300*time.Millisecond))
 	}
+	sampleClock.reset(cNow)
 	lastCounterAt = cNow
 	running, errMsg, started, version := engine.Status()
+	sampleClock.step("asking the engine's state", time.Now())
 
 	// --- engine connections (per app / per link) ---
 	var mc connList
@@ -269,6 +279,7 @@ func sample(slow bool) {
 	} else {
 		connPending = nil
 	}
+	sampleClock.step("waiting for the engine's connection list", time.Now())
 
 	connNow := connAt
 	if !gotConns {
@@ -287,6 +298,7 @@ func sample(slow bool) {
 
 	statsMu.Lock()
 	defer statsMu.Unlock()
+	sampleClock.step("waiting for the window's numbers to be free", time.Now())
 
 	type dbgConn struct {
 		link string
@@ -459,6 +471,7 @@ func sample(slow bool) {
 		}
 		links = append(links, ls)
 	}
+	sampleClock.step("speeds and usage per connection", time.Now())
 	usageSetCounters(ctrs)
 	totalHist = push(totalHist, totDown)
 	if totDown > peak {
