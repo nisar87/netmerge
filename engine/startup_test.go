@@ -53,3 +53,23 @@ func TestQuickStartIsQuiet(t *testing.T) {
 		t.Fatalf("a quick start wrote: %s", s)
 	}
 }
+
+// Without IPv6 in the settings the adapter has no IPv6 address, so no IPv6 listener is opened and nothing is
+// warned about; with it, a listener that cannot open is still reported.
+func TestIPv6ListenerOnlyWhenAsked(t *testing.T) {
+	var out syncBuf
+	e := New(t.TempDir(), &out)
+	ts := &tunStack{e: e}
+	ts.listen6(&Config{})
+	if ts.ln6 != nil || ts.port6 != 0 || out.String() != "" {
+		t.Fatalf("IPv6 off: listener %v, port %d, log %q", ts.ln6, ts.port6, out.String())
+	}
+	ts.listen6(&Config{IPv6: true})
+	if ts.ln6 != nil {
+		ts.ln6.Close()
+		t.Skip("this machine has the adapter's IPv6 address")
+	}
+	if !strings.Contains(out.String(), "IPv6 listener") {
+		t.Fatalf("IPv6 on and the listener failed, but nothing was logged: %q", out.String())
+	}
+}
