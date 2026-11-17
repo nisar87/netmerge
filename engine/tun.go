@@ -145,11 +145,7 @@ func (e *Engine) applyTun(c *Config) error {
 		return err
 	}
 	t.ln4, t.port4 = l4, uint16(l4.Addr().(*net.TCPAddr).Port)
-	if l6, err := net.ListenTCP("tcp6", &net.TCPAddr{IP: tunGW6.AsSlice(), Port: 0}); err == nil {
-		t.ln6, t.port6 = l6, uint16(l6.Addr().(*net.TCPAddr).Port)
-	} else {
-		e.log.Warnf("tun: IPv6 listener: %v (IPv6 is not captured)", err)
-	}
+	t.listen6(c)
 	e.tun = t
 	go t.readLoop()
 	go t.accept(t.ln4)
@@ -159,6 +155,21 @@ func (e *Engine) applyTun(c *Config) error {
 	go t.janitor()
 	e.log.Infof("[TUN] capturing traffic on %s (MTU %d), ready in %d ms", dev.Name(), mtu, time.Since(began).Milliseconds())
 	return nil
+}
+
+// listen6 opens the listener for the rewritten IPv6 connections. The adapter has an IPv6 address only when the
+// settings ask for IPv6 ("ipv6": true); without it there is nothing to listen on, and trying gave a warning on every
+// start ("The requested address is not valid in its context") although nothing was wrong.
+func (t *tunStack) listen6(c *Config) {
+	if !c.IPv6 {
+		return
+	}
+	l6, err := net.ListenTCP("tcp6", &net.TCPAddr{IP: tunGW6.AsSlice(), Port: 0})
+	if err != nil {
+		t.e.log.Warnf("tun: IPv6 listener: %v (IPv6 is not captured)", err)
+		return
+	}
+	t.ln6, t.port6 = l6, uint16(l6.Addr().(*net.TCPAddr).Port)
 }
 
 func (e *Engine) stopTun() {
