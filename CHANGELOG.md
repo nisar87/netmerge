@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.22.0
+
+- **Changing an app's line takes effect at once.** Before, a new app rule (or a line switched off) applied only to connections the app opened afterwards: an app that keeps one long connection, such as a Teams or Zoom call, a game or a VPN, stayed on the old line until it closed that connection by itself, sometimes for hours. Now NetMerge closes that app's open connections right after you change its rule, and the app opens them again over the new line. For a call this shows as a short "reconnecting". The same happens to everything on a line you switch off. Changing the traffic mode still leaves open connections alone, because that would interrupt every download and call on the PC.
+- **The apps list stays still.** "Using the internet now" is sorted A–Z by default, so rows no longer jump around as speeds change. Choose "Most download" for the busiest first; the choice is remembered. An app whose connections all closed stays in the list for two minutes, marked quiet, with its rule menu still there, instead of disappearing under your mouse.
+- **Search apps.** A search box above the list finds an app by name as you type. Esc clears it.
+
 ## 3.21.7
 
 A cleaner problem report. Nothing in the window changes.

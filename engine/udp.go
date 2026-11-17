@@ -255,7 +255,7 @@ func (t *udpTable) openFlow(f *udpFlow, m *Metadata, client string, reply replyF
 	}
 	f.sess = sess
 	e.log.Infof("[UDP] %s --> %s match %s using %s", srcText(m), m.RemoteAddress(), rule.Describe(), usingText(p, used))
-	f.tr = e.tracker.add(m, append([]string{used.Base()}, p.chain...), rule, nil)
+	f.tr = e.tracker.add(m, append([]string{used.Base()}, p.chain...), rule, udpForget{t, f})
 	sess.mu.Lock()
 	sess.flows[remote] = f
 	sess.mu.Unlock()
@@ -290,4 +290,33 @@ func (t *udpTable) readLoop(s *udpSession) {
 		}
 		_ = s.reply(buf[:n], src, host)
 	}
+}
+
+// udpForget is a UDP flow's "close": there is no connection to break, so the flow is forgotten instead. The app's
+// next packet to that address goes through the rules again and may leave on another line (for example after its
+// app rule changed). Replies that still arrive on the old line are passed on as before, so nothing is lost while the
+// other side catches up; call clients see their packets come from a new address and re-establish the call there.
+type udpForget struct {
+	t *udpTable
+	f *udpFlow
+}
+
+func (u udpForget) Close() error {
+	t, f := u.t, u.f
+	t.mu.Lock()
+	if t.flows[f.key] == f {
+		delete(t.flows, f.key)
+	}
+	t.mu.Unlock()
+	if f.sess != nil {
+		f.sess.mu.Lock()
+		if f.sess.flows[f.remote] == f {
+			delete(f.sess.flows, f.remote)
+		}
+		f.sess.mu.Unlock()
+	}
+	if f.tr != nil {
+		t.e.tracker.remove(f.tr)
+	}
+	return nil
 }

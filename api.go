@@ -171,6 +171,8 @@ func routes() http.Handler {
 			writeErr(w, 500, err.Error())
 			return
 		}
+		// an app given another line, or a line switched off: move what is already open (move.go)
+		go safely("move connections", func() { moveAfterChange(old, ns) })
 		writeJSON(w, map[string]bool{"ok": true})
 	}))
 
