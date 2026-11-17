@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.21.7
+
+A cleaner problem report. Nothing in the window changes.
+
+- **No more false IPv6 warning when merging starts.** Each time merging started, the log warned that IPv6 could not be captured, even though NetMerge leaves IPv6 alone unless you turn it on. That warning no longer appears, so real problems stand out in the log.
+
 ## 3.21.6
 
 Better problem reports. Nothing in the window changes.
