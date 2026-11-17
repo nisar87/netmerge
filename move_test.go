@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestMoveTargets(t *testing.T) {
 	old := Settings{
@@ -27,5 +30,23 @@ func TestMoveTargets(t *testing.T) {
 	}
 	if p, l := moveTargets(now, now); len(p)+len(l) != 0 {
 		t.Error("no change should move nothing")
+	}
+}
+
+func TestCleanAppName(t *testing.T) {
+	cases := map[[2]string]string{
+		{"Microsoft Teams", "ms-teams.exe"}:  "Microsoft Teams",
+		{"  Google   Chrome ", "chrome.exe"}: "Google Chrome",
+		{"chrome", "chrome.exe"}:             "",
+		{"Application", "foo.exe"}:           "",
+		{"", "foo.exe"}:                      "",
+	}
+	for in, want := range cases {
+		if got := cleanAppName(in[0], in[1]); got != want {
+			t.Errorf("cleanAppName(%q, %q) = %q, want %q", in[0], in[1], got, want)
+		}
+	}
+	if got := cleanAppName(strings.Repeat("x", 80), "a.exe"); len([]rune(got)) != 48 {
+		t.Errorf("long names are cut: %q", got)
 	}
 }

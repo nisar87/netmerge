@@ -9,6 +9,9 @@ function targetOptions(sel, withDefault){
   o.push(['bypass','Skip NetMerge']);
   return o.map(([v,t]) => `<option value="${esc(v)}"${v===sel?' selected':''}>${esc(t)}</option>`).join('');
 }
+// the app's own name when its program file has one ("Microsoft Teams"), with the process name kept underneath
+const appLabel = p => (S.snap.appNames || {})[String(p).toLowerCase()] || '';
+const appCell = p => { const n = appLabel(p); return `<span class="app-name">${appAvatar(n || p)}<span class="app-id">${n ? `<b>${esc(n)}</b><small>${esc(p)}</small>` : esc(p)}</span></span>`; };
 // a small coloured initial for each app, always the same colour for the same name
 const appAvatar = name => { let h = 0; for (const ch of String(name)) h = (h*31 + ch.charCodeAt(0)) >>> 0; return `<span class="app-av" style="--c:var(--l${h%5+1})" aria-hidden="true">${esc(String(name).replace(/\.exe$/i,'').slice(0,1).toUpperCase() || '?')}</span>`; };
 function renderApps(){
@@ -22,12 +25,12 @@ function renderApps(){
   const rt = $('#rulesTbl');
   if (!(document.activeElement && rt.contains(document.activeElement))){
     setHTML(rt, '<tr><th>App</th><th>Uses</th><th style="width:44px"></th></tr>' + (local.appRules.length ? local.appRules.map(r => `
-      <tr><td class="proc"><span class="app-name">${appAvatar(r.process)}${esc(r.process)}</span></td><td><select class="sel" data-process="${esc(r.process)}" aria-label="Rule for ${esc(r.process)}">${targetOptions(r.target, false)}</select></td><td><button class="x" data-del="${esc(r.process)}" title="Remove rule" aria-label="Remove rule">✕</button></td></tr>`).join('')
+      <tr><td class="proc">${appCell(r.process)}</td><td><select class="sel" data-process="${esc(r.process)}" aria-label="Rule for ${esc(r.process)}">${targetOptions(r.target, false)}</select></td><td><button class="x" data-del="${esc(r.process)}" title="Remove rule" aria-label="Remove rule">✕</button></td></tr>`).join('')
       : '<tr><td colspan="3" class="empty">No rules yet — apps follow the traffic mode.</td></tr>'));
     // Focus preserves this DOM through polling; resolve the process in the latest rules.
     rt.querySelectorAll('select').forEach(s => s.onchange = () => {
       const rule=local.appRules.find(r=>r.process===s.dataset.process);
-      if (rule) { rule.target=s.value; saveSoon(`Rule updated. ${rule.process}'s open connections reconnect under it now`); }
+      if (rule) { rule.target=s.value; saveSoon(`Rule updated. ${rule.process}'s open connections reconnect under it now`, 0); }
       else toast('This app rule was removed in another window.',true);
       s.blur(); renderApps();
     });
@@ -49,8 +52,9 @@ function renderApps(){
   const liveNames = new Set(live.map(a => a.process));
   let apps = [...appMemo.values()].map(m => liveNames.has(m.a.process) ? m.a : {...m.a, down: 0, up: 0, conns: 0, links: {}, quiet: true});
   const total = apps.length;
-  if (q) apps = apps.filter(a => a.process.toLowerCase().includes(q) || a.process.toLowerCase().replace(/\.exe$/, '').includes(q));
-  apps.sort(appSort === 'down' ? (x, y) => (y.down || 0) - (x.down || 0) || x.process.localeCompare(y.process) : (x, y) => (x.process === 'system') - (y.process === 'system') || x.process.localeCompare(y.process));
+  const shownName = a => (appLabel(a.process) || a.process).toLowerCase();
+  if (q) apps = apps.filter(a => a.process.toLowerCase().includes(q) || shownName(a).includes(q));
+  apps.sort(appSort === 'down' ? (x, y) => (y.down || 0) - (x.down || 0) || shownName(x).localeCompare(shownName(y)) : (x, y) => (x.process === 'system') - (y.process === 'system') || shownName(x).localeCompare(shownName(y)));
   { const down = apps.reduce((a,x)=>a+(x.down||0),0), stat = (v,l) => `<div class="hero-stat"><b>${v}</b><span>${l}</span></div>`;
     setHTML($('#appsStats'), stat(S.snap.running ? live.length : '—', 'apps online') + stat(S.snap.running ? fmtM(down) : '—', 'Mbps down') + stat((local.appRules||[]).length, (local.appRules||[]).length === 1 ? 'rule' : 'rules')); }
   const maxDown = Math.max(1, ...apps.map(a => a.down || 0));
@@ -60,18 +64,18 @@ function renderApps(){
      !apps.length ? `<tr><td colspan="5" class="empty">${q && total ? `No app matches “${esc(q)}”.` : 'No traffic right now.'}</td></tr>` :
      apps.map(a => {
        if (a.quiet) { const rule = local.appRules.find(r => r.process === a.process)?.target || '';
-         return `<tr class="quiet"><td class="proc"><span class="app-name">${appAvatar(a.process)}${esc(a.process)}</span></td><td><div class="app-lines">Quiet · no open connections</div></td><td class="r num">—</td><td class="r num">—</td><td>${a.process==='system'?'':`<select class="sel" data-p="${esc(a.process)}" aria-label="Rule for ${esc(a.process)}">${targetOptions(rule, true)}</select>`}</td></tr>`; }
+         return `<tr class="quiet"><td class="proc">${appCell(a.process)}</td><td><div class="app-lines">Quiet · no open connections</div></td><td class="r num">—</td><td class="r num">—</td><td>${a.process==='system'?'':`<select class="sel" data-p="${esc(a.process)}" aria-label="Rule for ${esc(a.process)}">${targetOptions(rule, true)}</select>`}</td></tr>`; }
        const tot = Object.values(a.links).reduce((x,y)=>x+y,0) || 1;
        const split = Object.entries(a.links).map(([n,c]) => `<i title="${esc(n==='bypass'?'Skip NetMerge':labelOf(n))}: ${c}" style="width:${c/tot*100}%;background:${n==='bypass'?'var(--dim)':colorOf(n)}"></i>`).join('');
        const names = Object.keys(a.links).map(n => n==='bypass' ? 'Skip' : labelOf(n)).join(' + ');
        const rule = local.appRules.find(r => r.process === a.process)?.target || '';
-       return `<tr><td class="proc"><span class="app-name">${appAvatar(a.process)}${esc(a.process)}</span></td><td><div class="split" aria-hidden="true">${split}</div><div class="app-lines">${esc(names)} · ${a.conns} open</div></td><td class="r num"><span class="app-rate"><span><b>${fmtM(a.down)}</b> Mbps</span><span class="app-bar" aria-hidden="true"><i style="width:${((a.down||0)/maxDown*100).toFixed(1)}%"></i></span></span></td><td class="r num">${fmtM(a.up)} Mbps</td>
+       return `<tr><td class="proc">${appCell(a.process)}</td><td><div class="split" aria-hidden="true">${split}</div><div class="app-lines">${esc(names)} · ${a.conns} open</div></td><td class="r num"><span class="app-rate"><span><b>${fmtM(a.down)}</b> Mbps</span><span class="app-bar" aria-hidden="true"><i style="width:${((a.down||0)/maxDown*100).toFixed(1)}%"></i></span></span></td><td class="r num">${fmtM(a.up)} Mbps</td>
          <td>${a.process==='system'?'':`<select class="sel" data-p="${esc(a.process)}" aria-label="Rule for ${esc(a.process)}">${targetOptions(rule, true)}</select>`}</td></tr>`;
      }).join('')));
   tb.querySelectorAll('select').forEach(s => s.onchange = () => {
     const p = s.dataset.p, i = local.appRules.findIndex(r => r.process === p);
     if (!s.value){ if (i>=0) local.appRules.splice(i,1); } else if (i>=0) local.appRules[i].target = s.value; else local.appRules.push({process:p, target:s.value});
-    $('#rulesTbl').dataset.h = ''; saveSoon(`Rule for ${p} saved. Its open connections reconnect under it now`); s.blur();
+    $('#rulesTbl').dataset.h = ''; saveSoon(`Rule for ${p} saved. Its open connections reconnect under it now`, 0); s.blur();
   });
 }
 $('#appAdd').onclick = () => {
@@ -79,7 +83,7 @@ $('#appAdd').onclick = () => {
   if (!p.endsWith('.exe')) p += '.exe';
   const t = $('#appTarget').value, i = local.appRules.findIndex(r => r.process === p);
   if (i>=0) local.appRules[i].target = t; else local.appRules.push({process:p, target:t});
-  $('#appInput').value=''; $('#rulesTbl').dataset.h=''; renderApps(); saveSoon(`Rule for ${p} added. If it is running, its open connections reconnect under it now`);
+  $('#appInput').value=''; $('#rulesTbl').dataset.h=''; renderApps(); saveSoon(`Rule for ${p} added. If it is running, its open connections reconnect under it now`, 0);
 };
 $('#appInput').onkeydown = e => { if (e.key==='Enter') $('#appAdd').click(); };
 

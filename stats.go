@@ -59,25 +59,27 @@ type AppStat struct {
 	Conns   int            `json:"conns"`
 	Links   map[string]int `json:"links"`
 	Rule    string         `json:"rule"`
+	Name    string         `json:"name,omitempty"` // the app's own name ("Microsoft Teams"), when its program file has one
 }
 
 type Snapshot struct {
-	Running   bool            `json:"running"`
-	Version   string          `json:"version"`
-	App       string          `json:"app"` // NetMerge version (the window reloads itself when it changes)
-	Error     string          `json:"error"`
-	Uptime    int64           `json:"uptime"`
-	Links     []LinkStat      `json:"links"`
-	Apps      []AppStat       `json:"apps"`
-	TotalDown float64         `json:"totalDown"`
-	TotalUp   float64         `json:"totalUp"`
-	PeakDown  float64         `json:"peakDown"`
-	Conns     int             `json:"conns"`
-	Total     []float64       `json:"total"`
-	Devices   []DeviceStat    `json:"devices"` // other devices using proxy sharing
-	Smart     bool            `json:"smart"`   // the smart dispatcher is steering new connections
-	Activity  []ActivityEvent `json:"activity"`
-	SameISP   []string        `json:"sameIsp"` // labels of lines that show the same public address (probably one provider)
+	Running   bool              `json:"running"`
+	Version   string            `json:"version"`
+	App       string            `json:"app"` // NetMerge version (the window reloads itself when it changes)
+	Error     string            `json:"error"`
+	Uptime    int64             `json:"uptime"`
+	Links     []LinkStat        `json:"links"`
+	Apps      []AppStat         `json:"apps"`
+	AppNames  map[string]string `json:"appNames,omitempty"` // process → the app's own name, for apps seen since start
+	TotalDown float64           `json:"totalDown"`
+	TotalUp   float64           `json:"totalUp"`
+	PeakDown  float64           `json:"peakDown"`
+	Conns     int               `json:"conns"`
+	Total     []float64         `json:"total"`
+	Devices   []DeviceStat      `json:"devices"` // other devices using proxy sharing
+	Smart     bool              `json:"smart"`   // the smart dispatcher is steering new connections
+	Activity  []ActivityEvent   `json:"activity"`
+	SameISP   []string          `json:"sameIsp"` // labels of lines that show the same public address (probably one provider)
 }
 
 type linkTrack struct {
@@ -188,6 +190,7 @@ type mConn struct {
 	Payload  string   `json:"rulePayload"`
 	Metadata struct {
 		Process  string `json:"process"`
+		Path     string `json:"processPath"`
 		Type     string `json:"type"`
 		SrcIP    string `json:"sourceIP"`
 		DestIP   string `json:"destinationIP"`
@@ -331,6 +334,9 @@ func sample(slow bool) {
 		if a == nil {
 			a = &AppStat{Process: proc, Links: map[string]int{}}
 			apps[proc] = a
+		}
+		if a.Name == "" && c.Metadata.Path != "" {
+			a.Name = appName(proc, c.Metadata.Path)
 		}
 		a.Down += d
 		a.Up += u
@@ -535,7 +541,7 @@ func sample(slow bool) {
 	if running {
 		up = int64(time.Since(started).Seconds())
 	}
-	snap = Snapshot{Running: running, Version: version, App: appVersion, Error: errMsg, Uptime: up, Links: links, Apps: appList,
+	snap = Snapshot{Running: running, Version: version, App: appVersion, Error: errMsg, Uptime: up, Links: links, Apps: appList, AppNames: appNames(),
 		TotalDown: totDown, TotalUp: totUp, PeakDown: peak, Conns: len(mc.Connections),
 		Total: append([]float64(nil), totalHist...)}
 	_, snap.Smart = dispatchSlotsOf("")

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"strings"
+	"time"
 )
 
 // Moving open connections after a change.
@@ -52,7 +53,7 @@ func moveTargets(old, now Settings) (procs map[string]bool, lines map[string]boo
 
 // moveAfterChange closes the open connections of the apps whose rule changed and of the lines switched off.
 // It runs after the engine has the new settings, so what reopens follows them.
-func moveAfterChange(old, now Settings) {
+func moveAfterChange(old, now Settings, started time.Time) {
 	procs, lines := moveTargets(old, now)
 	if len(procs) == 0 && len(lines) == 0 {
 		return
@@ -89,6 +90,6 @@ func moveAfterChange(old, now Settings) {
 		}
 	}
 	for why, n := range moved {
-		logf("moved %d open connection(s) of %s to the new settings", n, why)
+		logf("moved %d open connection(s) of %s to the new settings (%d ms after saving)", n, why, time.Since(started).Milliseconds())
 	}
 }

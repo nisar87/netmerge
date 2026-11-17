@@ -77,14 +77,15 @@ async function api(path, body){
     throw error;
   } finally {settingsPending--;stateEpoch++;}
 }
-function saveSoon(msg){
+// delay: how long to wait for more changes before saving (typing, − and +); a single choice saves at once
+function saveSoon(msg, delay = 350){
   recordSettingsIntent(local);
   clearTimeout(saveTimer);
   saveTimer=setTimeout(async()=>{
     saveTimer=null;
     try{await api('settings',local);toast(msg || 'Saved');}
     catch(error){toast(error.message,true);}
-  },350);
+  },delay);
 }
 
 /* ---------- theme ---------- */
@@ -291,7 +292,7 @@ function renderLinks(sn, act, P){
       lbl.onkeydown = e => { if (e.key==='Enter') e.target.blur(); };
       card.querySelector('[data-f=tog]').onclick = () => {
         const l = L(); if (l.enabled && local.links.filter(x=>x.enabled).length===1) return toast('At least one connection must stay on', true);
-        l.enabled = !l.enabled; saveSoon(l.enabled ? `${l.label} added to the merge` : `${l.label} left out of the merge`); render();
+        l.enabled = !l.enabled; saveSoon(l.enabled ? `${l.label} added to the merge` : `${l.label} left out of the merge; what was open on it reconnects on your other lines`, 0); render();
       };
       card.querySelector('[data-f=slowBtn]').onclick = () => { const l = L(); l.role = 'busy'; saveSoon(`${l.label} will join when the others are busy`); };
       card.querySelector('[data-f=role]').onchange = e => { const l = L(); l.role = e.target.value; saveSoon(l.role === 'backup' ? `${l.label} is now a backup line` : l.role === 'busy' ? `${l.label} will join when the others are busy` : `${l.label} is used all the time`); };
