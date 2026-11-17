@@ -102,7 +102,7 @@ const advanced=$('#pg-settings details.adv');advanced.dataset.view='advanced';ad
 $('#pg-settings > .hint2').remove();
 const appRules=$('#pg-apps > .card:not(.page-hero)');appRules.dataset.view='rules';
 const activeApps=document.createElement('section');activeApps.className='card';activeApps.dataset.view='active';
-activeApps.append($('#pg-apps > .sec'),$('#appsTbl'));$('#pg-apps').append(activeApps);
+activeApps.append($('#pg-apps > .sec'),$('#pg-apps .apps-tools'),$('#appsTbl'));$('#pg-apps').append(activeApps);
 const usage=$('#pg-usage');const quota=$('#usQuota').closest('.card');quota.dataset.view='allowances';
 const usageSummary=document.createElement('section');usageSummary.dataset.view='summary';
 [...usage.children].filter(el=>el!==quota).forEach(el=>usageSummary.append(el));usage.append(usageSummary);

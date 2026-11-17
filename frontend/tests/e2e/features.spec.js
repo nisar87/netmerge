@@ -225,3 +225,31 @@ test('addresses that skip NetMerge accept a range written with x, and explain wh
   await mutate(page, 'settings', { ...(await fixture.read('state')).settings, bypassIPs: [...before, '198.51.100.0/24', '10.20.0.0/16'] }, async () => { await input.fill('10.20.*.*'); await add.click(); });
   await expect(page.locator('#ipList .tag', { hasText: '10.20.x.x' })).toBeVisible();
 });
+
+test('the apps list keeps its order, keeps quiet apps for a while, and can be searched', async ({ page, fixture }) => {
+  const app = (process, down) => ({ process, down, up: 0, conns: 2, links: { Ethernet: 2 } });
+  await fixture.patch({ state: { snap: { apps: [app('zoom.exe', 900000), app('chrome.exe', 100000), app('ms-teams.exe', 500000)] } } });
+  await navigate(page, 'apps/active');
+  const rows = page.locator('#appsTbl tr:not(:first-child) .app-name');
+  // A–Z by default, whatever is busiest
+  await expect(rows).toHaveText(['Cchrome.exe', 'Mms-teams.exe', 'Zzoom.exe']);
+  // busier apps do not move rows around
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { apps: [app('chrome.exe', 2000000), app('ms-teams.exe', 10), app('zoom.exe', 5)] } } }));
+  await expect(rows).toHaveText(['Cchrome.exe', 'Mms-teams.exe', 'Zzoom.exe']);
+  // an app whose connections closed stays, marked quiet, with its rule still reachable
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { apps: [app('chrome.exe', 2000000), app('zoom.exe', 5)] } } }));
+  await expect(rows).toHaveText(['Cchrome.exe', 'Mms-teams.exe', 'Zzoom.exe']);
+  await expect(page.locator('#appsTbl tr.quiet')).toContainText('Quiet');
+  await expect(page.locator('#appsTbl tr.quiet select')).toHaveCount(1);
+  // search
+  await page.locator('#appSearch').fill('team');
+  await expect(rows).toHaveText(['Mms-teams.exe']);
+  await page.locator('#appSearch').fill('nothing-like-this');
+  await expect(page.locator('#appsTbl')).toContainText('No app matches');
+  await page.locator('#appSearch').press('Escape');
+  await expect(rows).toHaveCount(3);
+  // the busiest-first order is there when wanted, and remembered
+  await page.locator('#appSort button[data-v="down"]').click();
+  await expect(rows.first()).toHaveText('Cchrome.exe');
+  expect(await page.evaluate(() => localStorage.getItem('nm-app-sort'))).toBe('down');
+});

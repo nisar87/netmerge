@@ -90,7 +90,11 @@
         </div>
         <table class="tbl" id="rulesTbl" style="margin-top:16px"></table>
       </div>
-      <div class="sec"><h2>Using the internet now</h2><span class="hint">Pick a rule from any row to change how that app connects.</span></div>
+      <div class="sec"><h2>Using the internet now</h2><span class="hint">Pick a rule from any row to change how that app connects. Rows stay in place; an app that goes quiet stays listed for two minutes.</span></div>
+      <div class="apps-tools">
+        <label class="apps-search"><span data-icon="search" aria-hidden="true"></span><input class="inp" id="appSearch" type="search" placeholder="Search apps" aria-label="Search apps" autocomplete="off" spellcheck="false"></label>
+        <div class="seg" id="appSort" role="group" aria-label="Order of the list"><button data-v="name">A–Z</button><button data-v="down">Most download</button></div>
+      </div>
       <table class="tbl" id="appsTbl"></table>
     </section>
 
