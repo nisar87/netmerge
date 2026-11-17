@@ -24,7 +24,7 @@ More pages (connections, speed test, apps, sharing, settings, narrow window) are
 
 - **Merges your connections.** In the default mode every new connection a program opens is handed to the line with the most spare speed right now (or, if you prefer, each website stays on one line, or everything uses one line with the others as backup), so downloads, uploads and many-connection programs (browsers, torrent clients, game launchers) use all lines at once.
 - **See it live.** The Overview shows each connection flowing into NetMerge, with light that follows the real measured speed of each line, beside a combined-speed gauge. Dark and light themes; animations can be set to Normal, Reduced or Off.
-- **Per-app control.** Send a program to one line only, or keep it off the merge.
+- **Per-app control.** See which apps use the internet right now, under their own names ("Microsoft Teams", not just ms-teams.exe), find one with the search box, and send it to one line only or keep it off the merge. A change takes effect at once, also for what the app already has open (see [Changing an app's line](#changing-an-apps-line)).
 - **Usage tab.** Download and upload per connection per day, monthly allowance, warnings and a forecast.
 - **Share with your phone.** Scan a QR code with a free app (Hiddify, v2rayNG, Streisand, Shadowrocket) and the phone uses the merged connection too. Connected devices are listed and can be named.
 - **Ad and tracker blocking** with downloadable filter lists.
@@ -39,6 +39,12 @@ More pages (connections, speed test, apps, sharing, settings, narrow window) are
 - **A speed test made for merged lines** (see [Measuring the merged speed](#measuring-the-merged-speed)).
 - **Tray icon, start with Windows, update notifications.**
 - **Problems found without asking you for logs.** Short diagnostics reports, with nothing about the sites you visit (see [Diagnostics](#diagnostics); you can turn them off).
+
+### Changing an app's line
+
+A connection keeps the line it started on: that is what lets a call or a download carry on undisturbed while other things change. So when you give an app another line in **Apps**, or switch a line off, NetMerge also closes what that app (or that line) has open right then. The app opens it again at once, on the new line. In a call you see a short "Reconnecting…" from the call app, then the call runs on the new line. How long that moment takes is up to the app; NetMerge's own part takes a fraction of a second.
+
+Changing the traffic mode (combine fastest, steady, one line only) does not close anything, because that would interrupt every download and call on the PC. New connections follow the new mode at once, and open ones keep their line until they end. To move one app straight away, give it a rule in **Apps**.
 
 ### An honest limit
 

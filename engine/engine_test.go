@@ -14,6 +14,7 @@ import (
 	"math/rand"
 	"net"
 	"net/netip"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -409,5 +410,29 @@ func TestNoPenaltyWhenEveryLineFails(t *testing.T) {
 	}
 	if !a.healthy() || !b.healthy() {
 		t.Fatal("a line was passed over although every line failed")
+	}
+}
+
+// A reload keeps a website list read before while its file is unchanged, and reads it again when it changes.
+func TestReloadReusesUnchangedLists(t *testing.T) {
+	e := &Engine{}
+	p := t.TempDir() + "/list.txt"
+	if err := os.WriteFile(p, []byte("ads.example\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a, err := e.loadList(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := e.loadList(p)
+	if a != b {
+		t.Fatal("an unchanged list was read again")
+	}
+	if err := os.WriteFile(p, []byte("ads.example\ntracker.example\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := e.loadList(p)
+	if c == a || !c.Has("tracker.example") {
+		t.Fatal("a changed list was not read again")
 	}
 }

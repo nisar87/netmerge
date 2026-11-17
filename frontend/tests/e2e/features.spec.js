@@ -253,3 +253,18 @@ test('the apps list keeps its order, keeps quiet apps for a while, and can be se
   await expect(rows.first()).toHaveText('Cchrome.exe');
   expect(await page.evaluate(() => localStorage.getItem('nm-app-sort'))).toBe('down');
 });
+
+test('apps show their own names, with the process underneath, and can be found by either', async ({ page, fixture }) => {
+  const app = (process, down) => ({ process, down, up: 0, conns: 1, links: { Ethernet: 1 } });
+  await fixture.patch({ state: { snap: { apps: [app('ms-teams.exe', 900000), app('chrome.exe', 100000)], appNames: { 'ms-teams.exe': 'Microsoft Teams', 'chrome.exe': 'Google Chrome' } } } });
+  await navigate(page, 'apps/active');
+  const rows = page.locator('#appsTbl tr:not(:first-child) .app-id');
+  await expect(rows.nth(0).locator('b')).toHaveText('Google Chrome');
+  await expect(rows.nth(0).locator('small')).toHaveText('chrome.exe');
+  await expect(rows.nth(1).locator('b')).toHaveText('Microsoft Teams');
+  await page.locator('#appSearch').fill('microsoft');
+  await expect(rows).toHaveCount(1);
+  await page.locator('#appSearch').fill('ms-teams');
+  await expect(rows).toHaveCount(1);
+  await expect(page.locator('#appsTbl select[data-p="ms-teams.exe"]')).toHaveCount(1);
+});

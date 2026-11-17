@@ -50,6 +50,16 @@ type Engine struct {
 	stopOnce   sync.Once
 	stopped    chan struct{}
 	udp        *udpTable
+
+	listMu sync.Mutex
+	lists  map[string]cachedList // website lists by file, reused by a reload while the file is unchanged
+}
+
+// cachedList is a website list as read from its file, with the file's size and time to notice a new version.
+type cachedList struct {
+	size int64
+	mod  time.Time
+	set  *DomainSet
 }
 
 type sniffPorts struct {
@@ -139,7 +149,7 @@ func (e *Engine) Load(path string) error {
 		if err != nil {
 			return err
 		}
-		ds, err := LoadDomainSet(full)
+		ds, err := e.loadList(full)
 		if err != nil {
 			e.log.Warnf("rule set %s: %v (treated as empty)", name, err)
 			ds = NewDomainSet()
@@ -478,4 +488,29 @@ func (p *peekedConn) CloseWrite() error {
 		return cw.CloseWrite()
 	}
 	return errors.New("not supported")
+}
+
+// loadList reads a website list, or reuses the copy read before when the file has not changed. A reload (every
+// change in NetMerge's settings, such as giving an app another line) then takes milliseconds instead of reading a
+// block list of hundreds of thousands of names again. A list is never changed after it is read, so sharing it
+// between the old and the new settings is safe.
+func (e *Engine) loadList(path string) (*DomainSet, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	e.listMu.Lock()
+	defer e.listMu.Unlock()
+	if c, ok := e.lists[path]; ok && c.size == st.Size() && c.mod.Equal(st.ModTime()) {
+		return c.set, nil
+	}
+	ds, err := LoadDomainSet(path)
+	if err != nil {
+		return nil, err
+	}
+	if e.lists == nil {
+		e.lists = map[string]cachedList{}
+	}
+	e.lists[path] = cachedList{st.Size(), st.ModTime(), ds}
+	return ds, nil
 }

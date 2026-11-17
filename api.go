@@ -167,12 +167,13 @@ func routes() http.Handler {
 				return
 			}
 		}
+		applyStart := time.Now()
 		if err := engine.Apply(); err != nil {
 			writeErr(w, 500, err.Error())
 			return
 		}
 		// an app given another line, or a line switched off: move what is already open (move.go)
-		go safely("move connections", func() { moveAfterChange(old, ns) })
+		go safely("move connections", func() { moveAfterChange(old, ns, applyStart) })
 		writeJSON(w, map[string]bool{"ok": true})
 	}))
 

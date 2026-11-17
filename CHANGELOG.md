@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.22.1
+
+- **Switching an app's line is quicker.** Choosing a rule in Apps, or switching a line off, is now saved immediately instead of after a short pause. Applying it no longer reads the block lists again: a list that has not changed is reused, so a change takes milliseconds even with ad blocking on. The app's open connections are closed right after, so it reconnects on the new line straight away. The log records how long each move took.
+- **Apps show their real names.** Apps now shows the name a program gives itself, the same one Task Manager shows ("Microsoft Teams", "Google Chrome"), with the process name (ms-teams.exe) in small text underneath. The list is sorted by these names, and the search box finds an app by either.
+- **README:** a new section, "Changing an app's line", explains what moves at once and what keeps its line.
+
 ## 3.22.0
 
 - **Changing an app's line takes effect at once.** Before, a new app rule (or a line switched off) applied only to connections the app opened afterwards: an app that keeps one long connection, such as a Teams or Zoom call, a game or a VPN, stayed on the old line until it closed that connection by itself, sometimes for hours. Now NetMerge closes that app's open connections right after you change its rule, and the app opens them again over the new line. For a call this shows as a short "reconnecting". The same happens to everything on a line you switch off. Changing the traffic mode still leaves open connections alone, because that would interrupt every download and call on the PC.

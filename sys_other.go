@@ -94,3 +94,5 @@ func bootTime() time.Time { return fakeBoot }
 func readSysFacts() map[string]string {
 	return map[string]string{"os": "Development build", "osVersion": "", "build": "", "maker": "", "model": "", "cpu": "", "memory": ""}
 }
+
+func readFileDescription(path string) string { return "" }
