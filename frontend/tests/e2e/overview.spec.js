@@ -197,3 +197,21 @@ test('the combined number settles on the exact reading', async ({ page, fixture 
   await expect(page.locator('#mergeFlow [data-f="hubValue"]')).toHaveText('52.0');
   await expect(page.locator('#mergeFlow')).toHaveAttribute('aria-label', /Combined download speed 52\.0 Mbps/);
 });
+
+test('a Wi-Fi card names its network, and moving to another network drops the same-provider warning at once', async ({ page, fixture }) => {
+  await navigate(page, 'overview');
+  const links = (await fixture.read('state')).snap.links;
+  const same = links.map(l => ({ ...l, publicIP: '203.0.113.20', ssid: l.kind === 'wifi' ? 'Example Home' : undefined }));
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { links: same, sameIsp: same.map(l => l.label) } } }));
+  const wifi = page.locator('.lk[data-n="Wi-Fi"]');
+  await expect(wifi.locator('[data-f=desc]')).toHaveText(/^Example Home · /);
+  await expect(page.locator('#ovStatusTitle')).toContainText('look like the same provider');
+  await expect(wifi.locator('[data-f=tags]')).toContainText('Public 203.0.113.20');
+  // the Wi-Fi joins another network: NetMerge forgets its old public address and the warning goes
+  const moved = same.map(l => l.kind === 'wifi' ? { ...l, publicIP: '', ssid: 'Example Office' } : l);
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { links: moved, sameIsp: [] } } }));
+  await expect(wifi.locator('[data-f=desc]')).toHaveText(/^Example Office · /);
+  await expect(page.locator('#ovStatusTitle')).not.toContainText('same provider');
+  await expect(wifi.locator('[data-f=tags]')).toContainText('Public address…');
+  await expect(wifi.locator('[data-f=tags]')).not.toContainText('203.0.113.20');
+});

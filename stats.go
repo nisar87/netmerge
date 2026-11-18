@@ -33,10 +33,11 @@ type LinkStat struct {
 	TotalRx  uint64    `json:"totalRx"`
 	TotalTx  uint64    `json:"totalTx"`
 	PublicIP string    `json:"publicIP"`
-	Slots    int       `json:"slots"`    // of dispatchSlots: share of new connections the smart dispatcher gives it
-	UseDay   uint64    `json:"useDay"`   // bytes today
-	UseMonth uint64    `json:"useMonth"` // bytes in the current allowance period
-	QuotaOut bool      `json:"quotaOut"` // allowance used up and the connection is left out
+	SSID     string    `json:"ssid,omitempty"` // Wi-Fi network name
+	Slots    int       `json:"slots"`          // of dispatchSlots: share of new connections the smart dispatcher gives it
+	UseDay   uint64    `json:"useDay"`         // bytes today
+	UseMonth uint64    `json:"useMonth"`       // bytes in the current allowance period
+	QuotaOut bool      `json:"quotaOut"`       // allowance used up and the connection is left out
 	Role     string    `json:"role"`
 	Standby  bool      `json:"standby"` // role says it is not needed right now
 	Slow     bool      `json:"slow"`    // far slower than the best line: kept as standby, no new connections
@@ -453,7 +454,7 @@ func sample(slow bool) {
 		ls := LinkStat{Name: l.Name, Label: l.Label, Present: present, Enabled: l.Enabled, Weight: l.Weight,
 			Kind: a.Kind, Desc: a.Desc, IP: a.IP, LinkRate: a.LinkRate, Down: tr.rx, Up: tr.tx,
 			Conns: linkConns[l.Name], History: append([]float64(nil), tr.hist...), TotalRx: tr.totRx, TotalTx: tr.totTx,
-			PublicIP: publicIPs[l.Name]}
+			PublicIP: publicIPs[l.Name], SSID: a.SSID}
 		ls.UseDay, ls.UseMonth = usageSum(l.Name, s.QuotaReset)
 		ls.QuotaOut = isQuotaOut(l.Name)
 		ls.Quality = qualityFor(l.Name)

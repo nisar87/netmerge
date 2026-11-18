@@ -185,7 +185,7 @@ const MODE_ART = {
 };
 function renderConnectionMode(){
   const sn=S.snap;
-  $('#connHint').textContent = sn.links.length ? 'NetMerge looks for new connections by itself about every 10 seconds.' : 'No connections yet.';
+  $('#connHint').textContent = sn.links.length ? 'NetMerge looks for new connections by itself every few seconds.' : 'No connections yet.';
   const ms = $('#mode');
   if (document.activeElement !== ms) {
     const opts = [['fast','Combine all · fastest'], ['stable','Combine all · steady sites']].concat(local.links.map(l => ['link:'+l.name, 'Only '+l.label + (S.snap.links.find(x=>x.name===l.name)?.present === false ? ' (not connected)' : '')]));
@@ -219,7 +219,8 @@ function updateHeld(sn){
   sn.links.forEach(l => {
     const h = holdFor(l.name);
     if (l.delay) h.delay = l.delay;
-    if (l.publicIP) h.publicIP = l.publicIP;
+    // follow NetMerge: it forgets the address the moment a connection changes network, and so do we
+    h.publicIP = l.publicIP || '';
     if (l.present && Number.isFinite(l.down)) h.peak = Math.max(h.peak, l.down, ...(l.history || []));
     h.ema = h.ema*0.8 + (l.present && Number.isFinite(l.down) ? l.down : 0)*0.2;
     if (mbps(l.down) > 0.3 || mbps(l.up) > 0.3) h.activeAt = now;
@@ -318,7 +319,8 @@ function renderLinks(sn, act, P){
     const [st, sc] = statusOf({...l, enabled: ll.enabled}, run);
     f('status').textContent = st; f('status').style.setProperty('--c', sc);
     f('tog').classList.toggle('on', ll.enabled); f('tog').setAttribute('aria-checked', ll.enabled);
-    f('desc').textContent = l.present ? `${l.desc}${l.linkRate ? ' · '+l.linkRate : ''}` : 'Not connected';
+    f('desc').textContent = l.present ? `${l.ssid ? l.ssid+' · ' : ''}${l.desc}${l.linkRate ? ' · '+l.linkRate : ''}` : 'Not connected';
+    f('desc').title = l.ssid ? `Wi-Fi network: ${l.ssid}` : '';
     const h = holdFor(l.name), on = l.present && ll.enabled;
     // live figures
     f('down').textContent = l.present ? fmtM(l.down) : '—';

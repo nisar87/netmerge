@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.22.2
+
+- **The same-provider warning follows a network change within seconds.** Before, a line's public address was only looked up again every 5 minutes, so after moving a line to another provider the warning stayed. Now NetMerge notices a connection that joins another network (other router, other address or other Wi-Fi network) within about 3 seconds, forgets its old public address, and looks it up again at once. The warning goes as soon as the old address is forgotten, and comes back only if the new reading matches again. Lines are now looked up at the same time instead of one after another.
+- **Wi-Fi network name on Overview.** A Wi-Fi card shows the network it is on ("Home · Intel Wi-Fi 6 · 866 Mbps"). Windows 11 24H2 and later only share the name with apps allowed to use location; without that, the name is left out and the log says why once.
+- New connections are found every few seconds instead of every 10.
+
 ## 3.22.1
 
 - **Switching an app's line is quicker.** Choosing a rule in Apps, or switching a line off, is now saved immediately instead of after a short pause. Applying it no longer reads the block lists again: a list that has not changed is reused, so a change takes milliseconds even with ad blocking on. The app's open connections are closed right after, so it reconnects on the new line straight away. The log records how long each move took.

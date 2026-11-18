@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+// wifiNames: Windows only; the stubs below set SSID themselves.
+func wifiNames() map[string]string { return nil }
+
 func listAdapters() ([]Adapter, error) {
 	if os.Getenv("NM_STUB_LOOPBACK") != "" { // development only: two lines on the loopback, for testing end to end
 		return []Adapter{
