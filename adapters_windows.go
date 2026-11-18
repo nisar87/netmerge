@@ -16,7 +16,7 @@ var pGetAdaptersAddresses = iphlpapi.NewProc("GetAdaptersAddresses")
 // (GetAdaptersAddresses: about a millisecond). The PowerShell scan it replaces took seconds and sometimes
 // failed ("adapter scan failed: exit status 0xffff0000" in real logs).
 // IP_ADAPTER_ADDRESSES_LH offsets (64-bit): IfIndex 4, Next 8, FirstUnicastAddress 24, Description 64,
-// FriendlyName 72, OperStatus 104, TransmitLinkSpeed 184, FirstGatewayAddress 208.
+// AdapterName 16 ("{GUID}"), FriendlyName 72, OperStatus 104, TransmitLinkSpeed 184, FirstGatewayAddress 208.
 func listAdaptersAPI() ([]Adapter, error) {
 	const flags = 0x80 | 0x2 | 0x4 | 0x8 // include gateways; skip anycast, multicast, DNS servers
 	size := uint32(32 << 10)
@@ -49,6 +49,7 @@ func listAdaptersAPI() ([]Adapter, error) {
 			Name: utf16At(*(*unsafe.Pointer)(unsafe.Add(p, 72))), Index: int(*(*uint32)(unsafe.Add(p, 4))),
 			Desc: utf16At(*(*unsafe.Pointer)(unsafe.Add(p, 64))), IP: ip.String(), Gateway: gw.String(),
 			LinkRate: linkRateText(*(*uint64)(unsafe.Add(p, 184))), Up: true,
+			GUID: ansiAt(*(*unsafe.Pointer)(unsafe.Add(p, 16))),
 		})
 	}
 	return out, nil
@@ -89,4 +90,15 @@ func linkRateText(bps uint64) string {
 	default:
 		return strconv.FormatFloat(float64(bps)/1e3, 'f', 1, 64) + " Kbps"
 	}
+}
+
+func ansiAt(p unsafe.Pointer) string {
+	if p == nil {
+		return ""
+	}
+	n := 0
+	for *(*byte)(unsafe.Add(p, n)) != 0 && n < 256 {
+		n++
+	}
+	return string(unsafe.Slice((*byte)(p), n))
 }

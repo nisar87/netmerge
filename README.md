@@ -29,7 +29,8 @@ More pages (connections, speed test, apps, sharing, settings, narrow window) are
 - **Share with your phone.** Scan a QR code with a free app (Hiddify, v2rayNG, Streisand, Shadowrocket) and the phone uses the merged connection too. Connected devices are listed and can be named.
 - **Ad and tracker blocking** with downloadable filter lists.
 - **Link roles.** Use a line always, only when the others are busy, or only as a backup (for example a phone hotspot with limited data).
-- **Same-provider warning.** If two lines leave through the same public address, NetMerge tells you merging cannot add speed.
+- **Same-provider warning.** If two lines leave through the same public address, NetMerge tells you merging cannot add speed. When a line moves to another network, NetMerge checks again within a few seconds, so the warning disappears as soon as the lines really are different.
+- **Wi-Fi network name.** Each Wi-Fi card on Overview shows the name of the network it is on. On Windows 11 24H2 and later, Windows only gives this name to apps that may use location (Settings › Privacy & security › Location, "Let desktop apps access your location"); with that off, the card simply leaves the name out.
 - **Diagnostics export.** One click saves the logs, settings (without passwords) and a summary.
 - **Quality score, activity log and 24-hour graph.** See how steady each line is and what NetMerge changed.
 - **Calls protection.** Meeting apps use one steady line; with Smart balancing, new downloads go mostly to the other lines during a call.

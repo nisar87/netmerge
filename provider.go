@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync"
 	"time"
 )
 
@@ -8,11 +9,35 @@ import (
 // two Wi-Fi networks from one router), so merging them cannot add speed. We look up each line's public
 // address in the background and warn about it.
 
+// providerKick asks for a lookup now (a connection changed network); otherwise we look every 5 minutes.
+var providerKick = make(chan struct{}, 1)
+
 func providerLoop() {
-	time.Sleep(20 * time.Second)
+	select {
+	case <-time.After(20 * time.Second):
+	case <-providerKick:
+	}
 	for {
 		refreshPublicIPs()
-		time.Sleep(5 * time.Minute)
+		select {
+		case <-time.After(5 * time.Minute):
+		case <-providerKick:
+			time.Sleep(2 * time.Second) // let the new network settle (address, DNS)
+		}
+	}
+}
+
+// recheckProviders forgets the public address of connections that changed network, so the same-provider
+// warning does not stand on an old reading, and looks them up again at once.
+func recheckProviders(names []string) {
+	statsMu.Lock()
+	for _, n := range names {
+		delete(publicIPs, n)
+	}
+	statsMu.Unlock()
+	select {
+	case providerKick <- struct{}{}:
+	default:
 	}
 }
 
@@ -25,17 +50,23 @@ func refreshPublicIPs() {
 	for _, a := range getAdapters(false) {
 		present[a.Name] = a
 	}
+	var wg sync.WaitGroup
 	for _, l := range s.Links {
 		a, ok := present[l.Name]
 		if !l.Enabled || !ok {
 			continue
 		}
-		if ip := publicIP(&a); ip != "" {
-			statsMu.Lock()
-			publicIPs[l.Name] = ip
-			statsMu.Unlock()
-		}
+		wg.Add(1)
+		go func(name string, a Adapter) {
+			defer wg.Done()
+			if ip := publicIP(&a); ip != "" {
+				statsMu.Lock()
+				publicIPs[name] = ip
+				statsMu.Unlock()
+			}
+		}(l.Name, a)
 	}
+	wg.Wait()
 }
 
 // sameProviderLines returns the labels of enabled lines that share one public address (empty if all differ).

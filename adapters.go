@@ -17,6 +17,8 @@ type Adapter struct {
 	Kind     string `json:"kind"` // ethernet | wifi | mobile
 	LinkRate string `json:"linkRate"`
 	Up       bool   `json:"up"`
+	GUID     string `json:"-"`    // Windows adapter id ("{…}"), to match Wi-Fi interfaces
+	SSID     string `json:"ssid"` // Wi-Fi network name, when Windows tells us
 }
 
 var (
@@ -62,7 +64,7 @@ var adapterRefreshing bool
 // so unless force is set it never blocks: stale data is returned and refreshed in the background.
 func getAdapters(force bool) []Adapter {
 	adaptersMu.Lock()
-	cache, fresh := adapterCache, time.Since(adapterAt) < 10*time.Second
+	cache, fresh := adapterCache, time.Since(adapterAt) < 3*time.Second // the scan takes about a millisecond
 	if !force && cache != nil {
 		if !fresh && !adapterRefreshing {
 			adapterRefreshing = true
@@ -92,7 +94,18 @@ func refreshAdapters() []Adapter {
 		a.Kind = kindOf(a.Name, a.Desc)
 		out = append(out, a)
 	}
+	if hasWifi(out) {
+		names := wifiNames()
+		for i := range out {
+			if out[i].Kind == "wifi" {
+				out[i].SSID = names[strings.ToLower(out[i].GUID)]
+			}
+		}
+	}
 	logAdapterChanges(adapterCache, out, adapterAt.IsZero())
+	if moved := changedNetworks(adapterCache, out); len(moved) > 0 && !adapterAt.IsZero() {
+		go recheckProviders(moved)
+	}
 	adapterCache, adapterAt = out, time.Now()
 	return out
 }
@@ -121,6 +134,8 @@ func logAdapterChanges(before, now []Adapter, first bool) {
 			logf("connection appeared: %s", desc(a))
 		case o.Gateway != a.Gateway:
 			logf("connection changed network: %s (was gateway %s)", desc(a), maskIP(o.Gateway))
+		case o.SSID != a.SSID || o.IP != a.IP:
+			logf("connection changed network: %s (Wi-Fi network or address changed)", desc(a))
 		}
 		delete(old, a.Name)
 	}
@@ -136,4 +151,29 @@ func adapterByName(name string) (Adapter, bool) {
 		}
 	}
 	return Adapter{}, false
+}
+
+func hasWifi(list []Adapter) bool {
+	for _, a := range list {
+		if a.Kind == "wifi" {
+			return true
+		}
+	}
+	return false
+}
+
+// changedNetworks lists the connections that are new or now reach the internet another way (other gateway, other
+// address or other Wi-Fi network). Their public address must be looked up again.
+func changedNetworks(before, now []Adapter) []string {
+	old := map[string]Adapter{}
+	for _, a := range before {
+		old[a.Name] = a
+	}
+	var out []string
+	for _, a := range now {
+		if o, ok := old[a.Name]; !ok || o.Gateway != a.Gateway || o.IP != a.IP || o.SSID != a.SSID {
+			out = append(out, a.Name)
+		}
+	}
+	return out
 }
