@@ -139,9 +139,6 @@
 .us-bar:hover .us-hit{fill:color-mix(in srgb,var(--accent) 7%,transparent)}
 .us-bar.today .us-hit{fill:color-mix(in srgb,var(--accent) 5%,transparent)}
 .us-daily .scrollbox{border:1px solid var(--line);border-radius:12px}
-#usFix{margin-top:0}
-#usFix>summary{list-style:none;display:flex;align-items:center;gap:8px}
-#usFix>summary::before{content:"✎";display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--raised);color:var(--muted);font-size:13px}
 
 /* ---------- tables ---------- */
 .tbl th{font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);background:color-mix(in srgb,var(--canvas) 70%,var(--surface))}

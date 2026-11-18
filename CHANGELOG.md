@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.22.3
+
+- **Removed "Correct a wrong number" from Usage.** It was added so people could repair days that an old counting bug (3.11.17 and earlier) had inflated by about 4 GB. That bug is fixed and guarded: impossible counter jumps are thrown away, counters read across sleep are not trusted, and 64-bit counters are used. Each guard has its own test. The page no longer has a form for typing figures in, and the usage API is now read-only. The usage already recorded is not changed.
+
 ## 3.22.2
 
 - **The same-provider warning follows a network change within seconds.** Before, a line's public address was only looked up again every 5 minutes, so after moving a line to another provider the warning stayed. Now NetMerge notices a connection that joins another network (other router, other address or other Wi-Fi network) within about 3 seconds, forgets its old public address, and looks it up again at once. The warning goes as soon as the old address is forgotten, and comes back only if the new reading matches again. Lines are now looked up at the same time instead of one after another.

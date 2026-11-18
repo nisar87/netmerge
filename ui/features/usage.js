@@ -89,21 +89,6 @@ function renderUsage(){
     $('#qAct').onchange = e => { local.quotaAction = e.target.value; saveSoon('Saved'); setTimeout(loadUsage, 900); };
   }
   q.querySelectorAll('input[data-n]').forEach(inp => { if (document.activeElement !== inp){ const l = local.links.find(x => x.name === inp.dataset.n); inp.value = l && l.quotaGB > 0 ? l.quotaGB : ''; } });
-  // correction tool: the lists are rebuilt only when the connections or days change, so nothing a person is typing is lost
-  { const fl = $('#fxLink'), fd = $('#fxDay'), k = local.links.map(l=>l.name).join('|') + '#' + U.days.map(d=>d.date).join('|');
-    if (fl.dataset.keys !== k){
-      fl.dataset.keys = k;
-      fl.innerHTML = local.links.map(l => `<option value="${esc(l.name)}">${esc(l.label)}</option>`).join('');
-      fd.innerHTML = U.days.map(d => `<option value="${esc(d.date)}">${esc(dayText(d.date, true))}</option>`).join('');
-      const fill = () => { const d = U.days.find(x => x.date === fd.value), v = (d && d.links && d.links[fl.value]) || [0,0]; $('#fxDown').value = Math.round(v[0]/1e6); $('#fxUp').value = Math.round(v[1]/1e6); $('#fxSave').disabled = !fl.value || !fd.value; };
-      fl.onchange = fd.onchange = fill; fill();
-      $('#fxSave').onclick = async () => {
-        if (!fl.value || !fd.value || !$('#fxDown').reportValidity() || !$('#fxUp').reportValidity()) return;
-        try { await api('usage', {action:'set', link: fl.value, day: fd.value, downMB: +$('#fxDown').value || 0, upMB: +$('#fxUp').value || 0}); toast('Number corrected'); loadUsage(); }
-        catch(e){ toast(e.message, true); }
-      };
-    }
-  }
   if (document.activeElement !== $('#qReset')) $('#qReset').value = local.quotaReset || 1;
   if (document.activeElement !== $('#qAct')) $('#qAct').value = local.quotaAction || 'warn';
 }
