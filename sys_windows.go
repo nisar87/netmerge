@@ -307,7 +307,8 @@ $ErrorActionPreference = 'Stop'
 $log = Join-Path (Split-Path $Cur) 'data\update.log'
 function Note($m) { try { Add-Content -Path $log -Value ((Get-Date -Format 'HH:mm:ss') + ' ' + $m) } catch {} }
 Note "waiting for NetMerge (process $ProcId) to close"
-try { Wait-Process -Id $ProcId -Timeout 40 } catch { Note "it did not close in 40 s: $($_.Exception.Message)" }
+# Wait-Process also fails when the process has already gone; only a process still there did not close
+try { Wait-Process -Id $ProcId -Timeout 40 } catch { if (Get-Process -Id $ProcId -ErrorAction SilentlyContinue) { Note "it did not close in 40 s: $($_.Exception.Message)" } else { Note "it has closed" } }
 # an engine still running from this program (NetMerge.exe -engine) or from the old core folder holds the file
 $core = Join-Path (Split-Path $Cur) 'core'
 try { Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.Path -eq $Cur -or $_.Path.StartsWith($core + '\', 'OrdinalIgnoreCase')) } | Stop-Process -Force } catch { Note "could not stop a running copy: $($_.Exception.Message)" }

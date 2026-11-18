@@ -14,7 +14,7 @@ function renderUpdate(){
       <button class="btn primary" id="updGo" ${busy?'disabled':''}>${UP.status==='downloading' ? 'Downloading '+UP.progress+'%' : UP.status==='installing' ? 'Restarting…' : 'Update now'}</button></div>`;
   }
   setHTML($('#updBanner'), b);
-  const g = $('#updGo'); if (g) g.onclick = async () => { try { UP = await api('update',{action:'install'}); renderUpdate(); toast('Downloading the update…'); } catch(e){ toast(e.message, true); } };
+  const g = $('#updGo'); if (g) g.onclick = async () => { g.disabled = true; try { UP = await api('update',{action:'install'}); renderUpdate(); toast('Downloading the update…'); } catch(e){ g.disabled = false; toast(e.message, true); } };
   $('#appVer').textContent = 'v'+UP.current;
   $('#updInfo').textContent = UP.status === 'checking' ? 'Checking…' : UP.error ? UP.error : UP.available ? `Version ${UP.latest} is available.` : UP.checked ? `You have the latest version. Checked ${updAgo(UP.checked)}.` : 'Not checked yet.';
   $('#updCheck').disabled = busy;

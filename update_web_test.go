@@ -35,3 +35,29 @@ func TestUpdateCheckFallsBackToReleasePage(t *testing.T) {
 		t.Fatalf("asset %q sha %q", upd.asset, upd.sha)
 	}
 }
+
+// A second "Update now" while the first is still downloading or installing is answered as fine, not with
+// "there is no update to install".
+func TestSecondInstallWhileUnderWayIsNotAnError(t *testing.T) {
+	updMu.Lock()
+	saved := upd
+	updMu.Unlock()
+	defer func() { updMu.Lock(); upd = saved; updMu.Unlock() }()
+	for _, st := range []string{"downloading", "installing"} {
+		updMu.Lock()
+		upd = UpdateState{Status: st, Available: false}
+		updMu.Unlock()
+		if err := installUpdate(); err != nil {
+			t.Fatalf("status %s: %v", st, err)
+		}
+		if got := updateSnapshot().Status; got != st {
+			t.Fatalf("status changed from %s to %s", st, got)
+		}
+	}
+	updMu.Lock()
+	upd = UpdateState{Status: "idle", Available: false}
+	updMu.Unlock()
+	if err := installUpdate(); err == nil {
+		t.Fatal("with no update available, install should still say so")
+	}
+}

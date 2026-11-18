@@ -207,3 +207,14 @@ test('update progress preserves the release-notes disclosure and keyboard focus'
   await expect(page.locator('#updBanner summary')).toBeFocused();
   await expect(page.locator('#updGo')).toContainText('6%');
 });
+
+test('update now cannot be pressed twice while the first press is still being answered', async ({ page, fixture }) => {
+  await fixture.patch({ update: { available: true, status: 'idle', progress: 0, latest: '0.1.0-fixture' } });
+  await openFeature(page, 'settings/maintenance', '#updGo');
+  await fixture.fault({ path: '/api/update', method: 'POST', delayMs: 700, times: 1 });
+  const answered = postResponse(page, 'update');
+  await page.locator('#updGo').click();
+  expect(await page.locator('#updGo').evaluate(b => b.disabled)).toBe(true);
+  await answered;
+  await expect(page.locator('#updGo')).toContainText('Restarting');
+});
