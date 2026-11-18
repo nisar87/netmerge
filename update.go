@@ -267,6 +267,13 @@ func okDownloadHost(raw string) bool {
 // installUpdate downloads the new NetMerge.exe, verifies it and hands over to the updater script.
 func installUpdate() error {
 	updMu.Lock()
+	if upd.Status == "downloading" || upd.Status == "installing" {
+		// a second "Update now" (a double click, or a click before the window caught up) is not an error:
+		// the update it asks for is already under way
+		updMu.Unlock()
+		logf("update already under way (%s); a second request to install it was left alone", upd.Status)
+		return nil
+	}
 	if !upd.Available || upd.Status != "idle" {
 		updMu.Unlock()
 		return fmt.Errorf("there is no update to install")
