@@ -2,7 +2,7 @@ let hidTick=0,bootApp='',pollInFlight=null,lastStateAt=0;
 function safeToReload(){
   if(settingsIntent.length||document.querySelector('dialog[open]')||document.querySelector('[data-dirty="1"]'))return false;
   // text typed on other pages and not saved yet
-  if((typeof dnsDirty!=='undefined'&&dnsDirty)||(typeof prNameDraft!=='undefined'&&prNameDraft)||(typeof prScheduleDirty!=='undefined'&&prScheduleDirty.size)||(typeof shEdit!=='undefined'&&shEdit)||document.querySelector('#usFix[open]'))return false;
+  if((typeof dnsDirty!=='undefined'&&dnsDirty)||(typeof prNameDraft!=='undefined'&&prNameDraft)||(typeof prScheduleDirty!=='undefined'&&prScheduleDirty.size)||(typeof shEdit!=='undefined'&&shEdit))return false;
   const a=document.activeElement;
   return !(a&&(a.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)));
 }

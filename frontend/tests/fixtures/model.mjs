@@ -169,18 +169,6 @@ export function createModel(scenario = 'default') {
           data.state.snap.running = body.on; break;
         case '/api/settings': mergeSettings(body); break;
         case '/api/rescan': break;
-        case '/api/usage': {
-          if (body.action !== 'set' || ![body.downMB, body.upMB].every(n => Number.isFinite(n) && n >= 0 && n <= 1e7)) fail('bad request');
-          const link = data.usage.links?.find(l => l.name === body.link), day = data.usage.days?.find(d => d.date === body.day);
-          if (!link || !day) fail('Choose a known connection and day');
-          day.links ||= {};
-          const old = day.links[body.link] || [0, 0], next = [Math.trunc(body.downMB * 1e6), Math.trunc(body.upMB * 1e6)];
-          day.links[body.link] = next;
-          if (day.date >= data.usage.start && day.date < data.usage.end) {
-            link.rx += next[0] - old[0]; link.tx += next[1] - old[1]; link.used = link.rx + link.tx;
-          }
-          sync(); return data.usage;
-        }
         case '/api/speedtest':
           speedReads = 2; Object.assign(data.state.test, { running: true, phase: 'Testing fixture connections', progress: 0.5, live: 48 }); break;
         case '/api/applyweights':
