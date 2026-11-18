@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.22.4
+
+- **Pressing "Update now" twice no longer shows an error.** A second press while the update was still downloading used to say "there is no update to install". The button now turns grey as soon as you press it, and a second press is simply ignored while the update is under way.
+- The update log no longer says NetMerge "did not close" when it had in fact already closed.
+
 ## 3.22.3
 
 - **Removed "Correct a wrong number" from Usage.** It was added so people could repair days that an old counting bug (3.11.17 and earlier) had inflated by about 4 GB. That bug is fixed and guarded: impossible counter jumps are thrown away, counters read across sleep are not trusted, and 64-bit counters are used. Each guard has its own test. The page no longer has a form for typing figures in, and the usage API is now read-only. The usage already recorded is not changed.
