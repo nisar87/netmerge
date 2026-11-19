@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.22.5
+
+- **No false crash report when Windows shuts down.** When you shut down or restart Windows, Windows can close NetMerge's network engine a moment before it tells NetMerge it is shutting down. NetMerge took that as a crash: it showed "The network engine stopped unexpectedly", sent a crash report and tried to restart the engine. Now it waits a few seconds for Windows to confirm the shutdown and writes a plain note to the log instead. A real crash is still reported.
+
 ## 3.22.4
 
 - **Pressing "Update now" twice no longer shows an error.** A second press while the update was still downloading used to say "there is no update to install". The button now turns grey as soon as you press it, and a second press is simply ignored while the update is under way.
