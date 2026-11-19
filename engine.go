@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -270,6 +271,10 @@ func (e *Engine) watch(cmd *exec.Cmd, exited chan error) {
 		e.running, e.cmd = false, nil
 	}
 	e.mu.Unlock()
+	if current && endedWithSession(exitCode(err), 5*time.Second) {
+		logf("the network engine was closed by Windows as the session ends (%v); not a crash", err)
+		return
+	}
 	if current {
 		raw := engineCrashText()
 		logf("CRASH: the network engine stopped unexpectedly (%v)", err)
@@ -277,6 +282,43 @@ func (e *Engine) watch(cmd *exec.Cmd, exited chan error) {
 		note("bad", "The network engine stopped unexpectedly. NetMerge is restarting it.")
 		e.restartAfter(fmt.Sprintf("engine exited unexpectedly (%v)", err))
 	}
+}
+
+// dbgTerminateProcess is the exit code Windows gives a console program it closes because the session is ending
+// (shut down, restart or signing out).
+const dbgTerminateProcess = 0x40010004
+
+func exitCode(err error) int {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return ee.ExitCode()
+	}
+	return -1
+}
+
+func sessionIsEnding() bool {
+	runMu.Lock()
+	defer runMu.Unlock()
+	return runEnding != ""
+}
+
+// endedWithSession reports whether the engine stopped because Windows is ending the session, not because it
+// crashed. Windows can close the engine a moment before it tells NetMerge the session is ending, so for its
+// session-end exit code this waits up to wait for that word.
+func endedWithSession(code int, wait time.Duration) bool {
+	if sessionIsEnding() {
+		return true
+	}
+	if uint32(code) != dbgTerminateProcess {
+		return false
+	}
+	for deadline := time.Now().Add(wait); time.Now().Before(deadline); {
+		time.Sleep(50 * time.Millisecond)
+		if sessionIsEnding() {
+			return true
+		}
+	}
+	return false
 }
 
 // restartAfter restarts a dead engine, but gives up (and restores normal internet) if it keeps dying.
