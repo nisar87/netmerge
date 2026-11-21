@@ -172,6 +172,7 @@ var (
 	runMu      sync.Mutex
 	runAsleep  bool
 	runEnding  string
+	runPowerAt time.Time // when Windows last said the PC is going to sleep or has woken
 )
 
 func touchRunMarker() {
@@ -189,6 +190,7 @@ func powerSleep(on bool) {
 	runMu.Lock()
 	changed := runAsleep != on
 	runAsleep = on
+	runPowerAt = time.Now()
 	runMu.Unlock()
 	if !changed {
 		return

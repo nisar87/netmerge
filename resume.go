@@ -12,6 +12,26 @@ const resumeGap = 20 * time.Second
 
 func resumeDetected(last, now time.Time) bool { return !last.IsZero() && now.Sub(last) > resumeGap }
 
+// resumeSureGap: a pause this long is taken as sleep even when Windows sent no power notice.
+const resumeSureGap = 2 * time.Minute
+
+// wokeFromSleep tells a real wake from NetMerge itself being held up. last is when the previous sample ended.
+// A pause of 20 s to 2 min counts as sleep only when Windows said the PC went to sleep or woke around it;
+// otherwise reloading the engine would cut every connection for nothing (and could hold the next sample up
+// again, reloading over and over).
+func wokeFromSleep(last, now time.Time) bool {
+	if !resumeDetected(last, now) {
+		return false
+	}
+	if now.Sub(last) >= resumeSureGap {
+		return true
+	}
+	runMu.Lock()
+	asleep, at := runAsleep, runPowerAt
+	runMu.Unlock()
+	return asleep || (!at.IsZero() && at.After(last.Add(-resumeGap)))
+}
+
 func onResume() {
 	note("info", "The PC woke up - checking the connections again")
 	logf("resume from sleep detected")

@@ -133,12 +133,14 @@ func statsLoop() {
 	var last time.Time
 	for range t.C {
 		sampleClock.step("waiting for the next tick", time.Now())
-		if now := time.Now(); resumeDetected(last, now) {
+		if now := time.Now(); wokeFromSleep(last, now) {
 			onResume()
 			sampleClock.step("handling the wake from sleep", time.Now())
+		} else if resumeDetected(last, now) {
+			logf("the sampler did not run for %.0f s but the PC did not sleep - not reloading the engine", now.Sub(last).Seconds())
 		}
-		last = time.Now()
 		safely("sampler", func() { sample(n%5 == 0) })
+		last = time.Now() // after the sample: a slow sample is not a sleep
 		if n%5 == 0 && checkBusy.CompareAndSwap(false, true) {
 			// the engine check can wait seconds (an engine that does not answer, a restart): it runs beside the
 			// sampler, so the speeds keep updating every second meanwhile
