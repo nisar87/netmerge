@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.22.6
+
+- **No more needless reconnects when the PC is busy.** If NetMerge was held up for 20 seconds or more (for example while the PC was very busy), it thought the PC had just woken from sleep and restarted its network engine, which briefly cut every download and call. This could happen several times in a few minutes. Now NetMerge only does this when Windows says the PC actually slept, or after a pause of several minutes. Waking from real sleep works as before.
+
 ## 3.22.5
 
 - **No false crash report when Windows shuts down.** When you shut down or restart Windows, Windows can close NetMerge's network engine a moment before it tells NetMerge it is shutting down. NetMerge took that as a crash: it showed "The network engine stopped unexpectedly", sent a crash report and tried to restart the engine. Now it waits a few seconds for Windows to confirm the shutdown and writes a plain note to the log instead. A real crash is still reported.
