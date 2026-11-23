@@ -79,11 +79,10 @@ func reportLoop() {
 	tick := time.NewTicker(time.Hour)
 	defer tick.Stop()
 	for {
-		st := loadReportState()
-		_, crashErr := os.Stat(dataPath("crash.txt"))
-		due := time.Since(time.Unix(st.LastSent, 0)) >= reportEvery
-		if reportsOn() && (crashErr == nil || due) {
-			sendReport()
+		if reportsOn() {
+			if why := reportReason(loadReportState(), time.Now()); why != "" {
+				sendReport(why)
+			}
 		}
 		select {
 		case <-tick.C:
@@ -93,8 +92,32 @@ func reportLoop() {
 	}
 }
 
-// sendReport sends one report now; it returns the answer's status code (0 when it could not be sent).
-func sendReport() int {
+// reportReason tells why a report is due now, or "" when none is. A crash report waits in crash.txt; an empty
+// crash.txt holds nothing to send, so it is removed instead of making a report go out every hour.
+func reportReason(st reportState, now time.Time) string {
+	p := dataPath("crash.txt")
+	if fi, err := os.Stat(p); err == nil {
+		if fi.Size() > 0 {
+			return fmt.Sprintf("a crash report is waiting (%d bytes)", fi.Size())
+		}
+		_ = logErr("remove an empty crash.txt", os.Remove(p))
+	}
+	if st.LastSent == 0 {
+		return "first report"
+	}
+	last := time.Unix(st.LastSent, 0)
+	switch ago := now.Sub(last); {
+	case ago >= reportEvery:
+		return "last report " + ago.Round(time.Minute).String() + " ago"
+	case ago < -time.Hour:
+		return "the last report is dated " + (-ago).Round(time.Minute).String() + " ahead: the clock went back"
+	}
+	return ""
+}
+
+// sendReport sends one report now (why: the reason, for the log); it returns the answer's status code (0 when it
+// could not be sent).
+func sendReport(why string) int {
 	reportMu.Lock()
 	defer reportMu.Unlock()
 	if !reportsOn() {
@@ -102,7 +125,10 @@ func sendReport() int {
 	}
 	st := loadReportState()
 	logText, upTo := logSince(st.SentUpTo)
-	crash, _ := os.ReadFile(dataPath("crash.txt"))
+	crash, err := os.ReadFile(dataPath("crash.txt"))
+	if err != nil && !os.IsNotExist(err) {
+		logErr("read crash.txt", err)
+	}
 	kind := "log"
 	if len(crash) > 0 {
 		kind = "crash"
@@ -118,14 +144,18 @@ func sendReport() int {
 		return code
 	}
 	if len(crash) > 0 {
-		_ = os.Remove(dataPath("crash.txt"))
+		_ = logErr("remove crash.txt after its report was sent", os.Remove(dataPath("crash.txt")))
 	}
 	st.LastSent, st.Fails = time.Now().Unix(), 0
 	if upTo != "" {
 		st.SentUpTo = upTo
 	}
 	saveReportState(st)
-	logf("diagnostics report sent (%s, %d characters of log)", kind, len(logText))
+	if back := loadReportState(); back.LastSent != st.LastSent || back.Install != st.Install {
+		logf("problem: report.json did not keep the last report (read back install changed %v, last sent %d, want %d)",
+			back.Install != st.Install, back.LastSent, st.LastSent)
+	}
+	logf("diagnostics report sent (%s, %d characters of log; %s)", kind, len(logText), why)
 	return code
 }
 
