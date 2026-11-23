@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.22.7
+
+- **Diagnostics reports go out every 6 hours as intended.** On at least one PC, NetMerge sent its diagnostics report every hour instead. Each report now records why it was sent, and NetMerge notes in its log if it cannot keep track of when it last sent one, so the cause can be found. An empty leftover crash file, which could also cause hourly reports, is now cleared. Nothing changes in what a report contains.
+
 ## 3.22.6
 
 - **No more needless reconnects when the PC is busy.** If NetMerge was held up for 20 seconds or more (for example while the PC was very busy), it thought the PC had just woken from sleep and restarted its network engine, which briefly cut every download and call. This could happen several times in a few minutes. Now NetMerge only does this when Windows says the PC actually slept, or after a pause of several minutes. Waking from real sleep works as before.
