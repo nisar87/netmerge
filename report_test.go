@@ -110,7 +110,7 @@ func TestSendReportSendsTheNewLogOnceAndTheCrash(t *testing.T) {
 	reportURL = srv.URL
 	defer func() { reportURL = oldURL }()
 
-	if code := sendReport(); code != 200 {
+	if code := sendReport("test"); code != 200 {
 		t.Fatalf("answer %d", code)
 	}
 	r := got[0]
@@ -124,13 +124,13 @@ func TestSendReportSendsTheNewLogOnceAndTheCrash(t *testing.T) {
 		t.Fatal("crash.txt should be gone once sent")
 	}
 	// the next report starts after what was sent (the "report sent" line itself is new)
-	sendReport()
+	sendReport("test")
 	if l := got[1]["log"]["stringValue"]; strings.Contains(l, "first") || got[1]["kind"]["stringValue"] != "log" {
 		t.Fatalf("second report repeats the log or is not a log report: %v", got[1])
 	}
 	// turned off: nothing is sent
 	updateSettings(func(s *Settings) { s.NoDiagnostics = true })
-	if sendReport() != 0 || len(got) != 2 {
+	if sendReport("test") != 0 || len(got) != 2 {
 		t.Fatal("a report was sent with diagnostics off")
 	}
 }
@@ -232,5 +232,41 @@ func TestEngineSummaryNamesTheEngineVersion(t *testing.T) {
 	defer func() { engine.mu.Lock(); engine.version, engine.lastError = oldV, oldE; engine.mu.Unlock() }()
 	if s := engineSummary(); !strings.HasPrefix(s, "engine=nmengine-9.9.9 ") {
 		t.Fatalf("summary: %s", s)
+	}
+}
+
+func TestReportReasonSendsEvery6HoursOrForACrash(t *testing.T) {
+	old := rootDir
+	rootDir = t.TempDir()
+	defer func() { rootDir = old }()
+	_ = os.MkdirAll(filepath.Join(rootDir, "data"), 0o755)
+	now := time.Now()
+	sent := func(ago time.Duration) reportState { return reportState{Install: "x", LastSent: now.Add(-ago).Unix()} }
+
+	if why := reportReason(reportState{Install: "x"}, now); why != "first report" {
+		t.Fatalf("never sent: %q", why)
+	}
+	for _, ago := range []time.Duration{0, time.Hour, 3 * time.Hour, 5*time.Hour + 59*time.Minute, -30 * time.Minute} {
+		if why := reportReason(sent(ago), now); why != "" {
+			t.Fatalf("sent %v ago: due (%q)", ago, why)
+		}
+	}
+	if why := reportReason(sent(6*time.Hour), now); !strings.Contains(why, "6h0m0s ago") {
+		t.Fatalf("6 hours: %q", why)
+	}
+	if why := reportReason(sent(-3*time.Hour), now); !strings.Contains(why, "clock went back") {
+		t.Fatalf("dated ahead: %q", why)
+	}
+	// an empty crash.txt holds nothing: it is removed, and does not make a report due every hour
+	_ = os.WriteFile(dataPath("crash.txt"), nil, 0o644)
+	if why := reportReason(sent(time.Hour), now); why != "" {
+		t.Fatalf("empty crash.txt: due (%q)", why)
+	}
+	if _, err := os.Stat(dataPath("crash.txt")); err == nil {
+		t.Fatal("an empty crash.txt should be removed")
+	}
+	_ = os.WriteFile(dataPath("crash.txt"), []byte("panic: boom"), 0o644)
+	if why := reportReason(sent(time.Hour), now); !strings.Contains(why, "crash report is waiting") {
+		t.Fatalf("crash waiting: %q", why)
 	}
 }
