@@ -11,10 +11,15 @@ import (
 // lines (counting them) when that writer is far behind instead of waiting.
 func TestKeepRateDoesNotWaitForTheDisk(t *testing.T) {
 	release := make(chan struct{})
+	entered := make(chan struct{}, 1)
 	var mu sync.Mutex
 	var written []string
 	old := rateWrite
 	rateWrite = func(s string) {
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
 		<-release // the disk is stuck
 		mu.Lock()
 		written = append(written, strings.Split(s, "\n")...)
@@ -22,6 +27,13 @@ func TestKeepRateDoesNotWaitForTheDisk(t *testing.T) {
 	}
 	defer func() { rateWrite = old }()
 
+	// the writer takes a first line and gets stuck on the disk; only then does the flood come
+	keepRate("first", true)
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the rates.log writer never started")
+	}
 	start := time.Now()
 	for i := 0; i < 2000; i++ {
 		keepRate("rate line", true)
