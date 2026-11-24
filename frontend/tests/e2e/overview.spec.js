@@ -215,3 +215,16 @@ test('a Wi-Fi card names its network, and moving to another network drops the sa
   await expect(wifi.locator('[data-f=tags]')).toContainText('Public address…');
   await expect(wifi.locator('[data-f=tags]')).not.toContainText('203.0.113.20');
 });
+
+test('a disconnected line does not hide the same-provider warning, and the cards say it too', async ({ page, fixture }) => {
+  await navigate(page, 'overview');
+  const links = (await fixture.read('state')).snap.links;
+  const same = links.map(l => ({ ...l, publicIP: '203.0.113.20' }));
+  const old = { ...links[0], name: 'Ethernet 6', label: 'Ethernet 6', present: false, enabled: true, publicIP: '' };
+  const labels = same.map(l => l.label);
+  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { links: [...same, old], sameIsp: labels } } }));
+  await expect(page.locator('#ovStatusTitle')).toContainText('look like the same provider');
+  await expect(page.locator('#statusLine')).toContainText('Also: Ethernet 6 is disconnected');
+  const first = page.locator(`.lk[data-n="${same[0].name}"] [data-f=tags]`);
+  await expect(first).toContainText(`Same provider as ${labels.slice(1).join(', ')}`);
+});

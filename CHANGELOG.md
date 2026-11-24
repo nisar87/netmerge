@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.22.11
+
+- **The same-provider warning can no longer be hidden.** NetMerge did detect two lines with the same public address, but the Overview headline shows one message only. A line that is not plugged in (for example an old phone-tethering adapter that is still in the list) took that place, so the warning was never seen. Now:
+  - The headline puts the problems that matter most first: a line without internet, then the same provider, then used-up allowance, then a line that is not connected. Any other problems are named underneath ("Also: …").
+  - Each card of those lines carries a "Same provider as …" tag.
+  - Activity (and the log) records when lines start, and stop, sharing one public address.
+
 ## 3.22.10
 
 The same kind of failover as 3.22.9 gave the VPN, everywhere a line is pinned:
