@@ -60,6 +60,7 @@ main{padding:22px 30px 48px;max-width:1240px;width:100%}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 10px;border-radius:99px;background:color-mix(in srgb,var(--c,var(--mute)) 14%,transparent);color:var(--c,var(--mute))}
 .chip::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c,var(--mute))}
 .tag.dim{opacity:.55}
+.tag.warn{color:var(--warn-ink,var(--warn));border-color:color-mix(in srgb,var(--warn) 45%,var(--line));background:color-mix(in srgb,var(--warn) 12%,var(--inset))}
 .tag{font-variant-numeric:tabular-nums;min-width:62px;text-align:center;font-size:12px;color:var(--mute);background:var(--inset);border:1px solid var(--line);padding:2px 9px;border-radius:99px;font-family:var(--mono)}
 .x{border:0;background:none;color:var(--dim);padding:0 0 0 7px;font-size:15px;line-height:1}
 .x:hover{color:var(--bad)}

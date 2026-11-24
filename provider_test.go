@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -45,5 +46,28 @@ func TestRecheckForgetsOldAddressAndAsksForALookup(t *testing.T) {
 	<-providerKick
 	if got := sameProviderLines([]LinkStat{{Label: "A", Present: true, Enabled: true, PublicIP: "203.0.113.20"}, {Label: "B", Present: true, Enabled: true}}); len(got) != 0 {
 		t.Fatalf("a line without a public address cannot match: %v", got)
+	}
+}
+
+func TestSameProviderIsNotedOnceInActivity(t *testing.T) {
+	rootDir = t.TempDir()
+	lastSameProvider = ""
+	count := func(sub string) int {
+		n := 0
+		for _, e := range recentActivity(50) {
+			if strings.Contains(e.Text, sub) {
+				n++
+			}
+		}
+		return n
+	}
+	noteSameProvider([]string{"Wi-Fi", "LAN"})
+	noteSameProvider([]string{"LAN", "Wi-Fi"}) // same group, other order: no second note
+	if n := count("LAN and Wi-Fi show the same public address"); n != 1 {
+		t.Fatalf("want one note, got %d", n)
+	}
+	noteSameProvider(nil)
+	if n := count("LAN and Wi-Fi no longer show the same public address"); n != 1 {
+		t.Fatalf("want a note when it clears, got %d", n)
 	}
 }

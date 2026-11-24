@@ -167,10 +167,16 @@ function statusLine(sn, run){
   const ls = sn.links.filter(l => l.enabled && l.present);
   const bad = ls.filter(l => l.healthy === false), out = ls.filter(l => l.quotaOut), gone = sn.links.filter(l => l.enabled && !l.present);
   const names = a => a.map(l => l.label).join(' and ');
-  if (gone.length) return ['warn', `${names(gone)} ${gone.length>1?'are':'is'} disconnected`, `Using ${ls.length} connection${ls.length===1?'':'s'} for now. Plug it back in and it joins automatically.`];
-  if (bad.length) return ['bad', `${names(bad)} ${bad.length>1?'have':'has'} no internet`, 'It is left out until it works again, so nothing slows down.'];
-  if (out.length) return ['warn', `${names(out)} used up its allowance`, 'It is left out of the merge until the allowance renews.'];
-  if ((sn.sameIsp||[]).length > 1) return ['warn', `${sn.sameIsp.join(' and ')} look like the same provider`, 'They probably leave through the same provider or router, so merging cannot add speed. Two different providers are needed.'];
+  // most important first; the others are named underneath, so one problem never hides another
+  const issues = [];
+  if (bad.length) issues.push(['bad', `${names(bad)} ${bad.length>1?'have':'has'} no internet`, 'It is left out until it works again, so nothing slows down.']);
+  if ((sn.sameIsp||[]).length > 1) issues.push(['warn', `${sn.sameIsp.join(' and ')} look like the same provider`, 'They show the same public address, so they leave through the same provider or router and merging cannot add speed. Two different providers are needed.']);
+  if (out.length) issues.push(['warn', `${names(out)} used up its allowance`, 'It is left out of the merge until the allowance renews.']);
+  if (gone.length) issues.push(['warn', `${names(gone)} ${gone.length>1?'are':'is'} disconnected`, `Using ${ls.length} connection${ls.length===1?'':'s'} for now. Plug it back in and it joins automatically.`]);
+  if (issues.length) {
+    const [tone, title, text] = issues[0], more = issues.slice(1).map(i => i[1]);
+    return [tone, title, more.length ? `${text} Also: ${more.join('; ')}.` : text];
+  }
   const active=NM.contributingLinks(sn);
   if (ls.some(l=>l.healthy==null)) return ['warn','Checking connection health','Waiting for a confirmed health reading.'];
   if (active.length < 2) return ['warn',active.length ? 'One connection is contributing' : 'No connections are contributing','Check the connection cards below for status and roles, and Usage for allowances.'];
@@ -350,7 +356,12 @@ function renderLinks(sn, act, P){
     setHTML(f('tags'), [
       tag('Local ' + (l.present ? esc(l.ip) : '—'), 'Address on your network', !l.present),
       tag(h.publicIP ? 'Public ' + esc(h.publicIP) : 'Public address…', 'Internet address (what websites see)', !h.publicIP)
-    ].join(''));
+    ].join('') + (() => {
+      // same public address as another line: say so on the card too, where it cannot be pushed aside
+      const twins = (sn.sameIsp || []).filter(x => x !== l.label);
+      return (sn.sameIsp || []).includes(l.label) && twins.length
+        ? `<span class="tag warn" title="Both show the same public address, so merging them cannot add speed">Same provider as ${esc(twins.join(', '))}</span>` : '';
+    })());
     f('missing').innerHTML = l.present ? '' : '<div class="warn-line">Not connected. It rejoins by itself when it is plugged in again. <button class="btn" style="margin-left:8px;padding:2px 10px" data-forget="' + esc(l.name) + '">Forget it</button></div>';
     f('w').textContent = '×'+ll.weight;
     { const r = f('role'); if (document.activeElement !== r) r.value = ll.role || ''; f('roleHint').textContent = ll.role === 'busy' ? (local.mode === 'fast' && !local.classicBalance ? 'Saves this line: it joins only when the other lines are nearly full.' : 'Works only with Smart balancing in “fastest” mode; for now this line is used like the others.') : ll.role === 'backup' ? 'Kept in reserve: it is used only if the other lines stop working.' : 'Used all the time, together with the other lines.'; }

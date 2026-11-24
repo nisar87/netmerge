@@ -1,6 +1,8 @@
 package main
 
 import (
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -67,6 +69,26 @@ func refreshPublicIPs() {
 		}(l.Name, a)
 	}
 	wg.Wait()
+}
+
+var lastSameProvider string
+
+// noteSameProvider records in Activity when lines start (or stop) sharing one public address, so the finding is
+// kept even when the Overview headline shows something else, and the log says when it was seen.
+func noteSameProvider(labels []string) {
+	sorted := append([]string(nil), labels...)
+	sort.Strings(sorted)
+	key := strings.Join(sorted, " and ")
+	if key == lastSameProvider {
+		return
+	}
+	if key != "" {
+		note("warn", "%s show the same public address: they probably go through the same provider or router, so merging them cannot add speed", key)
+		logf("same provider: %s show the same public address", key)
+	} else if lastSameProvider != "" {
+		note("info", "%s no longer show the same public address", lastSameProvider)
+	}
+	lastSameProvider = key
 }
 
 // sameProviderLines returns the labels of enabled lines that share one public address (empty if all differ).

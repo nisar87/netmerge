@@ -551,6 +551,7 @@ func sample(slow bool) {
 		Total: append([]float64(nil), totalHist...)}
 	_, snap.Smart = dispatchSlotsOf("")
 	snap.SameISP = sameProviderLines(links)
+	noteSameProvider(snap.SameISP)
 	snap.Activity = recentActivity(8)
 	for _, dv := range devs {
 		snap.Devices = append(snap.Devices, *dv)
