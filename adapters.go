@@ -141,6 +141,7 @@ func logAdapterChanges(before, now []Adapter, first bool) {
 	}
 	for _, a := range old {
 		logf("connection went away: %s", a.Name)
+		applyNow("connection " + a.Name + " went away")
 	}
 }
 

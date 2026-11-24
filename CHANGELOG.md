@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.22.9
+
+- **A VPN moves off a line that stops working.** With "Line used by your VPN" set to Wi-Fi, a VPN stayed on Wi-Fi after the Wi-Fi lost its internet: the VPN rule pointed at the chosen line even when it was down, and a VPN that keeps retrying over the same UDP address never went quiet long enough to be routed again. Three changes:
+  - The VPN uses the chosen line only while it works. Otherwise it uses the first wired line that works, else any line that works. Once the chosen line is back, new VPN connections use it again; a VPN already connected elsewhere is left alone.
+  - When a line stops working or is unplugged, NetMerge updates the engine at once and closes what is still open on that line. Apps (a VPN that is "connecting", a call) open again on a line that works.
+  - The engine forgets a UDP flow after three sends fail on its line, so retries are routed again.
+- **A line that goes down is noticed sooner.** After one failed check, NetMerge checks that line again after 2 seconds (with a shorter wait) instead of after 10, so a line without internet is left out within about 10–30 seconds instead of about a minute.
+
 ## 3.22.8
 
 - **The window stays smooth with the debug log on.** With "debug log" switched on, NetMerge wrote a line to its speed log every second while it held the window's numbers, so on a slow disk the speeds and graphs could freeze for about 3 seconds at a time. The speed log is now written in the background, and if the disk falls far behind a few lines are skipped (and the log says how many) instead of holding everything up.

@@ -172,22 +172,7 @@ func buildConfig(s Settings) ([]byte, error) {
 		modeTarget = stable
 	}
 
-	// VPN link: chosen one if active, else first ethernet, else first.
-	vpn := modeTarget
-	if len(links) > 0 {
-		vpn = links[0].Proxy
-		for _, l := range links {
-			if l.Kind == "ethernet" {
-				vpn = l.Proxy
-				break
-			}
-		}
-		for _, l := range links {
-			if l.Name == s.VPNLink {
-				vpn = l.Proxy
-			}
-		}
-	}
+	vpn := vpnProxy(s, links, modeTarget)
 
 	target := func(t string) string {
 		switch {
@@ -339,4 +324,34 @@ func callRules(s Settings, stable string) []string {
 		}
 	}
 	return out
+}
+
+// vpnProxy picks the line for VPN tunnels: the chosen one while it works; otherwise (or on Automatic) the first
+// working wired line, else the first working line. A line that is down is never chosen while another works, so a
+// VPN that keeps trying to connect is not held on a line without internet.
+func vpnProxy(s Settings, links []activeLink, fallback string) string {
+	if len(links) == 0 {
+		return fallback
+	}
+	// a backup line waiting its turn still works: only a line without internet (or out of allowance) is avoided
+	usable := map[string]bool{}
+	for _, l := range links {
+		usable[l.Name] = !isDead(l.Name) && !isQuotaOut(l.Name)
+	}
+	for _, l := range links {
+		if l.Name == s.VPNLink && usable[l.Name] {
+			return l.Proxy
+		}
+	}
+	for _, l := range links {
+		if l.Kind == "ethernet" && usable[l.Name] {
+			return l.Proxy
+		}
+	}
+	for _, l := range links {
+		if usable[l.Name] {
+			return l.Proxy
+		}
+	}
+	return links[0].Proxy
 }

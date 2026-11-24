@@ -76,13 +76,45 @@ func probeAll() {
 	wg.Wait()
 }
 
+// probing: lines with a check under way, so a quick re-check and the regular one never run together.
+var probing = map[string]bool{}
+
+// reprobe checks one line again now (after a failed check), if it is still there and not being checked.
+func reprobe(name string) {
+	a, ok := adapterByName(name)
+	if !ok {
+		return
+	}
+	probeOne(name, a)
+}
+
 func probeOne(name string, a Adapter) {
+	probeMu.Lock()
+	if probing[name] {
+		probeMu.Unlock()
+		return
+	}
+	probing[name] = true
+	failing := probes[name].fails > 0
+	probeMu.Unlock()
+	defer func() {
+		probeMu.Lock()
+		delete(probing, name)
+		probeMu.Unlock()
+	}()
 	c := clientFor(&a)
 	c.Timeout = 7 * time.Second
+	if failing {
+		c.Timeout = 4 * time.Second // a line that just failed: answer quicker either way
+	}
 	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	ok, delay, portal := false, 0, false
 	lastErr := ""
+	began := time.Now()
 	for _, u := range probeURLs {
+		if failing && time.Since(began) > 4*time.Second {
+			break // re-checking a failing line: one slow round is answer enough
+		}
 		start := time.Now()
 		req, _ := http.NewRequest("GET", u, nil)
 		resp, err := c.Do(req)
@@ -141,6 +173,11 @@ func probeOne(name string, a Adapter) {
 	}
 	probes[name] = st
 	probeMu.Unlock()
+	if !st.ok && !st.dead {
+		// one failed check: look again in a moment instead of in 10 seconds, so a line that really went down is
+		// left out (and what was on it moved) within seconds rather than within a minute
+		time.AfterFunc(2*time.Second, func() { safely("probe "+name, func() { reprobe(name) }) })
+	}
 	if st.portal && !wasPortal {
 		logf("connection %s answers with a sign-in page (hotel or café Wi-Fi)", name)
 		note("warn", "%s needs a sign-in page first (hotel or café Wi-Fi). Open a browser on that network and sign in.", labelFor(getSettings(), name))
@@ -158,6 +195,7 @@ func probeOne(name string, a Adapter) {
 			trayBalloon("Connection back", labelFor(getSettings(), name)+" is working again.")
 		}
 		logf("connection %s is %s", name, map[bool]string{true: "not reaching the internet - left out until it recovers", false: "back online"}[st.dead])
+		applyNow("connection " + name + " " + map[bool]string{true: "stopped working", false: "works again"}[st.dead])
 	}
 	statsMu.Lock()
 	health[name] = linkHealth{ok: st.ok, delay: st.delay, fails: st.fails}
