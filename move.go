@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 	"time"
 )
@@ -51,6 +52,40 @@ func moveTargets(old, now Settings) (procs map[string]bool, lines map[string]boo
 	return procs, lines
 }
 
+// workingLines: the enabled lines that are present and reach the internet (and have allowance left).
+func workingLines() map[string]bool {
+	m := map[string]bool{}
+	for _, l := range activeLinks(getSettings()) {
+		if !isDead(l.Name) && !isQuotaOut(l.Name) {
+			m[l.Name] = true
+		}
+	}
+	return m
+}
+
+// lostLines: lines that worked before and no longer do (gone, unplugged, no internet).
+func lostLines(before, now map[string]bool) []string {
+	var out []string
+	for n := range before {
+		if !now[n] {
+			out = append(out, n)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// moveOffLines closes what is still open on lines that stopped working. Such connections cannot recover where they
+// are, and an app that keeps one open and retries on it (a VPN that is "connecting", a call) would otherwise stay
+// stuck on the dead line; closed, the app opens it again on a line that works.
+func moveOffLines(lines []string, started time.Time) {
+	set := map[string]bool{}
+	for _, l := range lines {
+		set[l] = true
+	}
+	closeOpen(getSettings(), nil, set, started, "it stopped working")
+}
+
 // moveAfterChange closes the open connections of the apps whose rule changed and of the lines switched off.
 // It runs after the engine has the new settings, so what reopens follows them.
 func moveAfterChange(old, now Settings, started time.Time) {
@@ -58,6 +93,11 @@ func moveAfterChange(old, now Settings, started time.Time) {
 	if len(procs) == 0 && len(lines) == 0 {
 		return
 	}
+	closeOpen(now, procs, lines, started, "the new settings")
+}
+
+// closeOpen closes the open connections of the given apps and of the given lines.
+func closeOpen(now Settings, procs, lines map[string]bool, started time.Time, reason string) {
 	b, code, err := apiReq("GET", "/connections", nil)
 	if err != nil || code != 200 {
 		logErr("list the open connections to move them", err)
@@ -90,6 +130,6 @@ func moveAfterChange(old, now Settings, started time.Time) {
 		}
 	}
 	for why, n := range moved {
-		logf("moved %d open connection(s) of %s to the new settings (%d ms after saving)", n, why, time.Since(started).Milliseconds())
+		logf("moved %d open connection(s) of %s because of %s (%d ms)", n, why, reason, time.Since(started).Milliseconds())
 	}
 }

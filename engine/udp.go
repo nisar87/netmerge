@@ -42,6 +42,7 @@ type udpFlow struct {
 	reject  bool
 	tr      *tracked
 	last    atomic.Int64
+	errs    atomic.Int32 // sends that failed in a row (the line's adapter went away or lost its network)
 }
 
 func newUDPTable(e *Engine) *udpTable {
@@ -134,7 +135,17 @@ func (t *udpTable) write(f *udpFlow, payload []byte) {
 		return
 	}
 	f.sess.last.Store(now)
-	if n, err := f.sess.conn.WriteToUDPAddrPort(payload, f.remote); err == nil && f.tr != nil {
+	n, err := f.sess.conn.WriteToUDPAddrPort(payload, f.remote)
+	if err != nil {
+		// the line cannot send any more: after a few failures forget the flow, so the app's next packet is routed
+		// again (to a line that works) instead of failing on this one for as long as the app keeps trying
+		if f.errs.Add(1) == 3 {
+			udpForget{t, f}.Close()
+		}
+		return
+	}
+	f.errs.Store(0)
+	if f.tr != nil {
 		t.e.tracker.addUp(f.tr, int64(n))
 	}
 }

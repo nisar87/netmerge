@@ -28,7 +28,8 @@ type Engine struct {
 	restarts      int
 	restartWindow time.Time
 	appliedKey    string
-	reloads       int // config reloads; a reload resets the engine's selectors, so the dispatcher sets them again
+	working       map[string]bool // lines that worked when the engine last loaded its settings
+	reloads       int             // config reloads; a reload resets the engine's selectors, so the dispatcher sets them again
 	apiFails      int
 }
 
@@ -234,6 +235,7 @@ func (e *Engine) startEngine() error {
 			e.mu.Lock()
 			e.running, e.version, e.startedAt, e.lastError, e.apiFails = true, v, time.Now(), "", 0
 			e.appliedKey = keyOf(links)
+			e.working = workingLines()
 			e.mu.Unlock()
 			logf("engine %s started with %d connection(s)", v, len(links))
 			note("good", "Merging started with %d connection(s)", len(links))
@@ -416,11 +418,17 @@ func (e *Engine) Apply() error {
 		time.Sleep(time.Second)
 		return e.Start()
 	}
+	now := workingLines()
 	e.mu.Lock()
 	e.appliedKey = activeKey()
 	e.reloads++
+	before := e.working
+	e.working = now
 	e.mu.Unlock()
 	logf("settings applied")
+	if lost := lostLines(before, now); len(lost) > 0 {
+		go safely("move off lost lines", func() { moveOffLines(lost, time.Now()) })
+	}
 	return nil
 }
 
@@ -457,4 +465,16 @@ func tailFile(p string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// applyNow reloads the engine at once (a line stopped or started working, a line went away), unless the engine is off
+// or already has these connections.
+func applyNow(why string) {
+	go safely("apply", func() {
+		if running, _, _, _ := engine.Status(); !running || engine.AppliedKey() == activeKey() {
+			return
+		}
+		logf("%s - updating the engine", why)
+		logErr("update the engine after "+why, engine.Apply())
+	})
 }
