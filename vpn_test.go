@@ -69,7 +69,9 @@ func TestPinnedAppAndVPNFollowAWorkingLine(t *testing.T) {
 		t.Skip("no adapters in this environment")
 	}
 	appOn := func(cfg []byte, target string) bool { return strings.Contains(string(cfg), `^app\\.exe$,`+target+`"`) }
-	vpnOn := func(cfg []byte, target string) bool { return strings.Contains(string(cfg), `"DST-PORT,4500,`+target+`"`) }
+	vpnOn := func(cfg []byte, target string) bool {
+		return strings.Contains(string(cfg), `"DST-PORT,4500,`+target+`"`)
+	}
 	if !appOn(cfg, "LINK2") || !vpnOn(cfg, "LINK2") {
 		t.Fatalf("Wi-Fi works: app and VPN should use it\n%s", cfg)
 	}
