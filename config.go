@@ -183,9 +183,11 @@ func buildConfig(s Settings) ([]byte, error) {
 		case t == "bypass":
 			return "DIRECT"
 		case strings.HasPrefix(t, "link:"):
+			// "Only <line>" for an app: that line while it works; while it has no internet (or is unplugged) the
+			// app uses the merge instead of failing, and new connections go back to the line once it works again
 			name := strings.TrimPrefix(t, "link:")
 			for _, l := range links {
-				if l.Name == name {
+				if l.Name == name && !isDead(l.Name) && !isQuotaOut(l.Name) {
 					return l.Proxy
 				}
 			}

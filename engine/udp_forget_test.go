@@ -51,6 +51,9 @@ func TestAFlowThatCannotSendIsForgotten(t *testing.T) {
 	conn.Close() // every send now fails, as on a line that is gone
 	remote := netip.MustParseAddrPort("198.51.100.7:4500")
 	sess := &udpSession{key: "s", conn: conn, flows: map[netip.AddrPort]*udpFlow{}}
+	u.mu.Lock()
+	u.sessions[sess.key] = sess
+	u.mu.Unlock()
 	f := &udpFlow{key: "10.0.0.2:4500>198.51.100.7:4500", sess: sess, remote: remote}
 	u.mu.Lock()
 	u.flows[f.key] = f
@@ -72,6 +75,12 @@ func TestAFlowThatCannotSendIsForgotten(t *testing.T) {
 	u.mu.Unlock()
 	if still || sess.flows[remote] != nil {
 		t.Fatal("the flow is still remembered after its line stopped sending")
+	}
+	u.mu.Lock()
+	_, sessKept := u.sessions[sess.key]
+	u.mu.Unlock()
+	if sessKept {
+		t.Fatal("the socket that cannot send is still used for new flows")
 	}
 	if n := len(e.tracker.snapshot()["connections"].([]map[string]any)); n != 0 {
 		t.Fatalf("still listed: %d", n)

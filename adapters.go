@@ -105,6 +105,17 @@ func refreshAdapters() []Adapter {
 	logAdapterChanges(adapterCache, out, adapterAt.IsZero())
 	if moved := changedNetworks(adapterCache, out); len(moved) > 0 && !adapterAt.IsZero() {
 		go recheckProviders(moved)
+		var switched []string
+		for _, n := range moved {
+			for _, a := range adapterCache {
+				if a.Name == n { // was there before: it changed network (a new line has nothing open yet)
+					switched = append(switched, n)
+				}
+			}
+		}
+		if len(switched) > 0 {
+			go safely("move off changed lines", func() { moveOffSwitched(switched) })
+		}
 	}
 	adapterCache, adapterAt = out, time.Now()
 	return out

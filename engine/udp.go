@@ -141,6 +141,7 @@ func (t *udpTable) write(f *udpFlow, payload []byte) {
 		// again (to a line that works) instead of failing on this one for as long as the app keeps trying
 		if f.errs.Add(1) == 3 {
 			udpForget{t, f}.Close()
+			t.dropSession(f.sess) // its socket may be tied to an adapter that is gone: the next flow opens a new one
 		}
 		return
 	}
@@ -330,4 +331,18 @@ func (u udpForget) Close() error {
 		t.e.tracker.remove(f.tr)
 	}
 	return nil
+}
+
+// dropSession closes a line's socket for one client, so the next packet opens a fresh one. Used when sends on it
+// keep failing (the adapter was unplugged and plugged in again, which gives it a new interface number).
+func (t *udpTable) dropSession(s *udpSession) {
+	if s == nil {
+		return
+	}
+	t.mu.Lock()
+	if t.sessions[s.key] == s {
+		delete(t.sessions, s.key)
+	}
+	t.mu.Unlock()
+	s.conn.Close()
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -52,5 +53,32 @@ func TestLostLines(t *testing.T) {
 	}
 	if got := lostLines(nil, map[string]bool{"Ethernet": true}); len(got) != 0 {
 		t.Fatalf("first start: got %v", got)
+	}
+}
+
+// An app told to use one line only uses the merge while that line has no internet, and the line again once it works;
+// the VPN rule follows its line the same way.
+func TestPinnedAppAndVPNFollowAWorkingLine(t *testing.T) {
+	rootDir = t.TempDir()
+	settings = defaultSettings()
+	settings.Links = []Link{{Name: "Ethernet", Label: "LAN", Enabled: true, Weight: 1}, {Name: "Wi-Fi", Label: "Wi-Fi", Enabled: true, Weight: 1}}
+	settings.AppRules = []AppRule{{Process: "app.exe", Target: "link:Wi-Fi"}}
+	settings.VPNLink = "Wi-Fi"
+	cfg, _ := buildConfig(getSettings())
+	if !strings.Contains(string(cfg), `"LINK2"`) {
+		t.Skip("no adapters in this environment")
+	}
+	appOn := func(cfg []byte, target string) bool { return strings.Contains(string(cfg), `^app\\.exe$,`+target+`"`) }
+	vpnOn := func(cfg []byte, target string) bool { return strings.Contains(string(cfg), `"DST-PORT,4500,`+target+`"`) }
+	if !appOn(cfg, "LINK2") || !vpnOn(cfg, "LINK2") {
+		t.Fatalf("Wi-Fi works: app and VPN should use it\n%s", cfg)
+	}
+	probeMu.Lock()
+	probes["Wi-Fi"] = probeState{dead: true}
+	probeMu.Unlock()
+	defer func() { probeMu.Lock(); delete(probes, "Wi-Fi"); probeMu.Unlock() }()
+	cfg, _ = buildConfig(getSettings())
+	if appOn(cfg, "LINK2") || vpnOn(cfg, "LINK2") || !vpnOn(cfg, "LINK1") {
+		t.Fatalf("Wi-Fi down: app and VPN must leave it\n%s", cfg)
 	}
 }
