@@ -86,6 +86,20 @@ func moveOffLines(lines []string, started time.Time) {
 	closeOpen(getSettings(), nil, set, started, "it stopped working")
 }
 
+// moveOffSwitched closes what is open on lines that joined another network (other router, other Wi-Fi). Those
+// connections were made through the old network: the other side no longer reaches them, and an app holding one
+// would wait for a timeout (a VPN or call can wait minutes). Closed, they reopen at once through the new network.
+func moveOffSwitched(lines []string) {
+	if running, _, _, _ := engine.Status(); !running {
+		return
+	}
+	set := map[string]bool{}
+	for _, l := range lines {
+		set[l] = true
+	}
+	closeOpen(getSettings(), nil, set, time.Now(), "it joined another network")
+}
+
 // moveAfterChange closes the open connections of the apps whose rule changed and of the lines switched off.
 // It runs after the engine has the new settings, so what reopens follows them.
 func moveAfterChange(old, now Settings, started time.Time) {

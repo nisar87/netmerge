@@ -46,6 +46,8 @@ More pages (connections, speed test, apps, sharing, settings, narrow window) are
 
 A connection keeps the line it started on: that is what lets a call or a download carry on undisturbed while other things change. So when you give an app another line in **Apps**, or switch a line off, NetMerge also closes what that app (or that line) has open right then. The app opens it again at once, on the new line. In a call you see a short "Reconnecting…" from the call app, then the call runs on the new line. How long that moment takes is up to the app; NetMerge's own part takes a fraction of a second.
 
+An app set to use one line only uses the merge while that line has no internet or is unplugged, instead of failing, and goes back to its line once it works again. The same happens to everything that was open on a line when it stops working, and on a line that joins another network (another router or Wi-Fi network): NetMerge closes it, and the apps open it again on a line that works.
+
 Changing the traffic mode (combine fastest, steady, one line only) does not close anything, because that would interrupt every download and call on the PC. New connections follow the new mode at once, and open ones keep their line until they end. To move one app straight away, give it a rule in **Apps**.
 
 ### An honest limit

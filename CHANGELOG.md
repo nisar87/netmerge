@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.22.10
+
+The same kind of failover as 3.22.9 gave the VPN, everywhere a line is pinned:
+
+- **Apps set to "Only <line>" no longer fail when that line goes down.** While the line has no internet (or is out of allowance), the app uses the merge; once the line works again, its new connections go back to it. What the app had open on the dead line is closed so it reconnects straight away. Before, the app stayed on the dead line until it was unplugged.
+- **A line that joins another network starts fresh.** When a connection moves to another router or Wi-Fi network without being unplugged, what was open on it was made through the old network and would hang until it timed out (minutes, for a VPN or a call). NetMerge now closes those connections, and the apps reopen them through the new network at once.
+- **An adapter that is unplugged and plugged in again gets a fresh socket.** Windows gives it a new interface number, and the engine kept sending UDP from the socket made for the old one, which failed every time. After three failed sends the engine now closes that socket, and the next packet opens a new one.
+
 ## 3.22.9
 
 - **A VPN moves off a line that stops working.** With "Line used by your VPN" set to Wi-Fi, a VPN stayed on Wi-Fi after the Wi-Fi lost its internet: the VPN rule pointed at the chosen line even when it was down, and a VPN that keeps retrying over the same UDP address never went quiet long enough to be routed again. Three changes:
