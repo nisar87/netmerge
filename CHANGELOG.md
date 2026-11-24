@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.22.8
+
+- **The window stays smooth with the debug log on.** With "debug log" switched on, NetMerge wrote a line to its speed log every second while it held the window's numbers, so on a slow disk the speeds and graphs could freeze for about 3 seconds at a time. The speed log is now written in the background, and if the disk falls far behind a few lines are skipped (and the log says how many) instead of holding everything up.
+
 ## 3.22.7
 
 - **Diagnostics reports go out every 6 hours as intended.** On at least one PC, NetMerge sent its diagnostics report every hour instead. Each report now records why it was sent, and NetMerge notes in its log if it cannot keep track of when it last sent one, so the cause can be found. An empty leftover crash file, which could also cause hourly reports, is now cleared. Nothing changes in what a report contains.
