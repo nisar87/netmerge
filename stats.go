@@ -482,6 +482,7 @@ func sample(slow bool) {
 	}
 	sampleClock.step("speeds and usage per connection", time.Now())
 	usageSetCounters(ctrs)
+	sampleClock.step("noting the byte counters for the usage", time.Now())
 	totalHist = push(totalHist, totDown)
 	if totDown > peak {
 		peak = totDown
@@ -539,6 +540,7 @@ func sample(slow bool) {
 			keepRate(cb.String(), s.DebugLog)
 		}
 	}
+	sampleClock.step("keeping the rate lines", time.Now())
 
 	up := int64(0)
 	if running {
@@ -608,7 +610,40 @@ func keepRate(line string, toFile bool) {
 	}
 	recentMu.Unlock()
 	if toFile {
-		appendRates(line)
+		rateWriterOnce.Do(func() { go rateWriter() })
+		select {
+		case rateFileCh <- line:
+		default: // the disk is far behind: drop the line rather than hold up the sampler (and the window)
+			rateDropped.Add(1)
+		}
+	}
+}
+
+// rates.log is written by its own goroutine: the sampler calls keepRate with the window's numbers locked, and a
+// slow disk (or a virus scanner looking at every write) used to hold the sampler up for seconds each tick.
+var (
+	rateFileCh     = make(chan string, 512)
+	rateWriterOnce sync.Once
+	rateDropped    atomic.Int64
+	rateWrite      = appendRates // replaced in tests
+)
+
+func rateWriter() {
+	for line := range rateFileCh {
+		batch := []string{line}
+	more:
+		for len(batch) < 512 {
+			select {
+			case l := <-rateFileCh:
+				batch = append(batch, l)
+			default:
+				break more
+			}
+		}
+		if n := rateDropped.Swap(0); n > 0 {
+			logf("rates.log: %d lines dropped because the disk was too slow", n)
+		}
+		safely("write rates.log", func() { rateWrite(strings.Join(batch, "\n")) })
 	}
 }
 
