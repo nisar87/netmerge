@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap rescap">
+  <Identity Name="NetMerge.WindowsVpnTest" Publisher="CN=NetMerge Test" Version="1.0.0.0" />
+  <Properties>
+    <DisplayName>NetMerge Windows VPN (test)</DisplayName>
+    <PublisherDisplayName>NetMerge</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.18362.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <!-- The window and the plug-in are two applications so they run in separate processes: closing the window must
+       not stop the VPN. -->
+  <Applications>
+    <Application Id="App" Executable="NetMergeVpn.exe" EntryPoint="NetMergeVpn.App">
+      <uap:VisualElements DisplayName="NetMerge Windows VPN (test)" Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png" BackgroundColor="#101418" Description="Helper used by NetMerge">
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#101418" />
+      </uap:VisualElements>
+      <Extensions>
+        <uap:Extension Category="windows.protocol">
+          <uap:Protocol Name="netmerge-vpn">
+            <uap:DisplayName>NetMerge Windows VPN</uap:DisplayName>
+          </uap:Protocol>
+        </uap:Extension>
+      </Extensions>
+    </Application>
+    <Application Id="Plugin">
+      <uap:VisualElements DisplayName="NetMerge Windows VPN (test)" Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png" BackgroundColor="#101418" Description="NetMerge VPN plug-in" AppListEntry="none">
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <Extension Category="windows.backgroundTasks" Executable="NetMergeVpn.exe" EntryPoint="NetMergeVpnBg.VpnBackgroundTask">
+          <BackgroundTasks>
+            <uap:Task Type="vpnClient" />
+          </BackgroundTasks>
+        </Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <Capability Name="internetClientServer" />
+    <Capability Name="privateNetworkClientServer" />
+    <rescap:Capability Name="networkingVpnProvider" />
+  </Capabilities>
+  <Extensions>
+    <Extension Category="windows.activatableClass.inProcessServer">
+      <InProcessServer>
+        <Path>CLRHost.dll</Path>
+        <ActivatableClass ActivatableClassId="NetMergeVpnBg.VpnBackgroundTask" ThreadingModel="both" />
+      </InProcessServer>
+    </Extension>
+  </Extensions>
+</Package>
