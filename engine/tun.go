@@ -111,6 +111,9 @@ func (e *Engine) applyTun(c *Config) error {
 			return nil
 		}
 		e.stopTun() // switched between the adapter and the Windows VPN: start over with the other one
+		if isVPN {
+			waitAddressGone(tunGW4, 20*time.Second, e)
+		}
 	}
 	if c.Tun.Device == "winvpn" {
 		return e.startVPNTun(c)

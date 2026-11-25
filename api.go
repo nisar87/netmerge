@@ -168,6 +168,12 @@ func routes() http.Handler {
 				return
 			}
 		}
+		if old.Capture == "winvpn" && ns.Capture != "winvpn" {
+			// leaving the Windows VPN: disconnect it before NetMerge's own adapter starts. Both use 198.18.0.1;
+			// with the VPN still up the adapter's address clashed and the PC had no internet for 15 minutes (seen
+			// on a real PC).
+			winvpnDisconnectNow()
+		}
 		applyStart := time.Now()
 		if err := engine.Apply(); err != nil {
 			writeErr(w, 500, err.Error())

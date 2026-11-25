@@ -42,16 +42,35 @@ namespace NetMergeVpnBg
                 hello = Encoding.ASCII.GetBytes("\0NMVPN1 " + token);
 
                 socket = new DatagramSocket();
+                // a large receive buffer: at full speed the engine sends faster than one Decapsulate call at a time
+                // takes them, and a lost packet makes TCP slow down
+                socket.Control.InboundBufferSizeInBytes = 8 * 1024 * 1024;
                 channel.AssociateTransport(socket, null);
                 socket.ConnectAsync(new HostName("127.0.0.1"), port.ToString()).AsTask().Wait();
                 SendHello();
 
                 var routes = new VpnRouteAssignment();
-                routes.Ipv4InclusionRoutes = new List<VpnRoute>
+                // everything, unless the settings name the ranges to catch ("a.b.c.d/n,..."; the automatic test
+                // on GitHub uses this so the machine's own connection to GitHub stays outside the VPN)
+                var only = Get("routes", "");
+                var included = new List<VpnRoute>();
+                foreach (var r in only.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
                 {
-                    new VpnRoute(new HostName("0.0.0.0"), 1),
-                    new VpnRoute(new HostName("128.0.0.0"), 1),
-                };
+                    var parts = r.Trim().Split('/');
+                    included.Add(new VpnRoute(new HostName(parts[0]), parts.Length > 1 ? byte.Parse(parts[1]) : (byte)32));
+                }
+                if (included.Count == 0)
+                {
+                    included.Add(new VpnRoute(new HostName("0.0.0.0"), 1));
+                    included.Add(new VpnRoute(new HostName("128.0.0.0"), 1));
+                }
+                else
+                {
+                    // NetMerge's own range: the engine answers apps from 198.18.0.2 (and DNS there), so those replies
+                    // must go back into the VPN too (with everything routed this is already the case)
+                    included.Add(new VpnRoute(new HostName("198.18.0.0"), 16));
+                }
+                routes.Ipv4InclusionRoutes = included;
                 routes.ExcludeLocalSubnets = true;
 
                 VpnDomainNameAssignment names = null;
