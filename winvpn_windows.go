@@ -116,7 +116,7 @@ func winvpnOpenLink(link string) error {
 // winvpnTaskCommand is what the task runs: PowerShell's Start-Process opens the link the way the Run box does.
 // (Explorer was tried first: given this link it opened a "This PC" window instead, seen on a real PC.)
 func winvpnTaskCommand(link string) string {
-	return "powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command Start-Process '" + strings.ReplaceAll(link, "'", "''") + "'"
+	return "powershell.exe -NoProfile -WindowStyle Hidden -Command Start-Process '" + strings.ReplaceAll(link, "'", "''") + "'"
 }
 
 func firstLineOf(s string) string {

@@ -79,7 +79,10 @@ func winvpnPluginConfig(s Settings, dns bool) string {
 
 func winvpnLink(action, cfg string) string {
 	if action == "connect" {
-		return "netmerge-vpn:connect?cfg=" + base64.URLEncoding.EncodeToString([]byte(cfg))
+		// standard Base64, as .NET's Convert.FromBase64String reads it (the URL-safe kind failed on a real PC). Its
+		// + / = need no escaping here: the helper takes everything after the first "=" and .NET's unescaping leaves
+		// them alone, and a "%" could be taken for a variable by the task that opens the link.
+		return "netmerge-vpn:connect?cfg=" + base64.StdEncoding.EncodeToString([]byte(cfg))
 	}
 	return "netmerge-vpn:" + action
 }
