@@ -236,7 +236,6 @@ func saveAndStop() {
 		eventsSave()
 		historySave()
 		engine.Stop()
-		winvpnDisconnectNow() // never leave Windows sending traffic into a VPN with no NetMerge behind it
 		flushCounts()
 	})
 }

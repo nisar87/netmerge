@@ -268,16 +268,3 @@ test('apps show their own names, with the process underneath, and can be found b
   await expect(rows).toHaveCount(1);
   await expect(page.locator('#appsTbl select[data-p="ms-teams.exe"]')).toHaveCount(1);
 });
-
-test('the Windows VPN test is chosen from a list and shows its state', async ({ page, fixture }) => {
-  await navigate(page, 'protection/routing');
-  const sel = page.locator('#capture');
-  await expect(sel).toHaveValue('');
-  await expect(page.locator('#captureStatus')).toHaveText('');
-  const before = (await fixture.read('state')).settings;
-  await mutate(page, 'settings', { ...before, capture: 'winvpn' }, () => sel.selectOption('winvpn'));
-  expect((await fixture.read('state')).settings.capture).toBe('winvpn');
-  await expect(page.locator('#captureStatus')).toContainText('Windows VPN (test)');
-  await waitForRead(page, 'state', () => fixture.patch({ state: { snap: { capture: 'connected' } } }));
-  await expect(page.locator('#captureStatus')).toContainText('is connected');
-});

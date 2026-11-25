@@ -225,9 +225,6 @@ func netsh(args ...string) error {
 }
 
 func (t *tunStack) setupOS(c *Config) error {
-	if _, ok := t.dev.(*loopDev); ok {
-		return t.setupVPNOS(c)
-	}
 	d := t.dev.(*wintunDev)
 	ws := &winState{idx: d.index, luid: d.luid, stop: make(chan struct{})}
 	t.osState = ws
@@ -429,31 +426,4 @@ func defaultRoute(tunIdx int) (string, netip.Addr, int) {
 		return "", netip.Addr{}, 0
 	}
 	return ifc.Name, gw, best
-}
-
-// setupVPNOS: with the Windows VPN (test) Windows itself gives the VPN its address, routes and DNS server (the
-// plug-in asks for them). NetMerge still keeps local and "skip NetMerge" addresses out of the capture with routes on
-// the real line, and watches which line is the PC's default.
-func (t *tunStack) setupVPNOS(c *Config) error {
-	idx := 0
-	if ifs, err := net.Interfaces(); err == nil {
-		for _, ifc := range ifs {
-			addrs, _ := ifc.Addrs()
-			for _, a := range addrs {
-				if p, ok := a.(*net.IPNet); ok && p.IP.Equal(tunGW4.AsSlice()) {
-					idx = ifc.Index
-				}
-			}
-		}
-	}
-	if idx == 0 {
-		return fmt.Errorf("the Windows VPN has no address %s", tunGW4)
-	}
-	ws := &winState{idx: idx, luid: luidOf(idx), stop: make(chan struct{})}
-	t.osState = ws
-	t.ensureFirewall()
-	t.watchOS()
-	t.updateExcludes(c.Tun.RouteExcludeAddress)
-	go t.watchLoop(ws)
-	return nil
 }

@@ -153,7 +153,6 @@ func routes() http.Handler {
 			s.NoDiagnostics = in.NoDiagnostics
 			s.SetupDone = s.SetupDone || in.SetupDone
 			s.QuotaReset, s.QuotaAction = in.QuotaReset, in.QuotaAction
-			s.Capture = in.Capture // the port and token are made by NetMerge, never taken from the page
 		})
 		logSettingsChange(old, ns)
 		if ns.NoDiagnostics && !old.NoDiagnostics {
@@ -167,12 +166,6 @@ func routes() http.Handler {
 				writeErr(w, 500, "Could not change start-with-Windows: "+err.Error())
 				return
 			}
-		}
-		if old.Capture == "winvpn" && ns.Capture != "winvpn" {
-			// leaving the Windows VPN: disconnect it before NetMerge's own adapter starts. Both use 198.18.0.1;
-			// with the VPN still up the adapter's address clashed and the PC had no internet for 15 minutes (seen
-			// on a real PC).
-			winvpnDisconnectNow()
 		}
 		applyStart := time.Now()
 		if err := engine.Apply(); err != nil {

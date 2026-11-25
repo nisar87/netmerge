@@ -41,8 +41,8 @@ type tunStack struct {
 	mtu     int
 	ln4     *net.TCPListener
 	ln6     *net.TCPListener
-	port4   atomic.Uint32 // the listeners' ports (0 until they exist)
-	port6   atomic.Uint32
+	port4   uint16
+	port6   uint16
 	nat     *natTable
 	wmu     sync.Mutex
 	hijack  atomic.Bool // answer DNS (port 53) here
@@ -74,7 +74,7 @@ func tunMTU(c *Config) int {
 // preopenTun starts creating the virtual adapter (the slowest step of starting, a few tenths of a second on
 // Windows) while the settings and block lists are still being read.
 func (e *Engine) preopenTun(c *Config) {
-	if !c.Tun.Enable || c.Tun.Device == "winvpn" || e.tun != nil || e.pendingTun != nil {
+	if !c.Tun.Enable || e.tun != nil || e.pendingTun != nil {
 		return
 	}
 	ch := make(chan tunOpened, 1)
@@ -104,19 +104,9 @@ func (e *Engine) applyTun(c *Config) error {
 		return nil
 	}
 	if t, ok := e.tun.(*tunStack); ok && t != nil {
-		_, isVPN := t.dev.(*loopDev)
-		if isVPN == (c.Tun.Device == "winvpn") {
-			t.hijack.Store(c.DNS.Enable && len(c.Tun.DNSHijack) > 0)
-			t.updateExcludes(c.Tun.RouteExcludeAddress)
-			return nil
-		}
-		e.stopTun() // switched between the adapter and the Windows VPN: start over with the other one
-		if isVPN {
-			waitAddressGone(tunGW4, 20*time.Second, e)
-		}
-	}
-	if c.Tun.Device == "winvpn" {
-		return e.startVPNTun(c)
+		t.hijack.Store(c.DNS.Enable && len(c.Tun.DNSHijack) > 0)
+		t.updateExcludes(c.Tun.RouteExcludeAddress)
+		return nil
 	}
 	mtu := tunMTU(c)
 	began := time.Now()
@@ -154,8 +144,7 @@ func (e *Engine) applyTun(c *Config) error {
 		dev.Close()
 		return err
 	}
-	t.ln4 = l4
-	t.port4.Store(uint32(l4.Addr().(*net.TCPAddr).Port))
+	t.ln4, t.port4 = l4, uint16(l4.Addr().(*net.TCPAddr).Port)
 	t.listen6(c)
 	e.tun = t
 	go t.readLoop()
@@ -180,8 +169,7 @@ func (t *tunStack) listen6(c *Config) {
 		t.e.log.Warnf("tun: IPv6 listener: %v (IPv6 is not captured)", err)
 		return
 	}
-	t.ln6 = l6
-	t.port6.Store(uint32(l6.Addr().(*net.TCPAddr).Port))
+	t.ln6, t.port6 = l6, uint16(l6.Addr().(*net.TCPAddr).Port)
 }
 
 func (e *Engine) stopTun() {
@@ -250,9 +238,9 @@ func (t *tunStack) readLoop() {
 
 func (t *tunStack) gw(v6 bool) (netip.Addr, netip.Addr, uint16) {
 	if v6 {
-		return tunGW6, tunPortal6, uint16(t.port6.Load())
+		return tunGW6, tunPortal6, t.port6
 	}
-	return tunGW4, tunPortal4, uint16(t.port4.Load())
+	return tunGW4, tunPortal4, t.port4
 }
 
 // tcpPacket rewrites one TCP packet: an app's packet goes to the engine's listener, the listener's reply goes back

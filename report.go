@@ -213,11 +213,11 @@ func reportSettings(s Settings) map[string]any {
 	raw, _ := json.Marshal(s)
 	var m map[string]any
 	_ = json.Unmarshal(raw, &m)
-	keepText := map[string]bool{"mode": true, "vpnLink": true, "quotaAction": true, "preset": true, "dnsProvider": true, "capture": true}
+	keepText := map[string]bool{"mode": true, "vpnLink": true, "quotaAction": true, "preset": true, "dnsProvider": true}
 	out := map[string]any{}
 	for k, v := range m {
 		switch k {
-		case "secret", "deviceNames", "presetBackup", "vpnToken":
+		case "secret", "deviceNames", "presetBackup":
 			continue
 		case "links":
 			var links []map[string]any

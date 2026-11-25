@@ -61,8 +61,8 @@ func TestIPv6ListenerOnlyWhenAsked(t *testing.T) {
 	e := New(t.TempDir(), &out)
 	ts := &tunStack{e: e}
 	ts.listen6(&Config{})
-	if ts.ln6 != nil || ts.port6.Load() != 0 || out.String() != "" {
-		t.Fatalf("IPv6 off: listener %v, port %d, log %q", ts.ln6, ts.port6.Load(), out.String())
+	if ts.ln6 != nil || ts.port6 != 0 || out.String() != "" {
+		t.Fatalf("IPv6 off: listener %v, port %d, log %q", ts.ln6, ts.port6, out.String())
 	}
 	ts.listen6(&Config{IPv6: true})
 	if ts.ln6 != nil {
