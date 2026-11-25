@@ -5,6 +5,10 @@ function chipList(el, arr, key, show = v => v){
   el.querySelectorAll('.x').forEach(b => b.onclick = () => { local[key].splice(b.dataset.i,1); renderRules(); saveSoon('Removed'); });
 }
 function renderRules(){
+  { const c = $('#capture'); if (document.activeElement !== c) c.value = local.capture || ''; }
+  { const st = (S.snap && S.snap.capture) || '', on = local.capture === 'winvpn';
+    $('#captureStatus').textContent = !on ? '' : st === 'connected' ? 'Windows VPN (test) is connected. Traffic comes through Windows\' own VPN.'
+      : st ? 'Windows VPN (test): ' + st + '.' : 'Windows VPN (test) is chosen. It connects while merging is on.'; }
   chipList($('#ipList'), local.bypassIPs, 'bypassIPs', ipShown);
   chipList($('#domList'), local.stableDomains, 'stableDomains');
   const v = $('#vpnLink'); if (document.activeElement !== v) setHTML(v, `<option value="">Automatic (wired first)</option>` + local.links.map(l => `<option value="${esc(l.name)}"${local.vpnLink===l.name?' selected':''}>${esc(l.label)}</option>`).join(''));
@@ -54,3 +58,4 @@ $('#domAdd').onclick = () => addTo('#domInput','stableDomains', v => /^[a-z0-9.-
 $('#ipInput').onkeydown = e => { if (e.key==='Enter') $('#ipAdd').click(); };
 $('#domInput').onkeydown = e => { if (e.key==='Enter') $('#domAdd').click(); };
 $('#vpnLink').onchange = e => { local.vpnLink = e.target.value; saveSoon('VPN connection set'); };
+$('#capture').onchange = e => { local.capture = e.target.value; saveSoon(e.target.value === 'winvpn' ? 'Switching to the Windows VPN (test). The first time takes up to a minute while the helper is installed' : 'Back to NetMerge\'s own adapter', 0); };

@@ -75,6 +75,9 @@ func ipCmd(args ...string) error {
 }
 
 func (t *tunStack) setupOS(c *Config) error {
+	if _, ok := t.dev.(*loopDev); ok {
+		return nil // the Windows VPN test exists on Windows only; on Linux only the packet path is tested
+	}
 	n := t.dev.Name()
 	if err := ipCmd("addr", "add", tunGW4.String()+"/16", "dev", n); err != nil {
 		return err

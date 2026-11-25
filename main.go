@@ -140,6 +140,7 @@ func main() {
 	go keepRunning("preset schedule", presetScheduleLoop)
 	go keepRunning("diagnostics reports", reportLoop)
 	go safely("old engine cleanup", removeOldEngine)
+	go safely("Windows VPN test cleanup", winvpnStartupCleanup)
 
 	srv := &http.Server{Handler: routes(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
