@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.23.2
+
+- **Windows VPN (test): the helper now really starts.** NetMerge runs as administrator, and Windows does not start Store-style apps for an administrator program, not even through Explorer. On a real PC the helper installed fine but never received NetMerge's request, so the VPN was never created. NetMerge now opens the helper's link through a one-off scheduled task that runs as the signed-in user without administrator rights (like typing it into Run), and removes the task right after.
+
 ## 3.23.1
 
 - **Windows VPN (test) no longer stops merging from starting.** The engine's private port for the helper was picked at random, and on some PCs it fell inside a range Windows keeps for itself (Hyper-V, WSL and Docker reserve such ranges). The engine then could not start ("access forbidden"). NetMerge now checks the port each time before the engine starts. If the port can't be used, NetMerge takes one that Windows hands out (Windows never hands out a reserved one) and passes the new port to the helper.
