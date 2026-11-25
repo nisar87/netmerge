@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -67,7 +68,7 @@ func winvpnRun(action, cfg string) (string, error) {
 	}
 	status := filepath.Join(os.Getenv("LOCALAPPDATA"), "Packages", pfn, "LocalState", "status.txt")
 	began := time.Now()
-	if err := hiddenCmd("explorer.exe", winvpnLink(action, cfg)).Start(); err != nil {
+	if err := winvpnOpenLink(winvpnLink(action, cfg)); err != nil {
 		return "", err
 	}
 	for time.Since(began) < 45*time.Second {
@@ -88,6 +89,28 @@ func winvpnRun(action, cfg string) (string, error) {
 		return res, nil
 	}
 	return "", fmt.Errorf("the helper did not answer within 45 seconds")
+}
+
+// winvpnOpenLink opens the helper's link as the signed-in user without administrator rights. Windows does not start
+// app packages for an elevated program, and Explorer started from one does not hand the link on either (seen on a
+// real PC: nothing happened). A one-off scheduled task with "limited" rights runs in the user's own session, like
+// typing the link into Run, and is removed right after.
+func winvpnOpenLink(link string) error {
+	const task = "NetMerge VPN helper link"
+	out, err := hiddenCmd("schtasks.exe", "/Create", "/F", "/TN", task, "/SC", "ONCE", "/ST", "00:00",
+		"/RL", "LIMITED", "/IT", "/TR", "explorer.exe "+link).CombinedOutput()
+	if err == nil {
+		out, err = hiddenCmd("schtasks.exe", "/Run", "/TN", task).CombinedOutput()
+		go func() {
+			time.Sleep(10 * time.Second)
+			_ = hiddenCmd("schtasks.exe", "/Delete", "/F", "/TN", task).Run()
+		}()
+		if err == nil {
+			return nil
+		}
+	}
+	logf("Windows VPN (test): starting the helper as the signed-in user did not work (%v: %s); trying Explorer", err, firstLineOf(string(out)))
+	return exec.Command("explorer.exe", link).Start()
 }
 
 func firstLineOf(s string) string {
