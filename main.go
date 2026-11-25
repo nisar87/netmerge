@@ -87,6 +87,11 @@ func main() {
 	}
 
 	engine.Adopt()
+	// a Windows VPN left connected by a NetMerge that closed unexpectedly must be gone before the own adapter starts
+	// (both use 198.18.0.1); only PCs where the helper was ever installed pay for this check
+	if _, err := os.Stat(filepath.Join(rootDir, "data", "winvpn", "installed.sha256")); err == nil {
+		winvpnStartupCleanup()
+	}
 	if running, _, _, _ := engine.Status(); !running && getSettings().MergeOnLaunch {
 		// at Windows start-up the adapters may not be ready yet, so keep trying for a couple of minutes
 		go safely("auto start", func() {
@@ -140,7 +145,6 @@ func main() {
 	go keepRunning("preset schedule", presetScheduleLoop)
 	go keepRunning("diagnostics reports", reportLoop)
 	go safely("old engine cleanup", removeOldEngine)
-	go safely("Windows VPN test cleanup", winvpnStartupCleanup)
 
 	srv := &http.Server{Handler: routes(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {

@@ -145,3 +145,35 @@ func (t *tunStack) finishVPN(c *Config) {
 	go t.janitor()
 	t.e.log.Infof("[TUN] capturing traffic through the Windows VPN (MTU %d), ready in %d ms", t.mtu, time.Since(began).Milliseconds())
 }
+
+// waitAddressGone waits until no interface has addr (the Windows VPN's 198.18.0.1 after it was disconnected), so
+// NetMerge's own adapter does not get an address that is still in use: Windows then leaves it unusable.
+func waitAddressGone(addr netip.Addr, limit time.Duration, e *Engine) {
+	began := time.Now()
+	for hasAddress(addr) {
+		if time.Since(began) > limit {
+			e.log.Warnf("[TUN] %s is still in use by another network adapter after %s (is the Windows VPN \"NetMerge\" still connected?)", addr, limit)
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if d := time.Since(began); d > 300*time.Millisecond {
+		e.log.Infof("[TUN] waited %d ms for the Windows VPN to let go of %s", d.Milliseconds(), addr)
+	}
+}
+
+func hasAddress(addr netip.Addr) bool {
+	ifs, err := net.Interfaces()
+	if err != nil {
+		return false
+	}
+	for _, ifc := range ifs {
+		addrs, _ := ifc.Addrs()
+		for _, a := range addrs {
+			if p, ok := a.(*net.IPNet); ok && p.IP.Equal(addr.AsSlice()) {
+				return true
+			}
+		}
+	}
+	return false
+}
