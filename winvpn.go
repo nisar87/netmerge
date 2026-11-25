@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,6 +32,24 @@ var (
 	wvCfg       string // the plug-in settings it was connected with
 	wvAgain     = make(chan struct{}, 1)
 )
+
+// usableVPNPort returns port when the engine can listen on it, otherwise a port Windows hands out itself. A port
+// picked at random can fall in a range Windows keeps for itself (Hyper-V, WSL and Docker reserve ranges; binding
+// there fails with "access forbidden"), so the free port comes from Windows, which never hands out a kept one.
+func usableVPNPort(port int) int {
+	if port > 0 {
+		if c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port}); err == nil {
+			c.Close()
+			return port
+		}
+	}
+	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		return port
+	}
+	defer c.Close()
+	return c.LocalAddr().(*net.UDPAddr).Port
+}
 
 func setWinvpnStatus(s string) {
 	wvStateMu.Lock()

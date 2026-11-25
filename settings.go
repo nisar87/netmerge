@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"os"
@@ -145,10 +144,8 @@ func normalizeLocked() {
 	if settings.Capture != "winvpn" {
 		settings.Capture = ""
 	} else {
-		if settings.VPNPort < 20000 || settings.VPNPort > 60000 {
-			var b [2]byte
-			_, _ = rand.Read(b[:])
-			settings.VPNPort = 20000 + (int(b[0])<<8|int(b[1]))%40000
+		if settings.VPNPort < 1024 || settings.VPNPort > 65535 {
+			settings.VPNPort = 0 // chosen when the engine's settings are written (usableVPNPort)
 		}
 		if len(settings.VPNToken) < 32 {
 			settings.VPNToken = randomHex(16)

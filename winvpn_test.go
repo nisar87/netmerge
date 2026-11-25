@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"encoding/base64"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,8 +33,15 @@ func TestWinvpnSettingsGetPortAndToken(t *testing.T) {
 	rootDir = t.TempDir()
 	settings = defaultSettings()
 	s := updateSettings(func(s *Settings) { s.Capture = "winvpn" })
-	if s.VPNPort < 20000 || s.VPNPort > 60000 || len(s.VPNToken) < 32 {
-		t.Fatalf("port %d token %q", s.VPNPort, s.VPNToken)
+	if len(s.VPNToken) < 32 {
+		t.Fatalf("token %q", s.VPNToken)
+	}
+	if err := writeConfig(); err != nil {
+		t.Fatal(err)
+	}
+	s = getSettings()
+	if s.VPNPort < 1024 || s.VPNPort > 65535 {
+		t.Fatalf("writing the engine settings must choose a port: %d", s.VPNPort)
 	}
 	again := updateSettings(func(s *Settings) {})
 	if again.VPNPort != s.VPNPort || again.VPNToken != s.VPNToken {
@@ -84,5 +92,25 @@ func TestUnzipRefusesPathsOutside(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "evil.txt")); err == nil {
 		t.Fatal("written outside")
+	}
+}
+
+// A port Windows keeps for itself (or one in use) is replaced by one Windows hands out; a usable one is kept.
+func TestUsableVPNPort(t *testing.T) {
+	busy, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	taken := busy.LocalAddr().(*net.UDPAddr).Port
+	p := usableVPNPort(taken)
+	if p == taken || p <= 0 {
+		t.Fatalf("a port that cannot be bound must be replaced: %d", p)
+	}
+	busy.Close()
+	if usableVPNPort(p) != p {
+		t.Fatal("a usable port must be kept (the VPN profile holds it)")
+	}
+	if usableVPNPort(0) <= 0 {
+		t.Fatal("no port chosen")
 	}
 }
