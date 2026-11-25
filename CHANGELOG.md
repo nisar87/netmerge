@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.23.1
+
+- **Windows VPN (test) no longer stops merging from starting.** The engine's private port for the helper was picked at random, and on some PCs it fell inside a range Windows keeps for itself (Hyper-V, WSL and Docker reserve such ranges). The engine then could not start ("access forbidden"). NetMerge now checks the port each time before the engine starts. If the port can't be used, NetMerge takes one that Windows hands out (Windows never hands out a reserved one) and passes the new port to the helper.
+
 ## 3.23.0
 
 - **Test: catch traffic through Windows' own VPN.** Protection › Routing exceptions has a new choice, "How NetMerge catches traffic". "Windows VPN (test)" uses Windows' built-in VPN feature instead of NetMerge's own Wintun adapter. That is the way a Microsoft Store edition would have to work, since the Store does not allow Wintun. Merging, rules, failover and everything else stay the same; only the way packets reach the engine changes.

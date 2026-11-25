@@ -292,6 +292,14 @@ func logLevel(s Settings) string {
 
 func writeConfig() error {
 	s := getSettings()
+	if s.Capture == "winvpn" {
+		if p := usableVPNPort(s.VPNPort); p != s.VPNPort {
+			if s.VPNPort != 0 {
+				logf("Windows VPN (test): port %d cannot be used on this PC (Windows keeps it for itself); using %d", s.VPNPort, p)
+			}
+			s = updateSettings(func(x *Settings) { x.VPNPort = p })
+		}
+	}
 	if blockCfg(s).Enabled {
 		if err := rebuildFilters(s); err != nil {
 			logf("could not prepare the block lists (%v) - blocking is off until this is fixed", err)
