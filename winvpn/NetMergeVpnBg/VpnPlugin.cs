@@ -47,11 +47,21 @@ namespace NetMergeVpnBg
                 SendHello();
 
                 var routes = new VpnRouteAssignment();
-                routes.Ipv4InclusionRoutes = new List<VpnRoute>
+                // everything, unless the settings name the ranges to catch ("a.b.c.d/n,..."; the automatic test
+                // on GitHub uses this so the machine's own connection to GitHub stays outside the VPN)
+                var only = Get("routes", "");
+                var included = new List<VpnRoute>();
+                foreach (var r in only.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
                 {
-                    new VpnRoute(new HostName("0.0.0.0"), 1),
-                    new VpnRoute(new HostName("128.0.0.0"), 1),
-                };
+                    var parts = r.Trim().Split('/');
+                    included.Add(new VpnRoute(new HostName(parts[0]), parts.Length > 1 ? byte.Parse(parts[1]) : (byte)32));
+                }
+                if (included.Count == 0)
+                {
+                    included.Add(new VpnRoute(new HostName("0.0.0.0"), 1));
+                    included.Add(new VpnRoute(new HostName("128.0.0.0"), 1));
+                }
+                routes.Ipv4InclusionRoutes = included;
                 routes.ExcludeLocalSubnets = true;
 
                 VpnDomainNameAssignment names = null;

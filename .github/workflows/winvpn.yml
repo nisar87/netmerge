@@ -8,7 +8,7 @@ on:
     branches: [main]
     paths: ["winvpn/**", ".github/workflows/winvpn.yml"]
   pull_request:
-    paths: ["winvpn/**", "winvpn*.go", ".github/workflows/winvpn.yml"]
+    paths: ["winvpn/**", "winvpn*.go", "engine/tun*.go", ".github/workflows/winvpn.yml"]
   workflow_dispatch:
 permissions:
   contents: write
@@ -97,3 +97,9 @@ jobs:
         env:
           NM_WINVPN_E2E_DIR: ${{ github.workspace }}\helper
         run: go test -count=1 -v -run TestWinvpnE2E -timeout 6m .
+      - name: Speed through the Windows VPN (engine + helper, real downloads)
+        shell: pwsh
+        working-directory: engine
+        env:
+          NM_WINVPN_ENGINE_E2E: "1"
+        run: go test -count=1 -v -run TestWinVPNCaptureSpeed -timeout 8m .
