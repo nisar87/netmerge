@@ -114,3 +114,15 @@ func TestUsableVPNPort(t *testing.T) {
 		t.Fatal("no port chosen")
 	}
 }
+
+func TestWinvpnLinkFitsATaskCommand(t *testing.T) {
+	s := Settings{VPNPort: 65535, VPNToken: strings.Repeat("f", 32)}
+	link := winvpnLink("connect", winvpnPluginConfig(s, true))
+	cmd := "powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command Start-Process '" + link + "'"
+	if len(cmd) > 261 {
+		t.Fatalf("task command too long (%d): %s", len(cmd), cmd)
+	}
+	if strings.ContainsAny(link, "' \\"+`"`) {
+		t.Fatalf("the link needs no quoting: %s", link)
+	}
+}
