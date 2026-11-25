@@ -51,11 +51,6 @@ type TunConfig struct {
 	RouteExcludeAddress []string `json:"route-exclude-address"`
 	DNSHijack           []string `json:"dns-hijack"`
 	MTU                 int      `json:"mtu"`
-	// Device "winvpn" (test): packets come from NetMerge's Windows VPN plug-in over 127.0.0.1 (VPNPort, UDP) instead
-	// of the Wintun adapter; the plug-in proves itself with VPNToken.
-	Device   string `json:"device"`
-	VPNPort  int    `json:"vpn-port"`
-	VPNToken string `json:"vpn-token"`
 }
 
 type ProxyConfig struct {

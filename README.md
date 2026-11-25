@@ -50,10 +50,6 @@ An app set to use one line only uses the merge while that line has no internet o
 
 Changing the traffic mode (combine fastest, steady, one line only) does not close anything, because that would interrupt every download and call on the PC. New connections follow the new mode at once, and open ones keep their line until they end. To move one app straight away, give it a rule in **Apps**.
 
-### Windows VPN (test)
-
-Protection › Routing exceptions › "How NetMerge catches traffic" can switch from NetMerge's own virtual adapter (Wintun) to Windows' built-in VPN feature. This is a test of how a Microsoft Store edition would work: the Store does not accept Wintun. The first time, NetMerge downloads and installs a small helper app ("NetMerge Windows VPN (test)") signed with a test certificate. A Windows VPN called "NetMerge" then carries the PC's traffic to NetMerge, which merges it as usual. Switch back if anything is slower or less steady.
-
 ### An honest limit
 
 One single connection (one download stream) can only use one line. A download manager that fetches a file in pieces over several connections gets around this. The gain comes from many connections at once, which is what browsers, download managers and most apps do. A single-stream speed test will show one line's speed (see the next section).

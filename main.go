@@ -87,11 +87,9 @@ func main() {
 	}
 
 	engine.Adopt()
-	// a Windows VPN left connected by a NetMerge that closed unexpectedly must be gone before the own adapter starts
-	// (both use 198.18.0.1); only PCs where the helper was ever installed pay for this check
-	if _, err := os.Stat(filepath.Join(rootDir, "data", "winvpn", "installed.sha256")); err == nil {
-		winvpnStartupCleanup()
-	}
+	// the Windows VPN test (3.23.0–3.23.5) was removed: take its helper, VPN entry and certificate off this PC,
+	// before merging starts (its VPN would clash with NetMerge's own adapter)
+	removeVPNTestLeftovers()
 	if running, _, _, _ := engine.Status(); !running && getSettings().MergeOnLaunch {
 		// at Windows start-up the adapters may not be ready yet, so keep trying for a couple of minutes
 		go safely("auto start", func() {

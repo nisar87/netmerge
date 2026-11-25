@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.23.6
+
+- **The Windows VPN test is removed.** It showed that Windows' own VPN system can't carry merged speed: about 26 Mbps on a machine with over 1,000 Mbps, and about 50 Mbps on a PC with 113 Mbps across two lines. NetMerge is back to exactly how it worked in 3.22.11, always using its own adapter. The setting, the helper app, its build and its tests are gone.
+- **What the test left on a PC is removed once, at start.** On PCs where the test was used, NetMerge takes off the helper app "NetMerge Windows VPN (test)", its "NetMerge" VPN entry, its test certificate and its folder, before merging starts.
+
 ## 3.23.5
 
 - **Switching back from the Windows VPN no longer cuts the internet.** NetMerge started its own adapter while the "NetMerge" Windows VPN was still connected. Both use the address 198.18.0.1, and Windows left the adapter unusable: on a real PC nothing worked for 15 minutes, until the setting was switched again. Now NetMerge disconnects the Windows VPN first, and the engine waits until that address is free before it starts its adapter. A VPN left connected by a NetMerge that closed unexpectedly is disconnected before merging starts.

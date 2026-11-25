@@ -12,7 +12,7 @@ export function patch(target, changes) {
   return target;
 }
 const settingsFields = ['appRules', 'bypassIPs', 'stableDomains', 'vpnLink', 'autoStart', 'mergeOnLaunch',
-  'builtinDNS', 'debugLog', 'classicBalance', 'noUpdateCheck', 'noCallProtect', 'noDiagnostics', 'quotaReset', 'quotaAction', 'capture'];
+  'builtinDNS', 'debugLog', 'classicBalance', 'noUpdateCheck', 'noCallProtect', 'noDiagnostics', 'quotaReset', 'quotaAction'];
 const restoreFields = ['appRules', 'bypassIPs', 'stableDomains', 'mergeOnLaunch', 'builtinDNS', 'dnsProvider',
   'dnsSecure', 'dnsCustom', 'dnsDomains', 'noCallProtect', 'noUpdateCheck', 'classicBalance', 'quotaReset', 'quotaAction'];
 

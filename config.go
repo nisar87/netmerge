@@ -234,9 +234,6 @@ func buildConfig(s Settings) ([]byte, error) {
 		"enable": true, "auto-route": true, "auto-detect-interface": true,
 		"route-exclude-address": exclude,
 	}
-	if s.Capture == "winvpn" && s.VPNPort > 0 && s.VPNToken != "" {
-		tun["device"], tun["vpn-port"], tun["vpn-token"] = "winvpn", s.VPNPort, s.VPNToken
-	}
 	if s.TunMTU >= 1280 && s.TunMTU <= 9000 {
 		tun["mtu"] = s.TunMTU
 	}
@@ -292,14 +289,6 @@ func logLevel(s Settings) string {
 
 func writeConfig() error {
 	s := getSettings()
-	if s.Capture == "winvpn" {
-		if p := usableVPNPort(s.VPNPort); p != s.VPNPort {
-			if s.VPNPort != 0 {
-				logf("Windows VPN (test): port %d cannot be used on this PC (Windows keeps it for itself); using %d", s.VPNPort, p)
-			}
-			s = updateSettings(func(x *Settings) { x.VPNPort = p })
-		}
-	}
 	if blockCfg(s).Enabled {
 		if err := rebuildFilters(s); err != nil {
 			logf("could not prepare the block lists (%v) - blocking is off until this is fixed", err)

@@ -171,15 +171,6 @@
           <p class="d">VPN tunnels (SonicWALL, Cisco, FortiClient, GlobalProtect, OpenVPN, WireGuard…) are kept on one line so they do not drop. Automatic uses the first wired connection. If the chosen line stops working, the VPN moves to one that works within seconds, and new VPN connections use your choice again once it is back.</p>
           <select class="sel" id="vpnLink" style="width:100%" aria-label="VPN connection"></select>
         </div>
-        <div class="card">
-          <span class="pc-ic" data-icon="zap"></span><h3>How NetMerge catches traffic <span class="rec">Test</span></h3>
-          <p class="d">Normally NetMerge uses its own virtual network adapter. The test uses Windows' own VPN instead, the way a Microsoft Store edition would have to. On first use NetMerge downloads a small helper app and installs it with a test certificate. Compare speed tests, calls and games with both, then switch back if anything is worse.</p>
-          <select class="sel" id="capture" style="width:100%" aria-label="How NetMerge catches traffic">
-            <option value="">NetMerge's own adapter (standard)</option>
-            <option value="winvpn">Windows VPN (test)</option>
-          </select>
-          <p class="hint2" id="captureStatus" aria-live="polite"></p>
-        </div>
       </div>
     </section>
 
