@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.23.4
+
+- **Windows VPN (test): the helper reads NetMerge's settings.** The helper started at last (3.23.3), but it rejected the settings NetMerge sent, because they were in the web-safe Base64 kind and .NET only reads the standard kind. NetMerge now sends standard Base64.
+- **Tested on a real Windows machine on every change.** A new GitHub job on Windows 2022 installs the freshly built helper the way NetMerge does, connects the "NetMerge" Windows VPN, and checks that the plug-in reaches NetMerge's port with the right token. The first run passed: helper installed, VPN connected with its own "NetMerge" adapter at 198.18.0.1, the plug-in said hello, and it disconnected cleanly.
+
 ## 3.23.3
 
 - **Windows VPN (test): the helper's link is opened with PowerShell.** On a real PC, the task from 3.23.2 ran, but Explorer did not treat the helper's link as a link and opened a "This PC" window instead, so the helper still never started. The task now opens the link with PowerShell's Start-Process, which handles it the way the Run box does.

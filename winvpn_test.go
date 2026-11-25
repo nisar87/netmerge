@@ -20,8 +20,9 @@ func TestWinvpnPluginConfigAndLink(t *testing.T) {
 		t.Fatal("built-in DNS on: Windows must be told to ask the engine")
 	}
 	link := winvpnLink("connect", cfg)
-	b, err := base64.URLEncoding.DecodeString(strings.TrimPrefix(link, "netmerge-vpn:connect?cfg="))
-	if err != nil || string(b) != cfg || strings.ContainsAny(strings.TrimPrefix(link, "netmerge-vpn:connect?cfg="), "+/") {
+	v := strings.TrimPrefix(link, "netmerge-vpn:connect?cfg=")
+	b, err := base64.StdEncoding.DecodeString(v) // what the helper does (.NET Convert.FromBase64String)
+	if err != nil || string(b) != cfg || strings.ContainsAny(v, "-_%") {
 		t.Fatalf("link %s", link)
 	}
 	if winvpnLink("disconnect", "") != "netmerge-vpn:disconnect" {
@@ -118,7 +119,7 @@ func TestUsableVPNPort(t *testing.T) {
 func TestWinvpnLinkFitsATaskCommand(t *testing.T) {
 	s := Settings{VPNPort: 65535, VPNToken: strings.Repeat("f", 32)}
 	link := winvpnLink("connect", winvpnPluginConfig(s, true))
-	cmd := "powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command Start-Process '" + link + "'"
+	cmd := "powershell.exe -NoProfile -WindowStyle Hidden -Command Start-Process '" + link + "'"
 	if len(cmd) > 261 {
 		t.Fatalf("task command too long (%d): %s", len(cmd), cmd)
 	}

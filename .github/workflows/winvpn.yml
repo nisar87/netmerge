@@ -8,7 +8,7 @@ on:
     branches: [main]
     paths: ["winvpn/**", ".github/workflows/winvpn.yml"]
   pull_request:
-    paths: ["winvpn/**", ".github/workflows/winvpn.yml"]
+    paths: ["winvpn/**", "winvpn*.go", ".github/workflows/winvpn.yml"]
   workflow_dispatch:
 permissions:
   contents: write
@@ -75,3 +75,25 @@ jobs:
               --notes "Helper package for NetMerge's Windows VPN test (Settings > How NetMerge catches traffic). NetMerge downloads it by itself; it is not an update of NetMerge." --target $env:GITHUB_SHA
           }
           gh release upload winvpn-test NetMergeVpnTest.zip NetMergeVpnTest.zip.sha256 --clobber
+
+  # The helper on a real Windows machine: installed the way NetMerge installs it, connected through Windows' own VPN,
+  # and the plug-in has to reach a test "engine" port on 127.0.0.1 with the right token.
+  e2e:
+    needs: build
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          name: NetMergeVpnTest
+      - name: Unpack
+        shell: pwsh
+        run: Expand-Archive NetMergeVpnTest.zip -DestinationPath helper -Force; Get-ChildItem -Recurse helper | Select-Object FullName
+      - name: Install, connect, check the plug-in reaches the engine
+        shell: pwsh
+        env:
+          NM_WINVPN_E2E_DIR: ${{ github.workspace }}\helper
+        run: go test -count=1 -v -run TestWinvpnE2E -timeout 6m .
