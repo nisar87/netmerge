@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"os"
@@ -24,19 +25,25 @@ type AppRule struct {
 }
 
 type Settings struct {
-	Links          []Link            `json:"links"`
-	Mode           string            `json:"mode"` // "fast" | "stable" | "link:<adapter name>"
-	AppRules       []AppRule         `json:"appRules"`
-	BypassIPs      []string          `json:"bypassIPs"`
-	StableDomains  []string          `json:"stableDomains"`
-	VPNLink        string            `json:"vpnLink"` // adapter that carries VPN tunnels ("" = first enabled)
-	AutoStart      bool              `json:"autoStart"`
-	MergeOnLaunch  bool              `json:"mergeOnLaunch"`
-	BuiltinDNS     bool              `json:"builtinDNS"`
-	SeenApps       []string          `json:"seenApps"`
-	Secret         string            `json:"secret"`
-	DebugLog       bool              `json:"debugLog"`
-	TunMTU         int               `json:"tunMTU"`
+	Links         []Link    `json:"links"`
+	Mode          string    `json:"mode"` // "fast" | "stable" | "link:<adapter name>"
+	AppRules      []AppRule `json:"appRules"`
+	BypassIPs     []string  `json:"bypassIPs"`
+	StableDomains []string  `json:"stableDomains"`
+	VPNLink       string    `json:"vpnLink"` // adapter that carries VPN tunnels ("" = first enabled)
+	AutoStart     bool      `json:"autoStart"`
+	MergeOnLaunch bool      `json:"mergeOnLaunch"`
+	BuiltinDNS    bool      `json:"builtinDNS"`
+	SeenApps      []string  `json:"seenApps"`
+	Secret        string    `json:"secret"`
+	DebugLog      bool      `json:"debugLog"`
+	TunMTU        int       `json:"tunMTU"`
+	// Capture "winvpn" (test): traffic is caught by Windows' own VPN platform through the "NetMerge Windows VPN"
+	// helper package instead of the Wintun adapter (the way a Microsoft Store edition would have to). VPNPort and
+	// VPNToken are made once: the plug-in reaches the engine on 127.0.0.1:VPNPort and proves itself with the token.
+	Capture        string            `json:"capture"`
+	VPNPort        int               `json:"vpnPort,omitempty"`
+	VPNToken       string            `json:"vpnToken,omitempty"`
 	Block          *BlockSettings    `json:"block"`
 	Share          *ShareSettings    `json:"share"`
 	DeviceNames    map[string]string `json:"deviceNames,omitempty"` // names you gave to phones, keyed by hardware address
@@ -135,6 +142,18 @@ func updateSettings(fn func(s *Settings)) Settings {
 }
 
 func normalizeLocked() {
+	if settings.Capture != "winvpn" {
+		settings.Capture = ""
+	} else {
+		if settings.VPNPort < 20000 || settings.VPNPort > 60000 {
+			var b [2]byte
+			_, _ = rand.Read(b[:])
+			settings.VPNPort = 20000 + (int(b[0])<<8|int(b[1]))%40000
+		}
+		if len(settings.VPNToken) < 32 {
+			settings.VPNToken = randomHex(16)
+		}
+	}
 	if _, ok := findProv(settings.DNSProvider); !ok && settings.DNSProvider != "custom" {
 		settings.DNSProvider = ""
 	}

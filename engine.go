@@ -239,6 +239,7 @@ func (e *Engine) startEngine() error {
 			e.mu.Unlock()
 			logf("engine %s started with %d connection(s)", v, len(links))
 			note("good", "Merging started with %d connection(s)", len(links))
+			go winvpnSync()
 			go e.watch(cmd, exited)
 			return nil
 		}
@@ -394,6 +395,7 @@ func (e *Engine) Stop() {
 	stopOwnEngines()
 	forgetEngine()
 	logf("merging stopped (asked by %s)", where(2))
+	go winvpnSync()
 	if was {
 		note("info", "Merging stopped")
 	}
@@ -418,6 +420,7 @@ func (e *Engine) Apply() error {
 		time.Sleep(time.Second)
 		return e.Start()
 	}
+	go winvpnSync()
 	now := workingLines()
 	e.mu.Lock()
 	e.appliedKey = activeKey()

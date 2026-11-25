@@ -153,6 +153,7 @@ func routes() http.Handler {
 			s.NoDiagnostics = in.NoDiagnostics
 			s.SetupDone = s.SetupDone || in.SetupDone
 			s.QuotaReset, s.QuotaAction = in.QuotaReset, in.QuotaAction
+			s.Capture = in.Capture // the port and token are made by NetMerge, never taken from the page
 		})
 		logSettingsChange(old, ns)
 		if ns.NoDiagnostics && !old.NoDiagnostics {

@@ -234,6 +234,9 @@ func buildConfig(s Settings) ([]byte, error) {
 		"enable": true, "auto-route": true, "auto-detect-interface": true,
 		"route-exclude-address": exclude,
 	}
+	if s.Capture == "winvpn" && s.VPNPort > 0 && s.VPNToken != "" {
+		tun["device"], tun["vpn-port"], tun["vpn-token"] = "winvpn", s.VPNPort, s.VPNToken
+	}
 	if s.TunMTU >= 1280 && s.TunMTU <= 9000 {
 		tun["mtu"] = s.TunMTU
 	}

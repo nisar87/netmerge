@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.23.0
+
+- **Test: catch traffic through Windows' own VPN.** Protection › Routing exceptions has a new choice, "How NetMerge catches traffic". "Windows VPN (test)" uses Windows' built-in VPN feature instead of NetMerge's own Wintun adapter. That is the way a Microsoft Store edition would have to work, since the Store does not allow Wintun. Merging, rules, failover and everything else stay the same; only the way packets reach the engine changes.
+  - The first time, NetMerge downloads a small helper app ("NetMerge Windows VPN (test)", built from `winvpn/` and published on the `winvpn-test` pre-release), trusts its test certificate on this PC, and installs it. The helper connects a Windows VPN called "NetMerge" and passes every packet to the engine over 127.0.0.1. Only the helper holding this PC's secret token is listened to.
+  - Switching back to "NetMerge's own adapter" disconnects the VPN. Quitting NetMerge disconnects it too.
+  - This is a test. If merging stops working with it, switch back. If NetMerge ever closes unexpectedly while the test is on, disconnect "NetMerge" in Windows Settings › Network & internet › VPN (NetMerge also does this itself the next time it starts).
+
 ## 3.22.11
 
 - **The same-provider warning can no longer be hidden.** NetMerge did detect two lines with the same public address, but the Overview headline shows one message only. A line that is not plugged in (for example an old phone-tethering adapter that is still in the list) took that place, so the warning was never seen. Now:

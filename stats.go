@@ -80,7 +80,8 @@ type Snapshot struct {
 	Devices   []DeviceStat      `json:"devices"` // other devices using proxy sharing
 	Smart     bool              `json:"smart"`   // the smart dispatcher is steering new connections
 	Activity  []ActivityEvent   `json:"activity"`
-	SameISP   []string          `json:"sameIsp"` // labels of lines that show the same public address (probably one provider)
+	SameISP   []string          `json:"sameIsp"`
+	Capture   string            `json:"capture,omitempty"` // Windows VPN (test) status, when that test is on // labels of lines that show the same public address (probably one provider)
 }
 
 type linkTrack struct {
@@ -552,6 +553,7 @@ func sample(slow bool) {
 	_, snap.Smart = dispatchSlotsOf("")
 	snap.SameISP = sameProviderLines(links)
 	noteSameProvider(snap.SameISP)
+	snap.Capture = winvpnStatus()
 	snap.Activity = recentActivity(8)
 	for _, dv := range devs {
 		snap.Devices = append(snap.Devices, *dv)
