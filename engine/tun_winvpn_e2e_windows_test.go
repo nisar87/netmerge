@@ -24,7 +24,8 @@ import (
 	"time"
 )
 
-const speedHost = "speed.cloudflare.com"
+// Hetzner's public speed-test files (Ashburn, near GitHub's runners); Cloudflare's speed test answered nothing there.
+const speedHost = "ash-speed.hetzner.com"
 
 func TestWinVPNCaptureSpeed(t *testing.T) {
 	if os.Getenv("NM_WINVPN_ENGINE_E2E") == "" {
@@ -55,7 +56,7 @@ func TestWinVPNCaptureSpeed(t *testing.T) {
 	probe, _ := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	port := probe.LocalAddr().(*net.UDPAddr).Port
 	probe.Close()
-	token := "0123456789abcdef0123456789abcdef"
+	token := "0123456789abcdef" // short: the whole link has to fit in a 261-character task command
 	dir := t.TempDir()
 	cfg := map[string]any{
 		"mode": "rule", "log-level": "info", "find-process-mode": "always",
@@ -80,7 +81,7 @@ func TestWinVPNCaptureSpeed(t *testing.T) {
 		t.Logf("engine log (last part):\n%s", tail(logs.String(), 4000))
 	}()
 
-	plugin := fmt.Sprintf("<nm><port>%d</port><token>%s</token><mtu>1500</mtu><routes>%s</routes></nm>", port, token, strings.Join(routes, ","))
+	plugin := fmt.Sprintf("<nm><port>%d</port><token>%s</token><routes>%s</routes></nm>", port, token, strings.Join(routes, ","))
 	began := time.Now()
 	openHelperLink(t, "netmerge-vpn:connect?cfg="+base64.StdEncoding.EncodeToString([]byte(plugin)))
 	defer openHelperLink(t, "netmerge-vpn:disconnect")
@@ -117,9 +118,17 @@ func measure(t *testing.T, what string, n int) float64 {
 			defer wg.Done()
 			c := &http.Client{Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}}
 			for ctx.Err() == nil {
-				req, _ := http.NewRequestWithContext(ctx, "GET", "https://"+speedHost+"/__down?bytes=200000000", nil)
+				req, _ := http.NewRequestWithContext(ctx, "GET", "https://"+speedHost+"/1GB.bin", nil)
 				resp, err := c.Do(req)
 				if err != nil {
+					if ctx.Err() == nil {
+						t.Logf("%s: %v", what, err)
+					}
+					return
+				}
+				if resp.StatusCode != 200 {
+					t.Logf("%s: HTTP %d", what, resp.StatusCode)
+					resp.Body.Close()
 					return
 				}
 				n, _ := io.Copy(io.Discard, resp.Body)
@@ -138,6 +147,9 @@ func measure(t *testing.T, what string, n int) float64 {
 func openHelperLink(t *testing.T, link string) {
 	const task = "NetMerge VPN helper link (test)"
 	cmd := "powershell.exe -NoProfile -WindowStyle Hidden -Command Start-Process '" + link + "'"
+	if len(cmd) > 261 {
+		t.Fatalf("task command too long (%d)", len(cmd))
+	}
 	if out, err := exec.Command("schtasks.exe", "/Create", "/F", "/TN", task, "/SC", "ONCE", "/ST", "00:00", "/RL", "LIMITED", "/IT", "/TR", cmd).CombinedOutput(); err != nil {
 		t.Logf("schtasks create: %v %s", err, out)
 		return
