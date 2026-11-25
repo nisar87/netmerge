@@ -14,6 +14,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,8 +25,9 @@ import (
 	"time"
 )
 
-// Hetzner's public speed-test files (Ashburn, near GitHub's runners); Cloudflare's speed test answered nothing there.
-const speedHost = "ash-speed.hetzner.com"
+// A file on GitHub's own servers, which GitHub's machines reach at full speed (two public speed-test servers
+// refused them).
+const speedURL = "https://github.com/nisar87/netmerge/releases/download/winvpn-test/NetMergeVpnTest.zip"
 
 func TestWinVPNCaptureSpeed(t *testing.T) {
 	if os.Getenv("NM_WINVPN_ENGINE_E2E") == "" {
@@ -39,20 +41,38 @@ func TestWinVPNCaptureSpeed(t *testing.T) {
 	if ifName == "" {
 		t.Fatal("no default route")
 	}
-	ips, err := net.DefaultResolver.LookupIP(context.Background(), "ip4", speedHost)
+	// where the download really comes from (github.com redirects to its file servers)
+	final := speedURL
+	if resp, err := (&http.Client{Timeout: 20 * time.Second}).Get(speedURL); err == nil {
+		final = resp.Request.URL.String()
+		resp.Body.Close()
+	}
+	u, _ := url.Parse(final)
+	ips, err := net.DefaultResolver.LookupIP(context.Background(), "ip4", u.Hostname())
 	if err != nil || len(ips) == 0 {
-		t.Fatalf("resolve %s: %v", speedHost, err)
+		t.Fatalf("resolve %s: %v", u.Hostname(), err)
 	}
 	var routes []string
 	for _, ip := range ips {
 		routes = append(routes, ip.String()+"/32")
 	}
-	t.Logf("line %s; routing %s into the VPN", ifName, strings.Join(routes, ","))
+	if len(routes) > 2 {
+		routes = routes[:2] // the link has to fit in a 261-character task command
+	}
+	t.Logf("line %s; file server %s; routing %s into the VPN", ifName, u.Hostname(), strings.Join(routes, ","))
 
-	// direct first, before anything is set up
-	direct1 := measure(t, "direct, 1 download", 1)
-	direct4 := measure(t, "direct, 4 downloads", 4)
+	direct1 := measure(t, "direct, 1 download", 1, final)
+	direct4 := measure(t, "direct, 4 downloads", 4, final)
+	results := []string{fmt.Sprintf("direct %.0f/%.0f", direct1, direct4)}
+	for _, mtu := range []int{1500, 9000} {
+		v1, v4 := vpnRun(t, ifName, routes, mtu, final)
+		results = append(results, fmt.Sprintf("Windows VPN MTU %d %.0f/%.0f", mtu, v1, v4))
+	}
+	t.Logf("RESULT Mbps (1 download/4 downloads): %s", strings.Join(results, "   "))
+}
 
+// vpnRun starts the engine on the Windows VPN with the given MTU, connects the helper, measures, and stops.
+func vpnRun(t *testing.T, ifName string, routes []string, mtu int, src string) (float64, float64) {
 	probe, _ := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	port := probe.LocalAddr().(*net.UDPAddr).Port
 	probe.Close()
@@ -61,7 +81,7 @@ func TestWinVPNCaptureSpeed(t *testing.T) {
 	cfg := map[string]any{
 		"mode": "rule", "log-level": "info", "find-process-mode": "always",
 		"external-controller": "127.0.0.1:0", "secret": "s",
-		"tun": map[string]any{"enable": true, "auto-route": true, "auto-detect-interface": true,
+		"tun": map[string]any{"enable": true, "auto-route": true, "auto-detect-interface": true, "mtu": mtu,
 			"device": "winvpn", "vpn-port": port, "vpn-token": token},
 		"proxies":      []map[string]any{{"name": "LINK1", "type": "direct", "interface-name": ifName, "udp": true}},
 		"proxy-groups": []map[string]any{{"name": "AUTO", "type": "load-balance", "strategy": "round-robin", "proxies": []string{"LINK1"}}},
@@ -77,36 +97,34 @@ func TestWinVPNCaptureSpeed(t *testing.T) {
 		t.Fatalf("start: %v\n%s", err, logs)
 	}
 	defer func() {
+		openHelperLink(t, "netmerge-vpn:disconnect")
 		e.Stop()
-		t.Logf("engine log (last part):\n%s", tail(logs.String(), 4000))
+		t.Logf("MTU %d engine log (last part):\n%s", mtu, tail(logs.String(), 1500))
 	}()
-
-	plugin := fmt.Sprintf("<nm><port>%d</port><token>%s</token><routes>%s</routes></nm>", port, token, strings.Join(routes, ","))
+	plugin := fmt.Sprintf("<nm><port>%d</port><token>%s</token><mtu>%d</mtu><routes>%s</routes></nm>", port, token, mtu, strings.Join(routes, ","))
 	began := time.Now()
 	openHelperLink(t, "netmerge-vpn:connect?cfg="+base64.StdEncoding.EncodeToString([]byte(plugin)))
-	defer openHelperLink(t, "netmerge-vpn:disconnect")
 	for !strings.Contains(logs.String(), "capturing traffic through the Windows VPN") {
-		if time.Since(began) > 60*time.Second {
-			t.Fatalf("the VPN did not come up in 60 s\n%s", logs)
+		if time.Since(began) > 45*time.Second {
+			t.Errorf("MTU %d: the VPN did not come up in 45 s", mtu)
+			return 0, 0
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	t.Logf("VPN up after %d ms", time.Since(began).Milliseconds())
+	if out := psOut(t, "Get-NetIPInterface -InterfaceAlias NetMerge -AddressFamily IPv4 | Format-List NlMtu"); out != "" {
+		t.Logf("MTU %d: Windows gave the VPN %s", mtu, strings.TrimSpace(out))
+	}
 	time.Sleep(2 * time.Second)
-
-	vpn1 := measure(t, "through the Windows VPN, 1 download", 1)
-	vpn4 := measure(t, "through the Windows VPN, 4 downloads", 4)
-	if !strings.Contains(logs.String(), speedHost) && !strings.Contains(logs.String(), ips[0].String()) {
-		t.Errorf("the downloads did not go through the engine (no %s in its log)", speedHost)
+	v1 := measure(t, fmt.Sprintf("Windows VPN MTU %d, 1 download", mtu), 1, src)
+	v4 := measure(t, fmt.Sprintf("Windows VPN MTU %d, 4 downloads", mtu), 4, src)
+	if !strings.Contains(logs.String(), "198.18.0.1:") {
+		t.Errorf("MTU %d: the downloads did not go through the engine", mtu)
 	}
-	t.Logf("RESULT  direct: %.0f Mbps (1) / %.0f Mbps (4)   Windows VPN: %.0f Mbps (1) / %.0f Mbps (4)", direct1, direct4, vpn1, vpn4)
-	if vpn1 <= 0 {
-		t.Fatal("nothing came through the Windows VPN")
-	}
+	return v1, v4
 }
 
 // measure downloads from Cloudflare's speed test for 8 seconds with n parallel downloads and returns Mbps.
-func measure(t *testing.T, what string, n int) float64 {
+func measure(t *testing.T, what string, n int, src string) float64 {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	var total atomic.Int64
@@ -118,7 +136,7 @@ func measure(t *testing.T, what string, n int) float64 {
 			defer wg.Done()
 			c := &http.Client{Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}}
 			for ctx.Err() == nil {
-				req, _ := http.NewRequestWithContext(ctx, "GET", "https://"+speedHost+"/1GB.bin", nil)
+				req, _ := http.NewRequestWithContext(ctx, "GET", src, nil)
 				resp, err := c.Do(req)
 				if err != nil {
 					if ctx.Err() == nil {

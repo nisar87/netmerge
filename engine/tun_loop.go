@@ -89,10 +89,7 @@ func (e *Engine) startVPNTun(c *Config) error {
 	if err != nil {
 		return err
 	}
-	mtu := tunMTU(c)
-	if mtu > 1500 {
-		mtu = 1500 // Windows VPN interfaces take at most a normal Ethernet size
-	}
+	mtu := tunMTU(c) // the plug-in asks Windows for the same size (the profile's <mtu>)
 	t := &tunStack{e: e, dev: dev, mtu: mtu, nat: newNATTable(), done: make(chan struct{})}
 	t.hijack.Store(c.DNS.Enable && len(c.Tun.DNSHijack) > 0)
 	e.tun = t

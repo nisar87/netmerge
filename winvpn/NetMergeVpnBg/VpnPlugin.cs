@@ -42,6 +42,9 @@ namespace NetMergeVpnBg
                 hello = Encoding.ASCII.GetBytes("\0NMVPN1 " + token);
 
                 socket = new DatagramSocket();
+                // a large receive buffer: at full speed the engine sends faster than one Decapsulate call at a time
+                // takes them, and a lost packet makes TCP slow down
+                socket.Control.InboundBufferSizeInBytes = 8 * 1024 * 1024;
                 channel.AssociateTransport(socket, null);
                 socket.ConnectAsync(new HostName("127.0.0.1"), port.ToString()).AsTask().Wait();
                 SendHello();
