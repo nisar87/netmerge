@@ -64,6 +64,12 @@ namespace NetMergeVpnBg
                     included.Add(new VpnRoute(new HostName("0.0.0.0"), 1));
                     included.Add(new VpnRoute(new HostName("128.0.0.0"), 1));
                 }
+                else
+                {
+                    // NetMerge's own range: the engine answers apps from 198.18.0.2 (and DNS there), so those replies
+                    // must go back into the VPN too (with everything routed this is already the case)
+                    included.Add(new VpnRoute(new HostName("198.18.0.0"), 16));
+                }
                 routes.Ipv4InclusionRoutes = included;
                 routes.ExcludeLocalSubnets = true;
 
