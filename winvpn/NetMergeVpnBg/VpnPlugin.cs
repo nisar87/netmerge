@@ -114,19 +114,12 @@ namespace NetMergeVpnBg
         }
 
         // Windows hands over the packets apps sent; they go to the engine as they are.
-        // Uses the platform's send queue (AppendVpnSendPacketBuffer + one flush per batch), the faster path Microsoft's
-        // own sample uses, instead of returning the packets in encapulatedPackets.
         public void Encapsulate(VpnChannel channel, VpnPacketBufferList packets, VpnPacketBufferList encapulatedPackets)
         {
-            if (packets.Size == 0)
-            {
-                return;
-            }
             while (packets.Size > 0)
             {
-                channel.AppendVpnSendPacketBuffer(packets.RemoveAtBegin());
+                encapulatedPackets.Append(packets.RemoveAtBegin());
             }
-            channel.FlushVpnSendPacketBuffers();
         }
 
         // A datagram from the engine is one IP packet for the PC (control messages from the engine are ignored).
@@ -149,8 +142,7 @@ namespace NetMergeVpnBg
             }
             src.CopyTo(0, pkt.Buffer, 0, src.Length);
             pkt.Buffer.Length = src.Length;
-            channel.AppendVpnReceivePacketBuffer(pkt);
-            channel.FlushVpnReceivePacketBuffers();
+            decapsulatedPackets.Append(pkt);
         }
 
         // Windows asks for a keep-alive now and then: it doubles as the hello, so a restarted engine learns the

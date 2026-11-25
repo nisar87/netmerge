@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.23.5
+
+- **Switching back from the Windows VPN no longer cuts the internet.** NetMerge started its own adapter while the "NetMerge" Windows VPN was still connected. Both use the address 198.18.0.1, and Windows left the adapter unusable: on a real PC nothing worked for 15 minutes, until the setting was switched again. Now NetMerge disconnects the Windows VPN first, and the engine waits until that address is free before it starts its adapter. A VPN left connected by a NetMerge that closed unexpectedly is disconnected before merging starts.
+- **Windows VPN (test): measured.** The Windows VPN path tops out far below NetMerge's own adapter:
+  - **GitHub's Windows machine:** 26 Mbps whether 1 or 4 downloads run, against 275 Mbps (1 download) and 1,378 Mbps (4 downloads) directly.
+  - **A real PC with 113 Mbps across two lines:** 37–52 Mbps.
+
+  Neither a larger packet size (Windows sets the VPN to 1400 anyway), a larger receive buffer, nor the platform's packet queues changed it. This is a limit of Windows' VPN plug-in system. A new automatic test on Windows measures it on every change to this path.
+- The helper can be told to catch only some address ranges (used by that test), and then always includes NetMerge's own 198.18.0.0/16.
+
 ## 3.23.4
 
 - **Windows VPN (test): the helper reads NetMerge's settings.** The helper started at last (3.23.3), but it rejected the settings NetMerge sent, because they were in the web-safe Base64 kind and .NET only reads the standard kind. NetMerge now sends standard Base64.
