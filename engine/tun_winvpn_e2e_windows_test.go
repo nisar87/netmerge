@@ -52,13 +52,9 @@ func TestWinVPNCaptureSpeed(t *testing.T) {
 	if err != nil || len(ips) == 0 {
 		t.Fatalf("resolve %s: %v", u.Hostname(), err)
 	}
-	var routes []string
-	for _, ip := range ips {
-		routes = append(routes, ip.String()+"/32")
-	}
-	if len(routes) > 2 {
-		routes = routes[:2] // the link has to fit in a 261-character task command
-	}
+	// one range covering the file servers (they share a /16), so the link fits in a 261-character task command
+	v4 := ips[0].To4()
+	routes := []string{fmt.Sprintf("%d.%d.0.0/16", v4[0], v4[1])}
 	t.Logf("line %s; file server %s; routing %s into the VPN", ifName, u.Hostname(), strings.Join(routes, ","))
 
 	direct1 := measure(t, "direct, 1 download", 1, final)
