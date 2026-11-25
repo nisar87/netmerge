@@ -5,7 +5,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -95,10 +94,11 @@ func winvpnRun(action, cfg string) (string, error) {
 // app packages for an elevated program, and Explorer started from one does not hand the link on either (seen on a
 // real PC: nothing happened). A one-off scheduled task with "limited" rights runs in the user's own session, like
 // typing the link into Run, and is removed right after.
+// Windows limits a task command to 261 characters; the link with its settings is far shorter.
 func winvpnOpenLink(link string) error {
 	const task = "NetMerge VPN helper link"
 	out, err := hiddenCmd("schtasks.exe", "/Create", "/F", "/TN", task, "/SC", "ONCE", "/ST", "00:00",
-		"/RL", "LIMITED", "/IT", "/TR", "explorer.exe "+link).CombinedOutput()
+		"/RL", "LIMITED", "/IT", "/TR", winvpnTaskCommand(link)).CombinedOutput()
 	if err == nil {
 		out, err = hiddenCmd("schtasks.exe", "/Run", "/TN", task).CombinedOutput()
 		go func() {
@@ -109,8 +109,14 @@ func winvpnOpenLink(link string) error {
 			return nil
 		}
 	}
-	logf("Windows VPN (test): starting the helper as the signed-in user did not work (%v: %s); trying Explorer", err, firstLineOf(string(out)))
-	return exec.Command("explorer.exe", link).Start()
+	logf("Windows VPN (test): starting the helper as the signed-in user did not work (%v: %s)", err, firstLineOf(string(out)))
+	return fmt.Errorf("could not start the helper as the signed-in user")
+}
+
+// winvpnTaskCommand is what the task runs: PowerShell's Start-Process opens the link the way the Run box does.
+// (Explorer was tried first: given this link it opened a "This PC" window instead, seen on a real PC.)
+func winvpnTaskCommand(link string) string {
+	return "powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command Start-Process '" + strings.ReplaceAll(link, "'", "''") + "'"
 }
 
 func firstLineOf(s string) string {

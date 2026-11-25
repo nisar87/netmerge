@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.23.3
+
+- **Windows VPN (test): the helper's link is opened with PowerShell.** On a real PC, the task from 3.23.2 ran, but Explorer did not treat the helper's link as a link and opened a "This PC" window instead, so the helper still never started. The task now opens the link with PowerShell's Start-Process, which handles it the way the Run box does.
+
 ## 3.23.2
 
 - **Windows VPN (test): the helper now really starts.** NetMerge runs as administrator, and Windows does not start Store-style apps for an administrator program, not even through Explorer. On a real PC the helper installed fine but never received NetMerge's request, so the VPN was never created. NetMerge now opens the helper's link through a one-off scheduled task that runs as the signed-in user without administrator rights (like typing it into Run), and removes the task right after.
