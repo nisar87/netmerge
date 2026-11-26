@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.23.7
+
+- **Clearer diagnostics when many connections fail.** On one PC, a line kept failing well over a thousand connections a minute for a whole day while NetMerge's own checks said the line was fine, and the log could not show why. When a minute has 100 or more failed connections, the log now adds one line saying which destination ports failed most, how many programs were involved (and how many failures the busiest one had), and which kind of rule they matched. Program names and websites are still never written to the log or sent in reports.
+
 ## 3.23.6
 
 - **The Windows VPN test is removed.** It showed that Windows' own VPN system can't carry merged speed: about 26 Mbps on a machine with over 1,000 Mbps, and about 50 Mbps on a PC with 113 Mbps across two lines. NetMerge is back to exactly how it worked in 3.22.11, always using its own adapter. The setting, the helper app, its build and its tests are gone, and so is the `winvpn-test` pre-release that held the helper.
