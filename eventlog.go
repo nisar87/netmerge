@@ -90,8 +90,96 @@ func flushCounts() {
 		parts = append(parts, fmt.Sprintf("%s=%d", k, counts[k]))
 	}
 	counts = map[string]int{}
+	detail := failDetailLine()
 	countMu.Unlock()
 	logf("counts in the last minute: %s", strings.Join(parts, " "))
+	if detail != "" {
+		logf("%s", detail)
+	}
+}
+
+// ---- what many failed connections have in common ----
+
+// When many connections fail in one minute (on one PC, about 1,600 a minute for a day while the line itself was
+// healthy), the counts alone cannot tell whether one program keeps retrying, which kind of service it is, or
+// whether a rule sends it somewhere wrong. So for such a minute one more line says: the destination ports that
+// failed most, how many programs were involved and how many failures the busiest one had, and the kind of rule
+// that matched. Program names and websites stay out of the log (the reports promise no websites or apps); the
+// program names are only compared in memory and forgotten each minute.
+const failDetailMin = 100
+
+var (
+	failTotal int
+	failPorts = map[string]int{}
+	failApps  = map[string]int{}
+	failRules = map[string]int{}
+	// "... (match <rule>/<payload>) <src>[(<app>)] --> <host>:<port> error: ..."
+	reDialDetail = regexp.MustCompile(`\(match ([^/)]*)/.*\) [^\s(]+(?:\((.*?)\))? --> \S*:(\d+) error: `)
+)
+
+// noteFailDetail is called (with countMu held) for each failed connection the engine reports.
+func noteFailDetail(msg string) {
+	failTotal++
+	m := reDialDetail.FindStringSubmatch(msg)
+	if m == nil {
+		failPorts["?"]++
+		return
+	}
+	rule := m[1]
+	if rule == "" {
+		rule = "?"
+	}
+	failRules[rule]++
+	app := m[2]
+	if app == "" {
+		app = "(no program found)"
+	}
+	failApps[app]++
+	failPorts[m[3]]++
+}
+
+// failDetailLine writes the summary when the minute had many failures, and starts a new minute (countMu held).
+func failDetailLine() string {
+	defer func() {
+		failTotal = 0
+		failPorts, failApps, failRules = map[string]int{}, map[string]int{}, map[string]int{}
+	}()
+	if failTotal < failDetailMin {
+		return ""
+	}
+	busiest := 0
+	for _, n := range failApps {
+		if n > busiest {
+			busiest = n
+		}
+	}
+	return fmt.Sprintf("many failed connections in the last minute (%d): ports %s; from %d program(s), the busiest %d; rules %s",
+		failTotal, topCounts(failPorts, 3), len(failApps), busiest, topCounts(failRules, 3))
+}
+
+// topCounts is "443=120 6881=40" for the n largest counters.
+func topCounts(m map[string]int, n int) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if m[keys[i]] != m[keys[j]] {
+			return m[keys[i]] > m[keys[j]]
+		}
+		return keys[i] < keys[j]
+	})
+	if len(keys) > n {
+		keys = keys[:n]
+	}
+	parts := make([]string, len(keys))
+	for i, k := range keys {
+		parts[i] = fmt.Sprintf("%s=%d", k, m[k])
+	}
+	if len(parts) == 0 {
+		return "-"
+	}
+	return strings.Join(parts, " ")
 }
 
 func countsLoop() {
@@ -401,6 +489,9 @@ func noteEngineLine(line string) {
 			lineName = strings.TrimSuffix(lineName[i+1:], "]")
 		}
 		count(strings.ToLower(d[1]) + "." + lineName + "." + failClass(d[3]))
+		countMu.Lock()
+		noteFailDetail(msg)
+		countMu.Unlock()
 		return
 	}
 	if p := reProto.FindStringSubmatch(msg); p != nil {

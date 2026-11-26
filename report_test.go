@@ -270,3 +270,42 @@ func TestReportReasonSendsEvery6HoursOrForACrash(t *testing.T) {
 		t.Fatalf("crash waiting: %q", why)
 	}
 }
+
+func TestManyFailuresAreSummedUpWithoutAppsOrWebsites(t *testing.T) {
+	countMu.Lock()
+	counts = map[string]int{}
+	failDetailLine()
+	countMu.Unlock()
+	for i := 0; i < 120; i++ {
+		noteEngineLine(`time="x" level=warning msg="[TCP] dial AUTO[LINK1] (match Match/) 192.168.1.5:5000(secretapp.exe) --> secret-site.com:6881 error: dial tcp 1.2.3.4:6881: i/o timeout"`)
+	}
+	for i := 0; i < 30; i++ {
+		noteEngineLine(`time="x" level=warning msg="[TCP] dial LINK1 (match AND/(Process(other app.exe),Network(tcp))) 192.168.1.5:5001(other app.exe) --> [2001:db8::1]:443 error: connection refused"`)
+	}
+	noteEngineLine(`time="x" level=warning msg="[TCP] dial LINK1 (match Match/) 192.168.1.5:5002 --> 1.2.3.4:80 error: connection refused"`)
+	countMu.Lock()
+	line := failDetailLine()
+	again := failDetailLine()
+	countMu.Unlock()
+	want := "many failed connections in the last minute (151): ports 6881=120 443=30 80=1; from 3 program(s), the busiest 120; rules Match=121 AND=30"
+	if line != want {
+		t.Fatalf("got  %q\nwant %q", line, want)
+	}
+	for _, s := range []string{"secret", "app.exe", "2001", "1.2.3.4"} {
+		if strings.Contains(line, s) {
+			t.Fatalf("summary names %q: %s", s, line)
+		}
+	}
+	if again != "" {
+		t.Fatalf("the next minute repeats the summary: %q", again)
+	}
+	// a quiet minute writes nothing
+	noteEngineLine(`time="x" level=warning msg="[TCP] dial LINK1 (match Match/) 192.168.1.5:5002 --> 1.2.3.4:80 error: connection refused"`)
+	countMu.Lock()
+	quiet := failDetailLine()
+	counts = map[string]int{}
+	countMu.Unlock()
+	if quiet != "" {
+		t.Fatalf("a quiet minute is summed up: %q", quiet)
+	}
+}
