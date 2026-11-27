@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.23.8
+
+- **Waking from sleep is always noticed.** If the PC went to sleep at the exact moment NetMerge was updating its numbers, NetMerge missed the wake: it kept old connection checks and did not refresh its network engine, which could leave connections slow or failing after a long sleep. NetMerge now notices the wake in that case too and refreshes once.
+- **Clearer diagnostics when the window stops updating.** On one PC the window's numbers sometimes stood still for 30–50 seconds while NetMerge waited for its own settings. When that happens for 2 seconds or more, the log now says where in NetMerge it happened and how long saving the settings file took, so the cause can be found.
+
 ## 3.23.7
 
 - **Clearer diagnostics when many connections fail.** On one PC, a line kept failing well over a thousand connections a minute for a whole day while NetMerge's own checks said the line was fine, and the log could not show why. When a minute has 100 or more failed connections, the log now adds one line saying which destination ports failed most, how many programs were involved (and how many failures the busiest one had), and which kind of rule they matched. Program names and websites are still never written to the log or sent in reports.
