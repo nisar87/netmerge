@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Link struct {
@@ -61,9 +62,29 @@ type Settings struct {
 }
 
 var (
-	settingsMu sync.Mutex
-	settings   Settings
+	settingsMu     sync.Mutex
+	settings       Settings
+	settingsLocked time.Time // when settingsMu was last taken; guarded by settingsMu
 )
+
+// settingsSlow: holding the settings this long holds up the sampler (and so the window): it is logged, with the
+// place in the code and how long saving the file took, so a report can tell a slow disk from slow code.
+var settingsSlow = 2 * time.Second
+
+var settingsSaveTook time.Duration // the last save's time while the lock is held; guarded by settingsMu
+
+func lockSettings() {
+	settingsMu.Lock()
+	settingsLocked, settingsSaveTook = time.Now(), 0
+}
+
+func unlockSettings() {
+	held, save := time.Since(settingsLocked), settingsSaveTook
+	settingsMu.Unlock()
+	if held >= settingsSlow {
+		logf("the settings were held for %.1f s (saving the file %.1f s) by %s", held.Seconds(), save.Seconds(), where(2))
+	}
+}
 
 func defaultSettings() Settings {
 	return Settings{
@@ -84,8 +105,8 @@ func defaultSettings() Settings {
 func settingsPath() string { return filepath.Join(rootDir, "data", "settings.json") }
 
 func loadSettings() {
-	settingsMu.Lock()
-	defer settingsMu.Unlock()
+	lockSettings()
+	defer unlockSettings()
 	settings = defaultSettings()
 	b, err := os.ReadFile(settingsPath())
 	if err == nil {
@@ -108,6 +129,7 @@ func loadSettings() {
 }
 
 func saveSettingsLocked() {
+	defer func(t time.Time) { settingsSaveTook += time.Since(t) }(time.Now())
 	_ = os.MkdirAll(filepath.Dir(settingsPath()), 0o755)
 	b, _ := json.MarshalIndent(settings, "", "  ")
 	tmp := settingsPath() + ".tmp"
@@ -117,8 +139,8 @@ func saveSettingsLocked() {
 }
 
 func getSettings() Settings {
-	settingsMu.Lock()
-	defer settingsMu.Unlock()
+	lockSettings()
+	defer unlockSettings()
 	b, _ := json.Marshal(settings)
 	var c Settings
 	_ = json.Unmarshal(b, &c)
@@ -126,11 +148,11 @@ func getSettings() Settings {
 }
 
 func updateSettings(fn func(s *Settings)) Settings {
-	settingsMu.Lock()
+	lockSettings()
 	fn(&settings)
 	normalizeLocked()
 	saveSettingsLocked()
-	settingsMu.Unlock()
+	unlockSettings()
 	return getSettings()
 }
 
@@ -216,8 +238,8 @@ func cleanList(in []string, cidr bool) []string {
 
 // syncLinks adds newly found adapters (enabled) and keeps settings for known ones.
 func syncLinks(adapters []Adapter) {
-	settingsMu.Lock()
-	defer settingsMu.Unlock()
+	lockSettings()
+	defer unlockSettings()
 	changed := false
 	for _, a := range adapters {
 		found := false
