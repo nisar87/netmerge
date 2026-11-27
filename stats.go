@@ -133,14 +133,7 @@ func statsLoop() {
 	var last time.Time
 	for range t.C {
 		sampleClock.step("waiting for the next tick", time.Now())
-		if now := time.Now(); wokeFromSleep(last, now) {
-			onResume()
-			sampleClock.step("handling the wake from sleep", time.Now())
-		} else if resumeDetected(last, now) {
-			logf("the sampler did not run for %.0f s but the PC did not sleep - not reloading the engine", now.Sub(last).Seconds())
-		}
-		safely("sampler", func() { sample(n%5 == 0) })
-		last = time.Now() // after the sample: a slow sample is not a sleep
+		last = sampleTick(last, func() { sample(n%5 == 0) })
 		if n%5 == 0 && checkBusy.CompareAndSwap(false, true) {
 			// the engine check can wait seconds (an engine that does not answer, a restart): it runs beside the
 			// sampler, so the speeds keep updating every second meanwhile
@@ -163,6 +156,33 @@ func statsLoop() {
 		}
 		n++
 	}
+}
+
+// sampleNow and resumeHook are swapped by tests.
+var (
+	sampleNow  = time.Now
+	resumeHook = onResume
+)
+
+// sampleTick runs one sample and returns when it ended. last is when the previous sample ended. A wake from sleep
+// is found either in the gap before the sample or inside the sample itself: when the PC sleeps in the middle of a
+// sample (waiting for a lock or the engine), the whole sleep lands inside it and the gap to the next tick looks
+// normal, so without the second check the engine was never reloaded after that sleep.
+func sampleTick(last time.Time, run func()) time.Time {
+	if now := sampleNow(); wokeFromSleep(last, now) {
+		resumeHook()
+		sampleClock.step("handling the wake from sleep", sampleNow())
+	} else if resumeDetected(last, now) {
+		logf("the sampler did not run for %.0f s but the PC did not sleep - not reloading the engine", now.Sub(last).Seconds())
+	}
+	start := sampleNow()
+	safely("sampler", run)
+	end := sampleNow() // a slow sample is not a sleep on its own (wokeFromSleep asks Windows)
+	if wokeFromSleep(start, end) {
+		logf("the PC slept during a sample (%.0f s)", end.Sub(start).Seconds())
+		resumeHook()
+	}
+	return end
 }
 
 type connList struct {
@@ -566,8 +586,8 @@ func getSnapshot() Snapshot {
 }
 
 func rememberApps(apps map[string]*AppStat) {
-	settingsMu.Lock()
-	defer settingsMu.Unlock()
+	lockSettings()
+	defer unlockSettings()
 	seen := map[string]bool{}
 	for _, a := range settings.SeenApps {
 		seen[a] = true

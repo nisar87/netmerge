@@ -69,3 +69,57 @@ func TestPowerSleepRecordsTheTime(t *testing.T) {
 		t.Fatalf("power notice time not recorded: %v", at)
 	}
 }
+
+// The PC can sleep in the middle of a sample: the sleep then lands inside the sample, the gap to the next tick is
+// normal, and the engine used to stay unreloaded after waking. A slow sample with no sleep still reloads nothing.
+func TestSleepInsideASampleIsAWake(t *testing.T) {
+	withTempLog(t)
+	reset := func(asleep bool, at time.Time) {
+		runMu.Lock()
+		runAsleep, runPowerAt = asleep, at
+		runMu.Unlock()
+	}
+	clock := time.Now()
+	oldNow, oldHook := sampleNow, resumeHook
+	resumes := 0
+	sampleNow = func() time.Time { return clock }
+	resumeHook = func() { resumes++ }
+	t.Cleanup(func() { sampleNow, resumeHook = oldNow, oldHook; reset(false, time.Time{}) })
+
+	reset(false, time.Time{})
+	last := clock.Add(-time.Second)
+	last = sampleTick(last, func() { clock = clock.Add(200 * time.Millisecond) })
+	if resumes != 0 {
+		t.Fatal("a normal sample is not a wake")
+	}
+
+	// held up 50 s on a lock, no sleep: not a wake
+	clock = clock.Add(time.Second)
+	last = sampleTick(last, func() { clock = clock.Add(50 * time.Second) })
+	if resumes != 0 {
+		t.Fatal("a slow sample without a power notice is not a wake")
+	}
+
+	// Windows says the PC goes to sleep, the next sample freezes for 10 hours; the wake notice comes after it
+	reset(true, clock)
+	clock = clock.Add(time.Second)
+	last = sampleTick(last, func() { clock = clock.Add(10 * time.Hour) })
+	if resumes != 1 {
+		t.Fatalf("a sleep inside a sample: %d resumes, want 1", resumes)
+	}
+	reset(false, clock)
+
+	// the next tick comes a second later: not counted again
+	clock = clock.Add(time.Second)
+	sampleTick(last, func() {})
+	if resumes != 1 {
+		t.Fatalf("the wake was handled twice: %d", resumes)
+	}
+
+	// a sleep between samples is still found before the sample, once
+	clock = clock.Add(3 * time.Hour)
+	sampleTick(clock.Add(-3*time.Hour), func() {})
+	if resumes != 2 {
+		t.Fatalf("a sleep between samples: %d resumes, want 2", resumes)
+	}
+}
